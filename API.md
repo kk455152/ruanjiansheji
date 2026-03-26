@@ -19,5 +19,6 @@
   "user_id": "ruanjiansheji",
   "password": "gaoji",
   "device_id": "dev_01",
+  "metric_type": "signal strength",
   "val": 25.5
 }
