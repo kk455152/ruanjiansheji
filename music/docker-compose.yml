@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  worker_1:
+    build: .
+    container_name: sim_1
+    volumes:
+      - ./host/data1:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "1"]
+
+  worker_2:
+    build: .
+    container_name: sim_2
+    volumes:
+      - ./host/data2:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "2"]
+
+  worker_3:
+    build: .
+    container_name: sim_3
+    volumes:
+      - ./host/data3:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "3"]
+
+  worker_4:
+    build: .
+    container_name: sim_4
+    volumes:
+      - ./host/data4:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "4"]
+
+  worker_5:
+    build: .
+    container_name: sim_5
+    volumes:
+      - ./host/data5:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "5"]
+
+  worker_6:
+    build: .
+    container_name: sim_6
+    volumes:
+      - ./host/data6:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "6"]
+
+  worker_7:
+    build: .
+    container_name: sim_7
+    volumes:
+      - ./host/data7:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "7"]
+
+  worker_8:
+    build: .
+    container_name: sim_8
+    volumes:
+      - ./host/data8:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "8"]
+
+  worker_9:
+    build: .
+    container_name: sim_9
+    volumes:
+      - ./host/data9:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "9"]
+
+  worker_10:
+    build: .
+    container_name: sim_10
+    volumes:
+      - ./host/data10:/app/log
+      - /etc/localtime:/etc/localtime:ro
+    command: ["python", "simulator.py", "--id", "10"]
