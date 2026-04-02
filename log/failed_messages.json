@@ -1,1 +1,93 @@
-[]
+[
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 7,
+        "timestamp": "2026-04-02 13:56:44"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "bass_gain",
+        "value": 2,
+        "timestamp": "2026-04-02 13:56:44"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "signal_strength",
+        "value": -45.02,
+        "timestamp": "2026-04-02 13:56:45"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -78.25,
+        "timestamp": "2026-04-02 13:56:46"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_01",
+        "type": "like_status",
+        "value": true,
+        "timestamp": "2026-04-02 13:56:47"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "volume",
+        "value": 36,
+        "timestamp": "2026-04-02 13:56:49"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "like_status",
+        "value": false,
+        "timestamp": "2026-04-02 13:56:49"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -68.94,
+        "timestamp": "2026-04-02 13:58:02"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "signal_strength",
+        "value": -50.87,
+        "timestamp": "2026-04-02 13:58:02"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "bass_gain",
+        "value": 1,
+        "timestamp": "2026-04-02 13:58:03"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 8,
+        "timestamp": "2026-04-02 13:58:04"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 66,
+        "timestamp": "2026-04-02 13:58:05"
+    },
+    {
+        "token": "smart_speaker_2026",
+        "device_id": "dev_02",
+        "type": "volume",
+        "value": 41,
+        "timestamp": "2026-04-02 13:58:05"
+    }
+]

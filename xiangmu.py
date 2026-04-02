@@ -119,10 +119,15 @@ def process_data(device_id, metric_type, value):
       "timestamp": timestamp
     }
     
-    print(f"📡 [尝试发送] {device_id} | {metric_type}: {value} (类型: {type(value).__name__})", flush=True)
+    # 用醒目的标识区分出 dev_false 发送的脏数据
+    if device_id == "dev_false":
+        print(f"👿 [毒数据注入] {device_id} | {metric_type}: {value} (类型: {type(value).__name__})", flush=True)
+    else:
+        print(f"📡 [尝试发送] {device_id} | {metric_type}: {value} (类型: {type(value).__name__})", flush=True)
 
     if push_to_mq(payload):
-        print(f"✅ [入队成功] {device_id} 的数据已推送到 Exchange")
+        if device_id != "dev_false":
+            print(f"✅ [入队成功] {device_id} 的数据已推送到 Exchange")
     else:
         print(f"⚠️ [网络/权限异常] {device_id} 无法送达云端，已存入本地缓存...")
         save_to_local_cache(payload)
@@ -139,6 +144,7 @@ def generate_normal_data(mu, sigma, min_val, max_val):
 # 4. 数据模拟线程 
 # ==========================================
 def simulate_hardware_status(device_id):
+    """正常设备的硬件数据"""
     time.sleep(random.uniform(0.1, 1.5)) 
     while True:
         sig_str = generate_normal_data(-60.0, 15.0, -120.0, 0.0)
@@ -157,6 +163,7 @@ def simulate_hardware_status(device_id):
         time.sleep(3)
 
 def simulate_playback_status(device_id):
+    """正常设备的播放数据"""
     time.sleep(random.uniform(0.1, 1.5))
     while True:
         bass = int(generate_normal_data(6, 2, 0, 12))
@@ -167,6 +174,24 @@ def simulate_playback_status(device_id):
         
         time.sleep(5)
 
+def simulate_malicious_status(device_id):
+    """【新增】专门发送脏数据的捣乱线程"""
+    time.sleep(2)
+    while True:
+        # 错误 1：类型错误（volume 本应该是 int，却发了 string）
+        process_data(device_id, "volume", "非常大声")
+        
+        # 错误 2：数值严重越界（signal_strength 本应该是 -120 到 0，却发了 +999.9）
+        process_data(device_id, "signal_strength", 999.99)
+        
+        # 错误 3：非法的数据类型（is_connected 本应该是 bool，却发了 null/None）
+        process_data(device_id, "is_connected", None)
+        
+        # 错误 4：凭空捏造一个后端根本不存在的指令类型
+        process_data(device_id, "self_destruct_mode", True)
+        
+        time.sleep(4) # 每 4 秒向云端轰炸一次毒数据
+
 # ==========================================
 # 5. 主程序入口 (动态交互并发版)
 # ==========================================
@@ -175,48 +200,50 @@ if __name__ == "__main__":
     print(f"=== 🚀 智能音箱压测客户端已启动 (动态交互版) ===")
     print(f"=================================================\n")
     
-    # 【核心修改】：通过交互式终端询问用户需要模拟多少台设备
     num_devices = 0
     while True:
         try:
-            user_input = input("👉 请在键盘输入要模拟的设备数量 (纯数字，例如 5): ")
+            user_input = input("👉 请输入要模拟的【正常设备】数量 (纯数字，例如 2): ")
             num_devices = int(user_input.strip())
-            if num_devices <= 0:
-                print("⚠️ 数量必须大于 0，请重新输入！\n")
+            if num_devices <= 0 or num_devices > 50:
+                print("⚠️ 数量必须在 1 到 50 之间，请重新输入！\n")
                 continue
-            if num_devices > 50:
-                print("⚠️ 为了保护你电脑的 CPU 和云端服务器，单次最多允许模拟 50 台，请重新输入！\n")
-                continue
-            break # 输入合法，跳出循环
+            break 
         except ValueError:
             print("⚠️ 输入格式错误！请只输入纯数字。\n")
             
-    # 根据用户输入的数字，自动生成设备列表，例如：dev_01, dev_02...
-    # :02d 的意思是如果是单个数字，前面自动补 0 (比如 1 变成 01)
     device_list = [f"dev_{i:02d}" for i in range(1, num_devices + 1)]
+    
+    # 【新增功能】：询问是否加入捣乱设备
+    include_false = input("👉 是否召唤 'dev_false' 注入脏数据来测试云端防御？(y/n): ")
+    if include_false.lower() == 'y':
+        device_list.append("dev_false")
     
     print(f"\n[-] 正在准备同时启动 {len(device_list)} 台设备...")
     print(f"[-] 设备列表: {', '.join(device_list)}")
     print("[-] 3秒后开始向云端推送数据... (按 Ctrl+C 随时停止)\n")
-    time.sleep(3) # 给用户3秒钟确认时间
+    time.sleep(3) 
     
     init_env()
     
-    # 启动后台重传线程 (无论多少台设备，1 个清洁工就够了)
     thread_retry = threading.Thread(target=background_retry_worker)
     thread_retry.daemon = True 
     thread_retry.start()
     
-    # 遍历设备列表，为每一台设备分配独立的工作线程
     for dev_id in device_list:
-        thread_hw = threading.Thread(target=simulate_hardware_status, args=(dev_id,))
-        thread_pb = threading.Thread(target=simulate_playback_status, args=(dev_id,))
-        
-        thread_hw.daemon = True
-        thread_pb.daemon = True
-        
-        thread_hw.start()
-        thread_pb.start()
+        if dev_id == "dev_false":
+            # 如果是捣乱设备，只给它分配脏数据线程
+            thread_bad = threading.Thread(target=simulate_malicious_status, args=(dev_id,))
+            thread_bad.daemon = True
+            thread_bad.start()
+        else:
+            # 正常设备分配正常的硬件和播放线程
+            thread_hw = threading.Thread(target=simulate_hardware_status, args=(dev_id,))
+            thread_pb = threading.Thread(target=simulate_playback_status, args=(dev_id,))
+            thread_hw.daemon = True
+            thread_pb.daemon = True
+            thread_hw.start()
+            thread_pb.start()
     
     try:
         while True:
