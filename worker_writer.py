@@ -20,15 +20,14 @@ def callback(ch, method, properties, body):
             # 这里的输出会被 Jenkins 捕获，方便 A 监控非法请求
             print(f" ⚠️ [SECURITY] 拦截非法 Token | 设备: {data.get('device_id', 'Unknown')}")
             return
-
-        # 2. 获取设备ID和类型
+        
+        # 2. 仅获取设备ID作为唯一标识
         dev_id = data.get("device_id", "unknown_device")
-        data_type = data.get("type", "data")
         
-        # 3. 构造路径：将文件统一存放在 data_db 目录下
-        file_name = f"dev_{dev_id}_{data_type}.json"
+        # 3. 构造路径：按线程（设备）划分文件
+        file_name = f"{dev_id}.json"
         file_path = os.path.join(DB_DIR, file_name)
-        
+
         # 4. 执行持久化写入
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(data, ensure_ascii=False) + "\n")
