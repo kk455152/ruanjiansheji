@@ -50,7 +50,7 @@ try:
     # 声明日志模块专用队列
     q = ch.queue_declare(queue='logger_v2', durable=True)
     ch.queue_bind(exchange=EXCHANGE_NAME, queue=q.method.queue)
-
+    ch.basic_qos(prefetch_count=1)
     ch.basic_consume(queue='logger_v2', on_message_callback=callback)
     print(f' [*] 全量日志模块已就绪，存储路径: {DB_DIR}/system_access.log')
     ch.start_consuming()
