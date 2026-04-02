@@ -38,7 +38,6 @@ def callback(ch, method, properties, body):
         print(f" ❌ [ERROR] 写入异常: {e}")
     finally:
         ch.basic_ack(delivery_tag=method.delivery_tag)
-
 # MQ 初始化
 try:
     conn = get_connection()
@@ -48,8 +47,14 @@ try:
     q = ch.queue_declare(queue='writer_v2', durable=True)
     ch.queue_bind(exchange=EXCHANGE_NAME, queue=q.method.queue)
 
+    # 🔴 核心补丁：告诉 MQ 在我没处理完当前消息前，不要给我发下一条
+    # 只有加了这一行，A 在 Jenkins 里开多个进程才能真正实现“按劳分配”
+    ch.basic_qos(prefetch_count=1)
+
     ch.basic_consume(queue='writer_v2', on_message_callback=callback)
-    print(f' [*] 写入模块已就绪，等待 Jenkins 触发流量...')
+    print(f' [*] 写入模块已就绪（支持负载均衡），等待 Jenkins 触发流量...')
     ch.start_consuming()
 except Exception as conn_err:
     print(f" 🚨 [CRITICAL] 无法连接到 RabbitMQ 服务器: {conn_err}")
+
+
