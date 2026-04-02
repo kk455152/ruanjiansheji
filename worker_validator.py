@@ -69,7 +69,7 @@ try:
     # 声明验证专用队列
     q = ch.queue_declare(queue='validator_v2', durable=True)
     ch.queue_bind(exchange=EXCHANGE_NAME, queue=q.method.queue)
-
+    ch.basic_qos(prefetch_count=1)
     ch.basic_consume(queue='validator_v2', on_message_callback=callback)
     print(f' [*] 验证模块（清洗中心）已启动，当前项目Token: {PROJECT_TOKEN}')
     ch.start_consuming()
