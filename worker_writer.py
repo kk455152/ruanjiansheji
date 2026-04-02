@@ -17,16 +17,21 @@ def callback(ch, method, properties, body):
         
         # 1. 身份校验
         if data.get("token") != PROJECT_TOKEN:
-            # 这里的输出会被 Jenkins 捕获，方便 A 监控非法请求
             print(f" ⚠️ [SECURITY] 拦截非法 Token | 设备: {data.get('device_id', 'Unknown')}")
             return
         
-        # 2. 仅获取设备ID作为唯一标识
+        # 2. 获取设备ID和接口类型 (API Type)
         dev_id = data.get("device_id", "unknown_device")
+        api_type = data.get("type", "others")
         
-        # 3. 构造路径：按线程（设备）划分文件
-        file_name = f"{dev_id}.json"
-        file_path = os.path.join(DB_DIR, file_name)
+        # 3. 【核心修改】构造嵌套路径：data_db/设备名/接口名.json
+        # 先确保设备专属文件夹存在
+        dev_path = os.path.join(DB_DIR, dev_id)
+        if not os.path.exists(dev_path):
+            os.makedirs(dev_path)
+            
+        # 再构造具体接口文件路径（例如: data_db/Speaker_01/volume.json）
+        file_path = os.path.join(dev_path, f"{api_type}.json")
 
         # 4. 执行持久化写入
         with open(file_path, "a", encoding="utf-8") as f:
@@ -37,7 +42,9 @@ def callback(ch, method, properties, body):
     except Exception as e:
         print(f" ❌ [ERROR] 写入异常: {e}")
     finally:
+        # 无论成功失败，都给 MQ 应答，保证任务不堆积
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
 # MQ 初始化
 try:
     conn = get_connection()
@@ -47,14 +54,12 @@ try:
     q = ch.queue_declare(queue='writer_v2', durable=True)
     ch.queue_bind(exchange=EXCHANGE_NAME, queue=q.method.queue)
 
-    # 🔴 核心补丁：告诉 MQ 在我没处理完当前消息前，不要给我发下一条
-    # 只有加了这一行，A 在 Jenkins 里开多个进程才能真正实现“按劳分配”
+    # 🔴 负载均衡补丁：支持 Jenkins 开启多个 Writer 平分任务
     ch.basic_qos(prefetch_count=1)
 
     ch.basic_consume(queue='writer_v2', on_message_callback=callback)
-    print(f' [*] 写入模块已就绪（支持负载均衡），等待 Jenkins 触发流量...')
+    print(f' [*] 写入模块就绪 | 存储模式: [设备ID/接口名.json] | 等待流量...')
     ch.start_consuming()
 except Exception as conn_err:
     print(f" 🚨 [CRITICAL] 无法连接到 RabbitMQ 服务器: {conn_err}")
-
 
