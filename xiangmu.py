@@ -5,7 +5,7 @@ import random
 import csv
 import os
 import json
-import pika
+import requests  
 from datetime import datetime
 
 # ==========================================
@@ -18,13 +18,22 @@ CACHE_FILE = os.path.join(LOG_DIR, "failed_messages.json")
 file_lock = threading.Lock()
 cache_lock = threading.Lock()
 
-# 全局变量：对齐云端配置
-MQ_HOST = "8.137.165.220"
-MQ_PORT = 5672
-MQ_USER = "migrate"
-MQ_PASS = "2728"
-MQ_EXCHANGE = "smart_speaker_exchange" 
+# ==========================================
+# 2. 云端 API 路由配置 (根据 Apipost 截图对齐)
+# ==========================================
+# 基础 IP 或域名
+BASE_URL = "http://8.137.165.220" 
 BUSINESS_TOKEN = "smart_speaker_2026"  
+
+# 路由映射表：将模拟器的数据类型映射到对应的后端接口路径
+ENDPOINT_MAP = {
+    "bass_gain": "/api/bass",
+    "signal_strength": "/api/signal",
+    "volume": "/api/volume",
+    "is_connected": "/api/status/connection",
+    "is_connecting": "/api/status/connection", # 连接状态类都指向 connection
+    "like_status": "/api/status/like"
+}
 
 def init_env():
     if not os.path.exists(LOG_DIR):
@@ -38,28 +47,32 @@ def init_env():
             json.dump([], f)
 
 # ==========================================
-# 2. 核心：MQ 发送与重传机制
+# 3. 核心：HTTP 动态路由发送与重传机制
 # ==========================================
-def push_to_mq(payload):
+def get_target_url(metric_type):
+    """根据数据类型获取对应的完整接口 URL"""
+    # 如果遇到捣乱线程发来的未知类型，默认给一个错误路径，测试云端 404 处理
+    path = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
+    return BASE_URL + path
+
+def send_via_http(payload):
+    """通过 HTTP POST 请求向对应的云端 API 发送数据"""
+    metric_type = payload.get("type")
+    target_url = get_target_url(metric_type)
+    
     try:
-        credentials = pika.PlainCredentials(MQ_USER, MQ_PASS)
-        parameters = pika.ConnectionParameters(
-            host=MQ_HOST, port=MQ_PORT, virtual_host='/', 
-            credentials=credentials, connection_attempts=1, socket_timeout=3       
-        )
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
+        response = requests.post(target_url, json=payload, timeout=3)
         
-        channel.basic_publish(
-            exchange=MQ_EXCHANGE, 
-            routing_key='', 
-            body=json.dumps(payload),
-            properties=pika.BasicProperties(delivery_mode=2)
-        )
-        connection.close()
-        return True
-    except Exception as e:
-        print(f"  [底层调试] MQ断开原因: {e}")
+        # 200 或 201 通常表示创建/接收成功，具体看你们后端的设定
+        if response.status_code in [200, 201]:
+            return True
+        else:
+            # 【此处已修复】将 path 替换为了 target_url
+            print(f"  [云端拒绝] 接口: {target_url}, 状态码: {response.status_code}, 响应: {response.text}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        print(f"  [网络异常] 无法连接接口 {target_url}: {e}")
         return False
 
 def save_to_local_cache(payload):
@@ -90,11 +103,11 @@ def background_retry_worker():
             reconnect_success = False
             
             for index, payload in enumerate(cache_data):
-                if push_to_mq(payload):
+                if send_via_http(payload):
                     reconnect_success = True
-                    print(f"  └─ ✅ 重发成功: {payload['device_id']} | {payload['type']} -> {payload['value']}")
+                    print(f"  └─ ✅ 重发成功: {payload['device_id']} -> {get_target_url(payload['type'])}")
                 else:
-                    print("  └─ ❌ 云端依然拒绝连接，停止本次重发。")
+                    print(f"  └─ ❌ 接口依然拒绝连接，停止本次重发。")
                     remaining_cache.extend(cache_data[index:])
                     break
             
@@ -119,21 +132,22 @@ def process_data(device_id, metric_type, value):
       "timestamp": timestamp
     }
     
-    # 用醒目的标识区分出 dev_false 发送的脏数据
+    target_endpoint = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
+    
     if device_id == "dev_false":
-        print(f"👿 [毒数据注入] {device_id} | {metric_type}: {value} (类型: {type(value).__name__})", flush=True)
+        print(f"👿 [毒数据注入] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
     else:
-        print(f"📡 [尝试发送] {device_id} | {metric_type}: {value} (类型: {type(value).__name__})", flush=True)
+        print(f"📡 [尝试发送] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
 
-    if push_to_mq(payload):
+    if send_via_http(payload):
         if device_id != "dev_false":
-            print(f"✅ [入队成功] {device_id} 的数据已推送到 Exchange")
+            print(f"✅ [发送成功] {device_id} 的数据已送达 {target_endpoint}")
     else:
-        print(f"⚠️ [网络/权限异常] {device_id} 无法送达云端，已存入本地缓存...")
+        print(f"⚠️ [网络/请求异常] {device_id} 无法送达 {target_endpoint}，已存入本地缓存...")
         save_to_local_cache(payload)
 
 # ==========================================
-# 3. 核心数学与统计工具
+# 4. 核心数学与统计工具
 # ==========================================
 def generate_normal_data(mu, sigma, min_val, max_val):
     val = random.gauss(mu, sigma)
@@ -141,10 +155,9 @@ def generate_normal_data(mu, sigma, min_val, max_val):
     return round(clamped_val, 2)
 
 # ==========================================
-# 4. 数据模拟线程 
+# 5. 数据模拟线程 
 # ==========================================
 def simulate_hardware_status(device_id):
-    """正常设备的硬件数据"""
     time.sleep(random.uniform(0.1, 1.5)) 
     while True:
         sig_str = generate_normal_data(-60.0, 15.0, -120.0, 0.0)
@@ -163,7 +176,6 @@ def simulate_hardware_status(device_id):
         time.sleep(3)
 
 def simulate_playback_status(device_id):
-    """正常设备的播放数据"""
     time.sleep(random.uniform(0.1, 1.5))
     while True:
         bass = int(generate_normal_data(6, 2, 0, 12))
@@ -175,29 +187,20 @@ def simulate_playback_status(device_id):
         time.sleep(5)
 
 def simulate_malicious_status(device_id):
-    """【新增】专门发送脏数据的捣乱线程"""
     time.sleep(2)
     while True:
-        # 错误 1：类型错误（volume 本应该是 int，却发了 string）
         process_data(device_id, "volume", "非常大声")
-        
-        # 错误 2：数值严重越界（signal_strength 本应该是 -120 到 0，却发了 +999.9）
         process_data(device_id, "signal_strength", 999.99)
-        
-        # 错误 3：非法的数据类型（is_connected 本应该是 bool，却发了 null/None）
         process_data(device_id, "is_connected", None)
-        
-        # 错误 4：凭空捏造一个后端根本不存在的指令类型
         process_data(device_id, "self_destruct_mode", True)
-        
-        time.sleep(4) # 每 4 秒向云端轰炸一次毒数据
+        time.sleep(4) 
 
 # ==========================================
-# 5. 主程序入口 (动态交互并发版)
+# 6. 主程序入口
 # ==========================================
 if __name__ == "__main__":
     print(f"=================================================")
-    print(f"=== 🚀 智能音箱压测客户端已启动 (动态交互版) ===")
+    print(f"=== 🚀 智能音箱压测客户端已启动 (多路由版) ======")
     print(f"=================================================\n")
     
     num_devices = 0
@@ -214,13 +217,13 @@ if __name__ == "__main__":
             
     device_list = [f"dev_{i:02d}" for i in range(1, num_devices + 1)]
     
-    # 【新增功能】：询问是否加入捣乱设备
     include_false = input("👉 是否召唤 'dev_false' 注入脏数据来测试云端防御？(y/n): ")
     if include_false.lower() == 'y':
         device_list.append("dev_false")
     
     print(f"\n[-] 正在准备同时启动 {len(device_list)} 台设备...")
     print(f"[-] 设备列表: {', '.join(device_list)}")
+    print(f"[-] 基础服务器 API: {BASE_URL}")
     print("[-] 3秒后开始向云端推送数据... (按 Ctrl+C 随时停止)\n")
     time.sleep(3) 
     
@@ -232,12 +235,10 @@ if __name__ == "__main__":
     
     for dev_id in device_list:
         if dev_id == "dev_false":
-            # 如果是捣乱设备，只给它分配脏数据线程
             thread_bad = threading.Thread(target=simulate_malicious_status, args=(dev_id,))
             thread_bad.daemon = True
             thread_bad.start()
         else:
-            # 正常设备分配正常的硬件和播放线程
             thread_hw = threading.Thread(target=simulate_hardware_status, args=(dev_id,))
             thread_pb = threading.Thread(target=simulate_playback_status, args=(dev_id,))
             thread_hw.daemon = True
