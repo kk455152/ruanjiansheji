@@ -8,6 +8,9 @@ import json
 import requests  
 from datetime import datetime
 
+# 【引入核心安全包】
+from security_utils import encrypt_data, generate_token
+
 # ==========================================
 # 1. 初始化设置与文件准备 
 # ==========================================
@@ -19,19 +22,17 @@ file_lock = threading.Lock()
 cache_lock = threading.Lock()
 
 # ==========================================
-# 2. 云端 API 路由配置 (根据 Apipost 截图对齐)
+# 2. 云端 API 路由配置
 # ==========================================
-# 基础 IP 或域名
 BASE_URL = "http://8.137.165.220" 
-BUSINESS_TOKEN = "smart_speaker_2026"  
 
-# 路由映射表：将模拟器的数据类型映射到对应的后端接口路径
+# 路由映射表
 ENDPOINT_MAP = {
     "bass_gain": "/api/bass",
     "signal_strength": "/api/signal",
     "volume": "/api/volume",
     "is_connected": "/api/status/connection",
-    "is_connecting": "/api/status/connection", # 连接状态类都指向 connection
+    "is_connecting": "/api/status/connection",
     "like_status": "/api/status/like"
 }
 
@@ -47,35 +48,65 @@ def init_env():
             json.dump([], f)
 
 # ==========================================
-# 3. 核心：HTTP 动态路由发送与重传机制
+# 3. 核心：带加密与鉴权的 HTTP 发送机制 (已对齐队友 C)
 # ==========================================
 def get_target_url(metric_type):
     """根据数据类型获取对应的完整接口 URL"""
-    # 如果遇到捣乱线程发来的未知类型，默认给一个错误路径，测试云端 404 处理
     path = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
     return BASE_URL + path
 
 def send_via_http(payload):
-    """通过 HTTP POST 请求向对应的云端 API 发送数据"""
+    """核心发送函数：负责鉴权、加密并发送 HTTP POST 请求"""
     metric_type = payload.get("type")
+    device_id = payload.get("device_id")
     target_url = get_target_url(metric_type)
     
-    try:
-        response = requests.post(target_url, json=payload, timeout=3)
+    # 1. 严格按照队友 C 的算法获取 Token 和整型时间戳 (不再需要传入 device_id)
+    token, timestamp = generate_token()
+    
+    # 2. 将真实 Payload 进行 AES 加密
+    encrypted_str = encrypt_data(payload)
+    if not encrypted_str:
+        print(f"  [加密失败] {device_id} 的数据加密异常，取消发送。")
+        return False
         
-        # 200 或 201 通常表示创建/接收成功，具体看你们后端的设定
+    # 3. 【核心修改】严格对齐队友 C 期望的 JSON 格式
+    secure_payload = {
+        "timestamp": timestamp,
+        "token": token,
+        "data": encrypted_str  # 这里装 AES 加密后的密文
+    }
+
+    try:
+        # 发送请求（不再使用 headers 传 Token，全部放在 json 里）
+        response = requests.post(
+            target_url, 
+            json=secure_payload, 
+            timeout=1.5, 
+            verify=False
+        )
+        
         if response.status_code in [200, 201]:
             return True
+            
+        # 拦截机制：被网关 403 拒绝，直接丢弃，不重传
+        elif response.status_code == 403:
+            print(f"  [网关拦截 403] 鉴权失败或秘钥错误，脏数据已销毁！")
+            return True 
+            
         else:
-            # 【此处已修复】将 path 替换为了 target_url
             print(f"  [云端拒绝] 接口: {target_url}, 状态码: {response.status_code}, 响应: {response.text}")
             return False
             
+    except requests.exceptions.Timeout:
+        print(f"  [请求超时] 无法在规定时间内连接到 {target_url}")
+        return False
     except requests.exceptions.RequestException as e:
-        print(f"  [网络异常] 无法连接接口 {target_url}: {e}")
+        print(f"  [网络异常] {target_url}: {e}")
         return False
 
 def save_to_local_cache(payload):
+    """将发送失败的【明文原始字典】存入本地，重传时会重新获取新时间戳并加密"""
     with cache_lock:
         try:
             with open(CACHE_FILE, 'r', encoding='utf-8') as f:
@@ -87,6 +118,7 @@ def save_to_local_cache(payload):
             json.dump(cache_data, f, indent=4)
             
 def background_retry_worker():
+    """后台重传线程"""
     while True:
         time.sleep(5)
         with cache_lock:
@@ -118,18 +150,18 @@ def background_retry_worker():
                 print("🎉 [重传完毕] 所有积压数据已成功同步至云端！\n")
 
 def process_data(device_id, metric_type, value):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """数据处理与分发中心"""
+    log_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with file_lock:
         with open(CSV_FILE, mode='a', newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f)
-            writer.writerow([timestamp, device_id, metric_type, value])
+            writer.writerow([log_timestamp, device_id, metric_type, value])
 
+    # 原始明文数据载体
     payload = {
-      "token": BUSINESS_TOKEN,    
       "device_id": device_id,     
       "type": metric_type,        
-      "value": value,             
-      "timestamp": timestamp
+      "value": value
     }
     
     target_endpoint = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
@@ -139,11 +171,12 @@ def process_data(device_id, metric_type, value):
     else:
         print(f"📡 [尝试发送] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
 
+    # 触发安全发送机制
     if send_via_http(payload):
         if device_id != "dev_false":
-            print(f"✅ [发送成功] {device_id} 的数据已送达 {target_endpoint}")
+            print(f"✅ [发送成功] {device_id} 的数据已安全送达 {target_endpoint}")
     else:
-        print(f"⚠️ [网络/请求异常] {device_id} 无法送达 {target_endpoint}，已存入本地缓存...")
+        print(f"⚠️ [网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
         save_to_local_cache(payload)
 
 # ==========================================
@@ -199,8 +232,12 @@ def simulate_malicious_status(device_id):
 # 6. 主程序入口
 # ==========================================
 if __name__ == "__main__":
+    # 忽略 requests 库在不验证证书时报的烦人 Warning
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     print(f"=================================================")
-    print(f"=== 🚀 智能音箱压测客户端已启动 (多路由版) ======")
+    print(f"=== 🚀 智能音箱压测客户端 (安全架构联调版) ======")
     print(f"=================================================\n")
     
     num_devices = 0
@@ -217,14 +254,13 @@ if __name__ == "__main__":
             
     device_list = [f"dev_{i:02d}" for i in range(1, num_devices + 1)]
     
-    include_false = input("👉 是否召唤 'dev_false' 注入脏数据来测试云端防御？(y/n): ")
+    include_false = input("👉 是否召唤 'dev_false' 注入脏数据测试网关防线？(y/n): ")
     if include_false.lower() == 'y':
         device_list.append("dev_false")
     
     print(f"\n[-] 正在准备同时启动 {len(device_list)} 台设备...")
-    print(f"[-] 设备列表: {', '.join(device_list)}")
     print(f"[-] 基础服务器 API: {BASE_URL}")
-    print("[-] 3秒后开始向云端推送数据... (按 Ctrl+C 随时停止)\n")
+    print("[-] 3秒后开始向云端推送加密数据... (按 Ctrl+C 随时停止)\n")
     time.sleep(3) 
     
     init_env()
