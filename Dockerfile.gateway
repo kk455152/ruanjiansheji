@@ -1,0 +1,10 @@
+FROM python:3.9-slim
+WORKDIR /app
+# 复制依赖清单并安装
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+# 复制所有代码和证书
+COPY . .
+# 声明网关使用的 HTTPS 端口
+EXPOSE 443
+CMD ["python", "app.py"]

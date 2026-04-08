@@ -1,0 +1,51 @@
+version: '3.8'
+services:
+  # 1. 消息中间件
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  # 2. 安全网关
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "443:443"
+    depends_on:
+      - rabbitmq
+
+  # 3. 业务工人集群 (每个工人执行不同的脚本)
+  worker-writer:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python worker_writer.py
+    depends_on:
+      - rabbitmq
+
+  worker-logger:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python worker_logger.py
+    depends_on:
+      - rabbitmq
+
+  worker-validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python worker_validator.py
+    depends_on:
+      - rabbitmq
+
+  worker-reader:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python worker_reader.py
+    depends_on:
+      - rabbitmq

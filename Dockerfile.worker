@@ -1,0 +1,6 @@
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+# 这里不写具体的 CMD，由总装配图指定
