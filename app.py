@@ -1,12 +1,46 @@
 # app.py
 from flask import Flask, request, jsonify
 from mq_config import get_connection, EXCHANGE_NAME
+from security_utils import decrypt_data, TOKEN_SALT  # 直接引用组员 B 上传的工具包
 import json
+import hashlib
 
 app = Flask(__name__)
 
 # ==========================================
-# 路由区域：精准匹配模拟器的 5 个 API 接口
+# 核心逻辑：安全解密与 Token 动态校验
+# ==========================================
+def validate_and_decrypt(request_json, auth_token, timestamp):
+    """
+    第一关：动态 Token 校验 (MD5: salt + timestamp)
+    第二关：AES-128-ECB 内容解密
+    """
+    # 1. 验证请求头中是否有必要的时间戳
+    if not timestamp:
+        return None, "Missing Timestamp"
+    
+    # 2. 动态计算 Token：严格对齐组员 B 的算法 MD5(salt + timestamp)
+    raw_str = f"{TOKEN_SALT}{timestamp}"
+    expected_token = hashlib.md5(raw_str.encode('utf-8')).hexdigest()
+    
+    # 3. 拦截非法 Token
+    if auth_token != expected_token:
+        return None, "Unauthorized: Invalid Token"
+
+    # 4. 获取加密的 Payload 数据
+    encrypted_payload = request_json.get('payload')
+    if not encrypted_payload:
+        return None, "Missing Payload"
+    
+    # 5. 调用 B 提供的工具进行 AES 解密
+    decrypted_dict = decrypt_data(encrypted_payload)
+    if not decrypted_dict:
+        return None, "Decryption Failed: Illegal data or Key mismatch"
+    
+    return decrypted_dict, None
+
+# ==========================================
+# 路由区域：统一处理模拟器的 5 个 API 接口
 # ==========================================
 @app.route('/api/bass', methods=['POST'])
 @app.route('/api/signal', methods=['POST'])
@@ -15,47 +49,52 @@ app = Flask(__name__)
 @app.route('/api/status/like', methods=['POST'])
 def handle_simulator_data():
     """
-    统一处理来自模拟器的所有 POST 请求
+    接收来自模拟器的加密 POST 请求，解密后打入 RabbitMQ
     """
-    # 1. 解析收到的 JSON 数据
-    data = request.json
+    # 从 HTTP Header 获取鉴权字段
+    auth_token = request.headers.get('Authorization')
+    timestamp = request.headers.get('X-Timestamp')
     
-    # 2. 安全机制验证 (Token验证，满足“良”等考核要求)
-    # 注意：这里的 token 值必须和你们模拟器里配置的一致
-    if not data or data.get("token") != "smart_speaker_2026":
-        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    # 1. 安全层：解密并验证合法性
+    data_decrypted, error_msg = validate_and_decrypt(request.json, auth_token, timestamp)
+    
+    if error_msg:
+        return jsonify({"status": "error", "message": error_msg}), 401
 
-    # 💡 核心小技巧：告诉 Worker 数据是从哪个接口来的
-    # request.path 会自动获取当前请求的路径（比如 '/api/bass'）
-    # 我们把它悄悄塞进数据里，这样你的 worker_writer 存文件时就能分门别类了
-    data['api_path'] = request.path
+    # 2. 路由元数据：记录数据来源接口，方便 Worker 后期分类存入 data_db
+    data_decrypted['api_path'] = request.path
 
-    # 3. 将验证通过的数据打包发给 RabbitMQ
+    # 3. 通信层：将解密后的干净数据发送至消息队列
     try:
+        # 获取由 mq_config 动态识别环境后的连接
         connection = get_connection()
         channel = connection.channel()
         
-        # 将字典转换为 JSON 字符串格式发送
+        # 将数据以 JSON 字符串形式发布到交换机
         channel.basic_publish(
             exchange=EXCHANGE_NAME,
-            routing_key='',  # 默认广播到绑定该交换机的所有队列
-            body=json.dumps(data)
+            routing_key='', 
+            body=json.dumps(data_decrypted)
         )
         connection.close()
         
-        # 4. 快速响应，要求响应时间 < 1s
         return jsonify({
             "status": "success", 
-            "message": f"Data from {request.path} safely queued!"
+            "message": f"Verified data from {request.path} sent to RabbitMQ"
         }), 200
         
     except Exception as e:
-        # 如果 MQ 没开或者连不上，返回 500 错误
-        return jsonify({"status": "error", "message": f"MQ Error: {str(e)}"}), 500
+        # 异常处理：如 MQ 服务未启动或连接超时
+        return jsonify({"status": "error", "message": f"Broker Error: {str(e)}"}), 500
 
-
+# ==========================================
+# 启动配置：强制开启 HTTPS
+# ==========================================
 if __name__ == '__main__':
-    # 默认启动在 5000 端口
-    # 如果你要自己测试 HTTPS，可以解开下面那行的注释，并注释掉最后一行
-    # app.run(host='0.0.0.0', port=5000, ssl_context='adhoc') 
-    app.run(host='0.0.0.0', port=5000)
+    # 生产环境使用 443 端口
+    # ssl_context 指向你复制内容并保存的证书文件
+    app.run(
+        host='0.0.0.0', 
+        port=443, 
+        ssl_context=('cert.pem', 'key.pem')
+    )
