@@ -1,12 +1,18 @@
 # mq_config.py
 import pika
+import os
 
 def get_connection():
     """统一获取 RabbitMQ 连接"""
-    # 使用你提供的公网 IP 和 凭据
+    # 💡 核心修改：如果是 Docker 运行，host 会从环境变量读取 'rabbitmq'
+    # 如果是本地直接跑，则使用你原来的公网 IP
+    mq_host = os.environ.get('MQ_HOST', '8.137.165.220')
+    
+    # 凭据保持不变
     credentials = pika.PlainCredentials('migrate', '2728')
+    
     parameters = pika.ConnectionParameters(
-        host='8.137.165.220', 
+        host=mq_host, 
         port=5672, 
         credentials=credentials,
         heartbeat=600,          # 保持长连接
@@ -14,7 +20,6 @@ def get_connection():
     )
     return pika.BlockingConnection(parameters)
 
-# 定义交换机名称（广播模式，确保 5 个模块都能同时收到数据）
+# 交换机和队列定义
 EXCHANGE_NAME = 'smart_speaker_exchange'
-# 定义原始数据队列名称
 RAW_DATA_QUEUE = 'speaker_data'
