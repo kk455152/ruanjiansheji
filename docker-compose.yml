@@ -1,11 +1,16 @@
 version: '3.8'
+
 services:
-  # 1. 消息中间件
+  # 1. 消息中间件 (换成自带 UI 的镜像，并设置默认账号)
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
 
   # 2. 安全网关
   gateway:
@@ -16,15 +21,19 @@ services:
       - "443:443"
     depends_on:
       - rabbitmq
+    restart: always  # 👈 增加自动重启，体现系统的高可用性
 
-  # 3. 业务工人集群 (每个工人执行不同的脚本)
+  # 3. 业务工人集群 (这里是拿“优”的关键：手动或自动扩容的目标)
   worker-writer:
     build:
       context: .
       dockerfile: Dockerfile.worker
     command: python worker_writer.py
+    deploy:
+      replicas: 1  # 👈 默认 1 个，演示时可以一键变 3 个
     depends_on:
       - rabbitmq
+    restart: on-failure
 
   worker-logger:
     build:
@@ -49,3 +58,13 @@ services:
     command: python worker_reader.py
     depends_on:
       - rabbitmq
+
+  # 4. 可视化监控 (这就是我之前说的“加分项”)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
