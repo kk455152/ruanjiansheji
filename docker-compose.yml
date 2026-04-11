@@ -1,18 +1,18 @@
 version: '3.8'
 
 services:
-  # 1. 消息中间件 (换成自带 UI 的镜像，并设置默认账号)
+  # 1. 消息中间件：提供数据通道与流量监控
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "15672:15672" # 管理后台端口，用于查看波浪线流量图
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
 
-  # 2. 安全网关
+  # 2. 安全网关：执行 HTTPS 校验与 AES 解密
   gateway:
     build:
       context: .
@@ -21,19 +21,32 @@ services:
       - "443:443"
     depends_on:
       - rabbitmq
-    restart: always  # 👈 增加自动重启，体现系统的高可用性
+    restart: always
 
-  # 3. 业务工人集群 (这里是拿“优”的关键：手动或自动扩容的目标)
+  # 3. 自动化大脑：负责根据压力自动启停 Worker
+  auto-scaler:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker 
+    command: python auto_scaler.py
+    volumes:
+      # 👈 核心：将宿主机的 Docker 守护进程挂载进容器，使其拥有“控制权”
+      - /var/run/docker.sock:/var/run/docker.sock 
+    depends_on:
+      - rabbitmq
+    restart: always
+
+  # 4. 业务工人：被自动伸缩的对象
   worker-writer:
     build:
       context: .
       dockerfile: Dockerfile.worker
     command: python worker_writer.py
-    deploy:
-      replicas: 1  # 👈 默认 1 个，演示时可以一键变 3 个
     depends_on:
       - rabbitmq
-    restart: on-failure
+    # 初始只启动 1 个，auto-scaler 会自动把它变成 3 个
+    deploy:
+      replicas: 1 
 
   worker-logger:
     build:
@@ -51,20 +64,12 @@ services:
     depends_on:
       - rabbitmq
 
-  worker-reader:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    command: python worker_reader.py
-    depends_on:
-      - rabbitmq
-
-  # 4. 可视化监控 (这就是我之前说的“加分项”)
+  # 5. 可视化监控：直观展示容器增减
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
     ports:
-      - "9000:9000"
+      - "9000:9000" # 👈 演示时展示给老师看的“大屏幕”
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: always
