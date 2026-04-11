@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # 1. 消息中间件：提供数据通道与流量监控
   rabbitmq:
-    image: rabbitmq:3-management
+    image: m.daocloud.io/docker.io/library/rabbitmq:3-management
     container_name: rabbitmq
     ports:
       - "5672:5672"
