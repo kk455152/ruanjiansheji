@@ -1,6 +1,6 @@
-FROM python:3.9-slim
+FROM m.daocloud.io/docker.io/library/python:3.9-slim
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 COPY . .
 # 这里不写具体的 CMD，由总装配图指定
