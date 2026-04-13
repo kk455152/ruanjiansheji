@@ -37,16 +37,17 @@ services:
     restart: always
 
   # 4. 业务工人：被自动伸缩的对象
-  worker-writer:
+worker-writer:
     build:
       context: .
       dockerfile: Dockerfile.worker
     command: python worker_writer.py
     depends_on:
       - rabbitmq
-    # 初始只启动 1 个，auto-scaler 会自动把它变成 3 个
+    volumes:
+      - /www/wwwroot/mysite/data_db:/www/wwwroot/mysite/data_db
     deploy:
-      replicas: 1 
+      replicas: 1
 
   worker-logger:
     build:
