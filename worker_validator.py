@@ -2,16 +2,9 @@
 import pika, json
 from mq_config import get_connection, EXCHANGE_NAME
 
-PROJECT_TOKEN = "smart_speaker_2026" 
-
 def clean_and_validate(data):
-    """根据最新取值范围表进行清洗 + 身份校验"""
-    # 1. 身份令牌校验 (Token Check)
-    received_token = data.get("token")
-    if received_token != PROJECT_TOKEN:
-        return False, f"身份验证失败! 非法Token: {received_token}"
-
-    # 2. 设备ID校验
+    """根据最新取值范围表进行清洗 (注意：身份令牌鉴权已完全交由 API网关 app.py 负责)"""
+    # 1. 设备ID校验
     dev_id = data.get("device_id")
     if not dev_id:
         return False, "缺失设备ID"
@@ -71,7 +64,7 @@ try:
     ch.queue_bind(exchange=EXCHANGE_NAME, queue=q.method.queue)
     ch.basic_qos(prefetch_count=1)
     ch.basic_consume(queue='validator_v2', on_message_callback=callback)
-    print(f' [*] 验证模块（清洗中心）已启动，当前项目Token: {PROJECT_TOKEN}')
+    print(f' [*] 验证模块（清洗中心）已启动，身份鉴权已移交至网关层')
     ch.start_consuming()
 except Exception as e:
     print(f" 🚨 [CRITICAL] 验证模块启动失败: {e}")

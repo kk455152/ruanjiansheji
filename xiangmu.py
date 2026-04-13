@@ -24,7 +24,7 @@ cache_lock = threading.Lock()
 # ==========================================
 # 2. 云端 API 路由配置
 # ==========================================
-BASE_URL = "http://8.137.165.220" 
+BASE_URL = "https://8.137.165.220" 
 
 # 路由映射表
 ENDPOINT_MAP = {
@@ -70,19 +70,26 @@ def send_via_http(payload):
         print(f"  [加密失败] {device_id} 的数据加密异常，取消发送。")
         return False
         
-    # 3. 【核心修改】严格对齐队友 C 期望的 JSON 格式
+    # 3. 【核心修改】严格对齐规范期望的 JSON 格式，补充文档要求的 sign
     secure_payload = {
         "timestamp": timestamp,
         "token": token,
-        "data": encrypted_str  # 这里装 AES 加密后的密文
+        "data": encrypted_str,  # 这里装 AES 加密后的密文
+        "sign": token           # 暂时以 token 作为 sign 发送，确保结构完整
+    }
+
+    # 4. 根据 music.pdf 要求增加 Authorization Header
+    headers = {
+        "Authorization": token
     }
 
     try:
-        # 发送请求（不再使用 headers 传 Token，全部放在 json 里）
+        # 发送请求（增加 headers）
         response = requests.post(
-            target_url, 
-            json=secure_payload, 
-            timeout=1.5, 
+            target_url,
+            headers=headers,
+            json=secure_payload,
+            timeout=1.0,
             verify=False
         )
         

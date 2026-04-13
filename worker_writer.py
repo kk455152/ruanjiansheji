@@ -2,8 +2,6 @@
 import pika, json, os
 from mq_config import get_connection, EXCHANGE_NAME
 
-PROJECT_TOKEN = "smart_speaker_2026"
-
 # 🔴 运维修改：使用绝对路径，确保文件生成位置固定
 # 注意：请确保运行程序的用户（如 jenkins 或 root）对该目录有写入权限
 DB_DIR = "/www/wwwroot/mysite/data_db"
@@ -18,10 +16,10 @@ if not os.path.exists(DB_DIR):
 def callback(ch, method, properties, body):
     try:
         data = json.loads(body)
-        
-        if data.get("token") != PROJECT_TOKEN:
-            return
-        
+
+        # 此时到达 worker 层的数据已经是经过 app.py 网关解密、鉴权的合法明文数据
+        # 故移除了硬编码的 token 校验逻辑
+
         dev_id = data.get("device_id", "unknown_device")
         api_type = data.get("type", "others")
         
