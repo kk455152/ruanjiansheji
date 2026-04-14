@@ -900,5 +900,35 @@
         "device_id": "dev_01",
         "type": "bass_gain",
         "value": 5
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 7
+    },
+    {
+        "device_id": "dev_01",
+        "type": "like_status",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -65.25
+    },
+    {
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 45
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connected",
+        "value": true
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connecting",
+        "value": true
     }
 ]

@@ -2799,3 +2799,15 @@
 2026-04-14 16:29:24,dev_01,volume,57
 2026-04-14 16:29:25,dev_01,is_connected,True
 2026-04-14 16:29:25,dev_01,is_connecting,False
+2026-04-14 16:59:53,dev_01,bass_gain,7
+2026-04-14 16:59:54,dev_01,like_status,False
+2026-04-14 16:59:54,dev_01,signal_strength,-65.25
+2026-04-14 16:59:54,dev_01,volume,45
+2026-04-14 16:59:55,dev_01,is_connected,True
+2026-04-14 16:59:55,dev_01,is_connecting,True
+2026-04-14 17:21:51,dev_01,signal_strength,-101.18
+2026-04-14 17:21:51,dev_01,bass_gain,6
+2026-04-14 17:21:51,dev_01,volume,40
+2026-04-14 17:21:52,dev_01,like_status,False
+2026-04-14 17:21:52,dev_01,is_connected,True
+2026-04-14 17:21:52,dev_01,is_connecting,False
