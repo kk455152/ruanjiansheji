@@ -760,5 +760,145 @@
         "device_id": "dev_02",
         "type": "is_connecting",
         "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 6
+    },
+    {
+        "device_id": "dev_01",
+        "type": "like_status",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -37.35
+    },
+    {
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 57
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -51.07
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 7
+    },
+    {
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 53
+    },
+    {
+        "device_id": "dev_01",
+        "type": "like_status",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connected",
+        "value": true
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connecting",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -80.72
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 6
+    },
+    {
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 47
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -79.57
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 8
+    },
+    {
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 46
+    },
+    {
+        "device_id": "dev_01",
+        "type": "like_status",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connected",
+        "value": true
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -75.16
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 5
+    },
+    {
+        "device_id": "dev_01",
+        "type": "volume",
+        "value": 58
+    },
+    {
+        "device_id": "dev_01",
+        "type": "like_status",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connected",
+        "value": true
+    },
+    {
+        "device_id": "dev_01",
+        "type": "is_connecting",
+        "value": false
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -58.19
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 3
+    },
+    {
+        "device_id": "dev_01",
+        "type": "signal_strength",
+        "value": -82.5
+    },
+    {
+        "device_id": "dev_01",
+        "type": "bass_gain",
+        "value": 5
     }
 ]
