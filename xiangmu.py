@@ -24,7 +24,8 @@ cache_lock = threading.Lock()
 # ==========================================
 # 2. 云端 API 路由配置
 # ==========================================
-BASE_URL = "https://8.137.165.220" 
+BASE_URL = os.environ.get("BASE_URL", "https://8.137.165.220").rstrip("/")
+HTTP_TIMEOUT = float(os.environ.get("HTTP_TIMEOUT", "5"))
 
 # 路由映射表
 ENDPOINT_MAP = {
@@ -89,7 +90,7 @@ def send_via_http(payload):
             target_url,
             headers=headers,
             json=secure_payload,
-            timeout=1.0,
+            timeout=(2.5, HTTP_TIMEOUT),
             verify=False
         )
         

@@ -4,8 +4,11 @@ import requests
 
 # 1. 配置参数
 # 注意：在 Docker 内部，可以用服务名 'rabbitmq' 访问
-RABBITMQ_API = "http://rabbitmq:15672/api/queues/%2f/speaker_data"
-AUTH = ('guest', 'guest')
+RABBITMQ_API = os.environ.get('MQ_MANAGEMENT_URL', "http://rabbitmq:15672/api/queues/%2f/speaker_data")
+AUTH = (
+    os.environ.get('MQ_USER', 'migrate'),
+    os.environ.get('MQ_PASSWORD', '2728')
+)
 
 # 2. 阈值设定 (演示时可以调小一点)
 UP_THRESHOLD = 15   # 消息堆积超过 15，扩容到 3 个工人

@@ -1,47 +1,54 @@
 version: '3.8'
 
 services:
-  # 1. 消息中间件：提供数据通道与流量监控
   rabbitmq:
     image: m.daocloud.io/docker.io/library/rabbitmq:3-management
     container_name: rabbitmq
     ports:
       - "5672:5672"
-      - "15672:15672" # 管理后台端口，用于查看波浪线流量图
+      - "15672:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_USER=migrate
+      - RABBITMQ_DEFAULT_PASS=2728
 
-  # 2. 安全网关：执行 HTTPS 校验与 AES 解密
   gateway:
     build:
       context: .
       dockerfile: Dockerfile.gateway
     ports:
       - "443:443"
+    environment:
+      - MQ_HOST=rabbitmq
+      - MQ_USER=migrate
+      - MQ_PASSWORD=2728
     depends_on:
       - rabbitmq
     restart: always
 
-  # 3. 自动化大脑：负责根据压力自动启停 Worker
   auto-scaler:
     build:
       context: .
-      dockerfile: Dockerfile.worker 
+      dockerfile: Dockerfile.worker
     command: python auto_scaler.py
     volumes:
-      # 👈 核心：将宿主机的 Docker 守护进程挂载进容器，使其拥有“控制权”
-      - /var/run/docker.sock:/var/run/docker.sock 
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MQ_USER=migrate
+      - MQ_PASSWORD=2728
+      - MQ_MANAGEMENT_URL=http://rabbitmq:15672/api/queues/%2f/speaker_data
     depends_on:
       - rabbitmq
     restart: always
 
-  # 4. 业务工人：被自动伸缩的对象
-worker-writer:
+  worker-writer:
     build:
       context: .
       dockerfile: Dockerfile.worker
     command: python worker_writer.py
+    environment:
+      - MQ_HOST=rabbitmq
+      - MQ_USER=migrate
+      - MQ_PASSWORD=2728
     depends_on:
       - rabbitmq
     volumes:
@@ -54,6 +61,10 @@ worker-writer:
       context: .
       dockerfile: Dockerfile.worker
     command: python worker_logger.py
+    environment:
+      - MQ_HOST=rabbitmq
+      - MQ_USER=migrate
+      - MQ_PASSWORD=2728
     depends_on:
       - rabbitmq
 
@@ -62,15 +73,18 @@ worker-writer:
       context: .
       dockerfile: Dockerfile.worker
     command: python worker_validator.py
+    environment:
+      - MQ_HOST=rabbitmq
+      - MQ_USER=migrate
+      - MQ_PASSWORD=2728
     depends_on:
       - rabbitmq
 
-  # 5. 可视化监控：直观展示容器增减
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
     ports:
-      - "9000:9000" # 👈 演示时展示给老师看的“大屏幕”
+      - "9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: always
