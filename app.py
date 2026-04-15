@@ -10,7 +10,7 @@ import time
 import pika
 from flask import Flask, jsonify, request
 
-from mq_config import EXCHANGE_NAME, get_connection
+from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
 
 app = Flask(__name__)
@@ -80,11 +80,7 @@ class RabbitPublisher:
         if self._channel is None:
             self._connection = get_connection()
             self._channel = self._connection.channel()
-            self._channel.exchange_declare(
-                exchange=EXCHANGE_NAME,
-                exchange_type='fanout',
-                durable=True,
-            )
+            declare_exchange(self._channel)
 
         return self._channel
 

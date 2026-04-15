@@ -1,6 +1,6 @@
 # worker_logger.py
 import pika, json, datetime, os
-from mq_config import get_connection, EXCHANGE_NAME
+from mq_config import get_connection, declare_exchange
 
 # 运维微调：确保日志存放在统一的数据目录下
 DB_DIR = "data_db"
@@ -38,7 +38,7 @@ def callback(ch, method, properties, body):
 try:
     conn = get_connection()
     ch = conn.channel()
-    ch.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='fanout')
+    declare_exchange(ch)
 
     # 声明日志模块专用队列
     q = ch.queue_declare(queue='logger_v2', durable=True)

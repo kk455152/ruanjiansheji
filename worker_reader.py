@@ -1,6 +1,6 @@
 # worker_reader.py
 import pika, json
-from mq_config import get_connection, EXCHANGE_NAME, RAW_DATA_QUEUE
+from mq_config import EXCHANGE_NAME, RAW_DATA_QUEUE, declare_exchange, get_connection
 
 def start_reader():
     try:
@@ -8,7 +8,7 @@ def start_reader():
         ch = conn.channel()
         
         # 1. 声明交换机：使用 fanout 广播模式
-        ch.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='fanout')
+        declare_exchange(ch)
         
         # 2. 声明原始队列：这是 B 端（模拟器）直接投递的目标
         ch.queue_declare(queue=RAW_DATA_QUEUE, durable=True)

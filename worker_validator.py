@@ -1,6 +1,6 @@
 # worker_validator.py
 import pika, json
-from mq_config import get_connection, EXCHANGE_NAME
+from mq_config import get_connection, declare_exchange
 
 def clean_and_validate(data):
     """根据最新取值范围表进行清洗 (注意：身份令牌鉴权已完全交由 API网关 app.py 负责)"""
@@ -57,7 +57,7 @@ def callback(ch, method, properties, body):
 try:
     conn = get_connection()
     ch = conn.channel()
-    ch.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='fanout')
+    declare_exchange(ch)
     
     # 声明验证专用队列
     q = ch.queue_declare(queue='validator_v2', durable=True)

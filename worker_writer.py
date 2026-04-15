@@ -1,6 +1,6 @@
 # worker_writer.py
 import pika, json, os
-from mq_config import get_connection, EXCHANGE_NAME
+from mq_config import get_connection, declare_exchange
 
 # 运维修改：使用绝对路径，确保文件生成位置固定
 # 注意：请确保运行程序的用户（如 jenkins 或 root）对该目录有写入权限
@@ -44,7 +44,7 @@ def callback(ch, method, properties, body):
 try:
     conn = get_connection()
     ch = conn.channel()
-    ch.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='fanout')
+    declare_exchange(ch)
     q = ch.queue_declare(queue='writer_v2', durable=True)
     ch.queue_bind(exchange=EXCHANGE_NAME, queue=q.method.queue)
     ch.basic_qos(prefetch_count=1)
