@@ -22,7 +22,7 @@ def get_ssl_paths():
 
 def run_with_local_https_server():
     cert_path, key_path = get_ssl_paths()
-    host = os.environ.get('APP_HOST', '0.0.0.0')
+    host = os.environ.get('APP_HOST', '127.0.0.1')
     port = int(os.environ.get('APP_PORT', '443'))
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_context.load_cert_chain(cert_path, key_path)
@@ -35,6 +35,8 @@ def run_with_local_https_server():
         ssl_context=ssl_context,
     )
     print(f'[gateway] HTTPS gateway listening at https://{host}:{port}', flush=True)
+    if host == '0.0.0.0':
+        print('[gateway] Bound to all interfaces for remote access.', flush=True)
     print('[gateway] Press Ctrl+C to stop.', flush=True)
     try:
         server.serve_forever()
