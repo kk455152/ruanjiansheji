@@ -19,7 +19,6 @@ services:
       - "443:443"
     environment:
       - APP_HOST=0.0.0.0
-      - APP_PROCESSES=4
       - MQ_HOST=8.137.165.220
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
