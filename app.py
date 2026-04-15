@@ -1,14 +1,17 @@
-# app.py
 import atexit
 import hashlib
 import json
 import os
+import queue
 import tempfile
+import threading
+import time
 
-from flask import Flask, request, jsonify
+import pika
+from flask import Flask, jsonify, request
 
-from mq_config import get_connection, EXCHANGE_NAME
-from security_utils import decrypt_data, TOKEN_SALT  # 直接引用组员 B 上传的工具包
+from mq_config import EXCHANGE_NAME, get_connection
+from security_utils import TOKEN_SALT, decrypt_data
 
 app = Flask(__name__)
 _TEMP_PEM_FILES = []
@@ -26,114 +29,213 @@ atexit.register(_cleanup_temp_pems)
 
 
 def normalize_pem_file(path, begin_marker, end_marker):
-    """
-    兼容仓库中只保存 Base64 内容、缺少 PEM 头尾的证书文件。
-    """
-    with open(path, 'r', encoding='ascii') as f:
-        content = f.read().strip()
+    with open(path, 'r', encoding='ascii') as file:
+        content = file.read().strip()
 
-    if content.startswith("-----BEGIN"):
+    if content.startswith('-----BEGIN'):
         return path
 
     fd, temp_path = tempfile.mkstemp(suffix='.pem')
-    with os.fdopen(fd, 'w', encoding='ascii', newline='\n') as f:
-        f.write(f"{begin_marker}\n{content}\n{end_marker}\n")
+    with os.fdopen(fd, 'w', encoding='ascii', newline='\n') as file:
+        file.write(f'{begin_marker}\n{content}\n{end_marker}\n')
 
     _TEMP_PEM_FILES.append(temp_path)
     return temp_path
 
-# ==========================================
-# 核心逻辑：安全解密与 Token 动态校验
-# ==========================================
-def validate_and_decrypt(request_json, auth_token, timestamp):
-    """
-    第一关：动态 Token 校验 (MD5: salt + timestamp)
-    第二关：AES-128-ECB 内容解密
-    """
-    # 1. 验证请求头中是否有必要的时间戳
-    if not timestamp:
-        return None, "Missing Timestamp"
-    
-    # 2. 动态计算 Token：严格对齐组员 B 的算法 MD5(salt + timestamp)
-    raw_str = f"{TOKEN_SALT}{timestamp}"
-    expected_token = hashlib.md5(raw_str.encode('utf-8')).hexdigest()
-    
-    # 3. 拦截非法 Token
-    if auth_token != expected_token:
-        return None, "Unauthorized: Invalid Token"
 
-    # 4. 获取加密的 Payload 数据 (修正为对齐 music.pdf 的 'data' 字段)
+class RabbitPublisher:
+    def __init__(self):
+        self._connection = None
+        self._channel = None
+        self._lock = threading.Lock()
+
+    def _close_unlocked(self):
+        channel = self._channel
+        connection = self._connection
+        self._channel = None
+        self._connection = None
+
+        if channel is not None:
+            try:
+                channel.close()
+            except Exception:
+                pass
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+    def close(self):
+        with self._lock:
+            self._close_unlocked()
+
+    def _ensure_channel_unlocked(self):
+        if self._connection and self._connection.is_closed:
+            self._close_unlocked()
+
+        if self._channel and self._channel.is_closed:
+            self._close_unlocked()
+
+        if self._channel is None:
+            self._connection = get_connection()
+            self._channel = self._connection.channel()
+            self._channel.exchange_declare(
+                exchange=EXCHANGE_NAME,
+                exchange_type='fanout',
+                durable=True,
+            )
+
+        return self._channel
+
+    def publish(self, body):
+        with self._lock:
+            channel = self._ensure_channel_unlocked()
+            channel.basic_publish(
+                exchange=EXCHANGE_NAME,
+                routing_key='',
+                body=body,
+                properties=pika.BasicProperties(
+                    content_type='application/json',
+                    delivery_mode=2,
+                ),
+            )
+
+
+class BufferedMessageDispatcher:
+    def __init__(self):
+        self.maxsize = int(os.environ.get('GATEWAY_QUEUE_MAXSIZE', '2000'))
+        self.max_retries = int(os.environ.get('GATEWAY_PUBLISH_RETRIES', '5'))
+        self.retry_delay = float(os.environ.get('GATEWAY_PUBLISH_RETRY_DELAY', '1.5'))
+        self._queue = queue.Queue(maxsize=self.maxsize)
+        self._publisher = RabbitPublisher()
+        self._stop_event = threading.Event()
+        self._worker = threading.Thread(
+            target=self._run,
+            name='gateway-publisher',
+            daemon=True,
+        )
+        self._started = False
+        self._start_lock = threading.Lock()
+
+    def start(self):
+        with self._start_lock:
+            if not self._started:
+                self._worker.start()
+                self._started = True
+
+    def stop(self):
+        self._stop_event.set()
+        try:
+            self._queue.put_nowait(None)
+        except queue.Full:
+            pass
+        self._publisher.close()
+
+    def submit(self, payload):
+        self.start()
+        serialized = json.dumps(payload, ensure_ascii=False)
+        item = {'body': serialized, 'attempt': 1}
+        try:
+            self._queue.put_nowait(item)
+            return True
+        except queue.Full:
+            return False
+
+    def _run(self):
+        while not self._stop_event.is_set():
+            item = self._queue.get()
+            if item is None:
+                self._queue.task_done()
+                continue
+
+            body = item['body']
+            attempt = item['attempt']
+
+            try:
+                self._publisher.publish(body)
+            except Exception as exc:
+                app.logger.warning(
+                    'Broker publish attempt %s failed: %s',
+                    attempt,
+                    exc,
+                )
+                self._publisher.close()
+                if attempt < self.max_retries and not self._stop_event.is_set():
+                    time.sleep(self.retry_delay)
+                    try:
+                        self._queue.put_nowait({'body': body, 'attempt': attempt + 1})
+                    except queue.Full:
+                        app.logger.error('Gateway publish queue is full while retrying a message.')
+                else:
+                    app.logger.error('Gateway dropped a message after %s publish attempts.', attempt)
+            finally:
+                self._queue.task_done()
+
+
+dispatcher = BufferedMessageDispatcher()
+dispatcher.start()
+atexit.register(dispatcher.stop)
+
+
+def validate_and_decrypt(request_json, auth_token, timestamp):
+    if not timestamp:
+        return None, 'Missing Timestamp'
+
+    raw_string = f'{TOKEN_SALT}{timestamp}'
+    expected_token = hashlib.md5(raw_string.encode('utf-8')).hexdigest()
+    if auth_token != expected_token:
+        return None, 'Unauthorized: Invalid Token'
+
     encrypted_payload = request_json.get('data')
     if not encrypted_payload:
-        return None, "Missing Payload"
-    
-    # 5. 调用 B 提供的工具进行 AES 解密
+        return None, 'Missing Payload'
+
     decrypted_dict = decrypt_data(encrypted_payload)
     if not decrypted_dict:
-        return None, "Decryption Failed: Illegal data or Key mismatch"
-    
+        return None, 'Decryption Failed: Illegal data or Key mismatch'
+
     return decrypted_dict, None
 
-# ==========================================
-# 路由区域：统一处理模拟器的 5 个 API 接口
-# ==========================================
+
+@app.after_request
+def ensure_connection_close(response):
+    response.headers['Connection'] = 'close'
+    return response
+
+
 @app.route('/api/bass', methods=['POST'])
 @app.route('/api/signal', methods=['POST'])
 @app.route('/api/volume', methods=['POST'])
 @app.route('/api/status/connection', methods=['POST'])
 @app.route('/api/status/like', methods=['POST'])
 def handle_simulator_data():
-    """
-    接收来自模拟器的加密 POST 请求，解密后打入 RabbitMQ
-    """
-    # 从 HTTP Header 获取鉴权字段
+    request_json = request.get_json(silent=True)
+    if not isinstance(request_json, dict):
+        return jsonify({'status': 'error', 'message': 'Invalid JSON Payload'}), 400
+
     auth_token = request.headers.get('Authorization')
-    # timestamp 在 xiangmu.py 中是放在 body 里的，对齐提取方式
-    timestamp = request.json.get('timestamp')
-    
-    # 1. 安全层：解密并验证合法性
-    data_decrypted, error_msg = validate_and_decrypt(request.json, auth_token, timestamp)
-    
+    timestamp = request_json.get('timestamp')
+    data_decrypted, error_msg = validate_and_decrypt(request_json, auth_token, timestamp)
     if error_msg:
-        return jsonify({"status": "error", "message": error_msg}), 401
+        return jsonify({'status': 'error', 'message': error_msg}), 401
 
-    # 2. 路由元数据：记录数据来源接口，方便 Worker 后期分类存入 data_db
     data_decrypted['api_path'] = request.path
+    if not dispatcher.submit(data_decrypted):
+        return jsonify({'status': 'error', 'message': 'Gateway queue is busy, please retry'}), 503
 
-    # 3. 通信层：将解密后的干净数据发送至消息队列
-    try:
-        # 获取由 mq_config 动态识别环境后的连接
-        connection = get_connection()
-        channel = connection.channel()
-        
-        # 将数据以 JSON 字符串形式发布到交换机
-        channel.basic_publish(
-            exchange=EXCHANGE_NAME,
-            routing_key='', 
-            body=json.dumps(data_decrypted)
-        )
-        connection.close()
-        
-        return jsonify({
-            "status": "success", 
-            "message": f"Verified data from {request.path} sent to RabbitMQ"
-        }), 200
-        
-    except Exception as e:
-        # 异常处理：如 MQ 服务未启动或连接超时
-        return jsonify({"status": "error", "message": f"Broker Error: {str(e)}"}), 500
+    return jsonify({
+        'status': 'success',
+        'message': f'Verified data from {request.path} queued for broker delivery',
+    }), 200
 
-# ==========================================
-# 启动配置：强制开启 HTTPS
-# ==========================================
+
 if __name__ == '__main__':
     cert_path = normalize_pem_file('cert.pem', '-----BEGIN CERTIFICATE-----', '-----END CERTIFICATE-----')
     key_path = normalize_pem_file('key.pem', '-----BEGIN PRIVATE KEY-----', '-----END PRIVATE KEY-----')
-
-    # 生产环境使用 443 端口
-    # ssl_context 指向你复制内容并保存的证书文件
     app.run(
         host='0.0.0.0',
         port=int(os.environ.get('APP_PORT', '443')),
-        ssl_context=(cert_path, key_path)
+        threaded=True,
+        ssl_context=(cert_path, key_path),
     )

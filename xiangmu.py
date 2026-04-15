@@ -5,8 +5,9 @@ import random
 import csv
 import os
 import json
-import requests  
+import requests
 from datetime import datetime
+from requests.adapters import HTTPAdapter
 
 # 【引入核心安全包】
 from security_utils import encrypt_data, generate_token
@@ -21,6 +22,7 @@ CACHE_FILE = os.path.join(LOG_DIR, "failed_messages.json")
 file_lock = threading.Lock()
 cache_lock = threading.Lock()
 print_lock = threading.Lock()
+http_local = threading.local()
 
 # ==========================================
 # 2. 云端 API 路由配置
@@ -53,6 +55,18 @@ def init_env():
 def log_message(message):
     with print_lock:
         print(message, flush=True)
+
+
+def get_http_session():
+    session = getattr(http_local, "session", None)
+    if session is None:
+        session = requests.Session()
+        session.trust_env = False
+        adapter = HTTPAdapter(pool_connections=32, pool_maxsize=32, max_retries=0)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        http_local.session = session
+    return session
 
 
 def is_retryable_payload(payload):
@@ -95,9 +109,11 @@ def send_via_http(payload):
         "Authorization": token
     }
 
+    response = None
     try:
         # 发送请求（增加 headers）
-        response = requests.post(
+        session = get_http_session()
+        response = session.post(
             target_url,
             headers=headers,
             json=secure_payload,
@@ -126,6 +142,10 @@ def send_via_http(payload):
     except requests.exceptions.RequestException as e:
         log_message(f"  [网络异常] {target_url}: {e}")
         return False
+
+    finally:
+        if response is not None:
+            response.close()
 
 def save_to_local_cache(payload):
     """将发送失败的【明文原始字典】存入本地，重传时会重新获取新时间戳并加密"""
