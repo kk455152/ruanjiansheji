@@ -20,6 +20,7 @@ CSV_FILE = os.path.join(LOG_DIR, "data.csv")
 CACHE_FILE = os.path.join(LOG_DIR, "failed_messages.json")
 file_lock = threading.Lock()
 cache_lock = threading.Lock()
+print_lock = threading.Lock()
 
 # ==========================================
 # 2. 云端 API 路由配置
@@ -48,6 +49,11 @@ def init_env():
         with open(CACHE_FILE, mode='w', encoding='utf-8') as f:
             json.dump([], f)
 
+
+def log_message(message):
+    with print_lock:
+        print(message, flush=True)
+
 # ==========================================
 # 3. 核心：带加密与鉴权的 HTTP 发送机制 (已对齐队友 C)
 # ==========================================
@@ -68,7 +74,7 @@ def send_via_http(payload):
     # 2. 将真实 Payload 进行 AES 加密
     encrypted_str = encrypt_data(payload)
     if not encrypted_str:
-        print(f"  [加密失败] {device_id} 的数据加密异常，取消发送。")
+        log_message(f"  [加密失败] {device_id} 的数据加密异常，取消发送。")
         return False
         
     # 3. 【核心修改】严格对齐规范期望的 JSON 格式，补充文档要求的 sign
@@ -99,18 +105,18 @@ def send_via_http(payload):
             
         # 拦截机制：被网关 403 拒绝，直接丢弃，不重传
         elif response.status_code == 403:
-            print(f"  [网关拦截 403] 鉴权失败或秘钥错误，脏数据已销毁！")
+            log_message("  [网关拦截 403] 鉴权失败或秘钥错误，脏数据已销毁！")
             return True 
             
         else:
-            print(f"  [云端拒绝] 接口: {target_url}, 状态码: {response.status_code}, 响应: {response.text}")
+            log_message(f"  [云端拒绝] 接口: {target_url}, 状态码: {response.status_code}, 响应: {response.text}")
             return False
             
     except requests.exceptions.Timeout:
-        print(f"  [请求超时] 无法在规定时间内连接到 {target_url}")
+        log_message(f"  [请求超时] 无法在规定时间内连接到 {target_url}")
         return False
     except requests.exceptions.RequestException as e:
-        print(f"  [网络异常] {target_url}: {e}")
+        log_message(f"  [网络异常] {target_url}: {e}")
         return False
 
 def save_to_local_cache(payload):
@@ -138,16 +144,16 @@ def background_retry_worker():
             if not cache_data:
                 continue
                 
-            print(f"\n[后台重传] 检测到 {len(cache_data)} 条积压数据，尝试向云端重传...")
+            log_message(f"\n[后台重传] 检测到 {len(cache_data)} 条积压数据，尝试向云端重传...")
             remaining_cache = []
             reconnect_success = False
             
             for index, payload in enumerate(cache_data):
                 if send_via_http(payload):
                     reconnect_success = True
-                    print(f"  [重发成功] {payload['device_id']} -> {get_target_url(payload['type'])}")
+                    log_message(f"  [重发成功] {payload['device_id']} -> {get_target_url(payload['type'])}")
                 else:
-                    print(f"  [重发失败] 接口依然拒绝连接，停止本次重发。")
+                    log_message("  [重发失败] 接口依然拒绝连接，停止本次重发。")
                     remaining_cache.extend(cache_data[index:])
                     break
             
@@ -155,7 +161,7 @@ def background_retry_worker():
                 json.dump(remaining_cache, f, indent=4)
                 
             if reconnect_success and not remaining_cache:
-                print("[重传完毕] 所有积压数据已成功同步至云端！\n")
+                log_message("[重传完毕] 所有积压数据已成功同步至云端！\n")
 
 def process_data(device_id, metric_type, value):
     """数据处理与分发中心"""
@@ -175,16 +181,16 @@ def process_data(device_id, metric_type, value):
     target_endpoint = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
     
     if device_id == "dev_false":
-        print(f"[毒数据注入] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
+        log_message(f"[毒数据注入] {device_id} | {metric_type}: {value} -> {target_endpoint}")
     else:
-        print(f"[尝试发送] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
+        log_message(f"[尝试发送] {device_id} | {metric_type}: {value} -> {target_endpoint}")
 
     # 触发安全发送机制
     if send_via_http(payload):
         if device_id != "dev_false":
-            print(f"[发送成功] {device_id} 的数据已安全送达 {target_endpoint}")
+            log_message(f"[发送成功] {device_id} 的数据已安全送达 {target_endpoint}")
     else:
-        print(f"[网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
+        log_message(f"[网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
         save_to_local_cache(payload)
 
 # ==========================================
@@ -244,9 +250,9 @@ if __name__ == "__main__":
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    print(f"=================================================")
-    print(f"=== 智能音箱压测客户端 (安全架构联调版) ======")
-    print(f"=================================================\n")
+    log_message("=================================================")
+    log_message("=== 智能音箱压测客户端 (安全架构联调版) ======")
+    log_message("=================================================\n")
     
     num_devices = 0
     while True:
@@ -254,11 +260,11 @@ if __name__ == "__main__":
             user_input = input("请输入要模拟的【正常设备】数量 (纯数字，例如 2): ")
             num_devices = int(user_input.strip())
             if num_devices <= 0 or num_devices > 50:
-                print("数量必须在 1 到 50 之间，请重新输入！\n")
+                log_message("数量必须在 1 到 50 之间，请重新输入！\n")
                 continue
             break 
         except ValueError:
-            print("输入格式错误！请只输入纯数字。\n")
+            log_message("输入格式错误！请只输入纯数字。\n")
             
     device_list = [f"dev_{i:02d}" for i in range(1, num_devices + 1)]
     
@@ -266,9 +272,9 @@ if __name__ == "__main__":
     if include_false.lower() == 'y':
         device_list.append("dev_false")
     
-    print(f"\n[-] 正在准备同时启动 {len(device_list)} 台设备...")
-    print(f"[-] 基础服务器 API: {BASE_URL}")
-    print("[-] 3秒后开始向云端推送加密数据... (按 Ctrl+C 随时停止)\n")
+    log_message(f"\n[-] 正在准备同时启动 {len(device_list)} 台设备...")
+    log_message(f"[-] 基础服务器 API: {BASE_URL}")
+    log_message("[-] 3秒后开始向云端推送加密数据... (按 Ctrl+C 随时停止)\n")
     time.sleep(3) 
     
     init_env()
@@ -294,4 +300,4 @@ if __name__ == "__main__":
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n=== 用户已停止模拟器 ===")
+        log_message("\n=== 用户已停止模拟器 ===")
