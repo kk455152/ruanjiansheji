@@ -26,7 +26,7 @@ print_lock = threading.Lock()
 # 2. 云端 API 路由配置
 # ==========================================
 BASE_URL = os.environ.get("BASE_URL", "https://8.137.165.220").rstrip("/")
-HTTP_TIMEOUT = float(os.environ.get("HTTP_TIMEOUT", "5"))
+HTTP_TIMEOUT = float(os.environ.get("HTTP_TIMEOUT", "15"))
 
 # 路由映射表
 ENDPOINT_MAP = {
@@ -53,6 +53,11 @@ def init_env():
 def log_message(message):
     with print_lock:
         print(message, flush=True)
+
+
+def is_retryable_payload(payload):
+    metric_type = payload.get("type")
+    return ENDPOINT_MAP.get(metric_type) is not None
 
 # ==========================================
 # 3. 核心：带加密与鉴权的 HTTP 发送机制 (已对齐队友 C)
@@ -96,7 +101,7 @@ def send_via_http(payload):
             target_url,
             headers=headers,
             json=secure_payload,
-            timeout=(2.5, HTTP_TIMEOUT),
+            timeout=HTTP_TIMEOUT,
             verify=False
         )
         
@@ -104,9 +109,12 @@ def send_via_http(payload):
             return True
             
         # 拦截机制：被网关 403 拒绝，直接丢弃，不重传
-        elif response.status_code == 403:
-            log_message("  [网关拦截 403] 鉴权失败或秘钥错误，脏数据已销毁！")
+        elif response.status_code in [401, 403]:
+            log_message(f"  [网关拦截 {response.status_code}] 鉴权失败或秘钥错误，当前数据已丢弃。")
             return True 
+        elif response.status_code == 404:
+            log_message(f"  [接口不存在 404] {target_url}，当前数据不再重试。")
+            return True
             
         else:
             log_message(f"  [云端拒绝] 接口: {target_url}, 状态码: {response.status_code}, 响应: {response.text}")
@@ -141,6 +149,17 @@ def background_retry_worker():
                     cache_data = json.load(f)
             except (FileNotFoundError, json.JSONDecodeError):
                 continue
+            if not cache_data:
+                continue
+
+            retryable_cache = [item for item in cache_data if isinstance(item, dict) and is_retryable_payload(item)]
+            dropped_count = len(cache_data) - len(retryable_cache)
+            if dropped_count:
+                log_message(f"[缓存清理] 已丢弃 {dropped_count} 条无效或不可重试的历史消息。")
+                with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(retryable_cache, f, indent=4)
+
+            cache_data = retryable_cache
             if not cache_data:
                 continue
                 
@@ -190,8 +209,11 @@ def process_data(device_id, metric_type, value):
         if device_id != "dev_false":
             log_message(f"[发送成功] {device_id} 的数据已安全送达 {target_endpoint}")
     else:
-        log_message(f"[网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
-        save_to_local_cache(payload)
+        if target_endpoint == "/api/unknown_malicious":
+            log_message(f"[非法类型已丢弃] {device_id} | {metric_type} 不进入重试缓存。")
+        else:
+            log_message(f"[网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
+            save_to_local_cache(payload)
 
 # ==========================================
 # 4. 核心数学与统计工具
