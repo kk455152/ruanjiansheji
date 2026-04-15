@@ -42,13 +42,13 @@ def callback(ch, method, properties, body):
         
         if success:
             # 只有验证通过才打印绿色勾选
-            print(f" ✅ [验证中心] 准入通过 | 设备: {data.get('device_id')} | 类型: {data.get('type')} | 值: {data.get('value')}")
+            print(f"[验证中心] 准入通过 | 设备: {data.get('device_id')} | 类型: {data.get('type')} | 值: {data.get('value')}")
         else:
             # 身份不符或数据错误，直接拦截并打印警告
-            print(f" ❌ [安全拦截] {info}")
+            print(f"[安全拦截] {info}")
             
     except Exception as e:
-        print(f" ⚠️ [系统异常] 解析失败或处理出错: {e}")
+        print(f"[系统异常] 解析失败或处理出错: {e}")
     finally:
         # 无论成功失败，都给 MQ 应答，防止消息堆积
         ch.basic_ack(delivery_tag=method.delivery_tag)
@@ -67,4 +67,4 @@ try:
     print(f' [*] 验证模块（清洗中心）已启动，身份鉴权已移交至网关层')
     ch.start_consuming()
 except Exception as e:
-    print(f" 🚨 [CRITICAL] 验证模块启动失败: {e}")
+    print(f"[CRITICAL] 验证模块启动失败: {e}")

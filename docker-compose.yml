@@ -18,11 +18,9 @@ services:
     ports:
       - "443:443"
     environment:
-      - MQ_HOST=rabbitmq
+      - MQ_HOST=8.137.165.220
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
-    depends_on:
-      - rabbitmq
     restart: always
 
   auto-scaler:
@@ -35,9 +33,7 @@ services:
     environment:
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
-      - MQ_MANAGEMENT_URL=http://rabbitmq:15672/api/queues/%2f/speaker_data
-    depends_on:
-      - rabbitmq
+      - MQ_MANAGEMENT_URL=http://8.137.165.220:15672/api/queues/%2f/speaker_data
     restart: always
 
   worker-writer:
@@ -46,15 +42,12 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_writer.py
     environment:
-      - MQ_HOST=rabbitmq
+      - MQ_HOST=8.137.165.220
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
-    depends_on:
-      - rabbitmq
     volumes:
       - /www/wwwroot/mysite/data_db:/www/wwwroot/mysite/data_db
-    deploy:
-      replicas: 1
+    restart: always
 
   worker-logger:
     build:
@@ -62,11 +55,10 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_logger.py
     environment:
-      - MQ_HOST=rabbitmq
+      - MQ_HOST=8.137.165.220
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
-    depends_on:
-      - rabbitmq
+    restart: always
 
   worker-validator:
     build:
@@ -74,11 +66,21 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_validator.py
     environment:
-      - MQ_HOST=rabbitmq
+      - MQ_HOST=8.137.165.220
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
-    depends_on:
-      - rabbitmq
+    restart: always
+
+  worker-reader:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python worker_reader.py
+    environment:
+      - MQ_HOST=8.137.165.220
+      - MQ_USER=migrate
+      - MQ_PASSWORD=2728
+    restart: always
 
   portainer:
     image: portainer/portainer-ce:latest

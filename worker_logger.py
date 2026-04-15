@@ -2,7 +2,7 @@
 import pika, json, datetime, os
 from mq_config import get_connection, EXCHANGE_NAME
 
-# 🔴 运维微调：确保日志存放在统一的数据目录下
+# 运维微调：确保日志存放在统一的数据目录下
 DB_DIR = "data_db"
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
@@ -25,12 +25,12 @@ def callback(ch, method, properties, body):
             f.write(log_entry)
             
         # 4. 控制台输出（由 Jenkins 捕获，方便 A 实时监控）
-        print(f" 📝 [LOG] 记录成功: {device_id} - {data_type}")
+        print(f"[LOG] 记录成功: {device_id} - {data_type}")
         
     except json.JSONDecodeError:
-        print(f" ⚠️ [LOG_ERROR] 收到非JSON格式数据")
+        print(f"[LOG_ERROR] 收到非JSON格式数据")
     except Exception as e:
-        print(f" ❌ [LOG_ERROR] 发生异常: {e}")
+        print(f"[LOG_ERROR] 发生异常: {e}")
     finally:
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -48,4 +48,4 @@ try:
     print(f' [*] 全量日志模块已就绪，存储路径: {DB_DIR}/system_access.log')
     ch.start_consuming()
 except Exception as e:
-    print(f" 🚨 [CRITICAL] 日志模块启动失败: {e}")
+    print(f"[CRITICAL] 日志模块启动失败: {e}")

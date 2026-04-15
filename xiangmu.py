@@ -138,16 +138,16 @@ def background_retry_worker():
             if not cache_data:
                 continue
                 
-            print(f"\n🔄 [后台重传] 检测到 {len(cache_data)} 条积压数据，尝试向云端重传...")
+            print(f"\n[后台重传] 检测到 {len(cache_data)} 条积压数据，尝试向云端重传...")
             remaining_cache = []
             reconnect_success = False
             
             for index, payload in enumerate(cache_data):
                 if send_via_http(payload):
                     reconnect_success = True
-                    print(f"  └─ ✅ 重发成功: {payload['device_id']} -> {get_target_url(payload['type'])}")
+                    print(f"  [重发成功] {payload['device_id']} -> {get_target_url(payload['type'])}")
                 else:
-                    print(f"  └─ ❌ 接口依然拒绝连接，停止本次重发。")
+                    print(f"  [重发失败] 接口依然拒绝连接，停止本次重发。")
                     remaining_cache.extend(cache_data[index:])
                     break
             
@@ -155,7 +155,7 @@ def background_retry_worker():
                 json.dump(remaining_cache, f, indent=4)
                 
             if reconnect_success and not remaining_cache:
-                print("🎉 [重传完毕] 所有积压数据已成功同步至云端！\n")
+                print("[重传完毕] 所有积压数据已成功同步至云端！\n")
 
 def process_data(device_id, metric_type, value):
     """数据处理与分发中心"""
@@ -175,16 +175,16 @@ def process_data(device_id, metric_type, value):
     target_endpoint = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
     
     if device_id == "dev_false":
-        print(f"👿 [毒数据注入] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
+        print(f"[毒数据注入] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
     else:
-        print(f"📡 [尝试发送] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
+        print(f"[尝试发送] {device_id} | {metric_type}: {value} -> {target_endpoint}", flush=True)
 
     # 触发安全发送机制
     if send_via_http(payload):
         if device_id != "dev_false":
-            print(f"✅ [发送成功] {device_id} 的数据已安全送达 {target_endpoint}")
+            print(f"[发送成功] {device_id} 的数据已安全送达 {target_endpoint}")
     else:
-        print(f"⚠️ [网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
+        print(f"[网络/请求异常] {device_id} 无法送达，已存入本地缓存...")
         save_to_local_cache(payload)
 
 # ==========================================
@@ -245,24 +245,24 @@ if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     print(f"=================================================")
-    print(f"=== 🚀 智能音箱压测客户端 (安全架构联调版) ======")
+    print(f"=== 智能音箱压测客户端 (安全架构联调版) ======")
     print(f"=================================================\n")
     
     num_devices = 0
     while True:
         try:
-            user_input = input("👉 请输入要模拟的【正常设备】数量 (纯数字，例如 2): ")
+            user_input = input("请输入要模拟的【正常设备】数量 (纯数字，例如 2): ")
             num_devices = int(user_input.strip())
             if num_devices <= 0 or num_devices > 50:
-                print("⚠️ 数量必须在 1 到 50 之间，请重新输入！\n")
+                print("数量必须在 1 到 50 之间，请重新输入！\n")
                 continue
             break 
         except ValueError:
-            print("⚠️ 输入格式错误！请只输入纯数字。\n")
+            print("输入格式错误！请只输入纯数字。\n")
             
     device_list = [f"dev_{i:02d}" for i in range(1, num_devices + 1)]
     
-    include_false = input("👉 是否召唤 'dev_false' 注入脏数据测试网关防线？(y/n): ")
+    include_false = input("是否召唤 'dev_false' 注入脏数据测试网关防线？(y/n): ")
     if include_false.lower() == 'y':
         device_list.append("dev_false")
     

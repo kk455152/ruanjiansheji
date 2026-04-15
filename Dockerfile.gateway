@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 COPY . .
 # 声明网关使用的 HTTPS 端口
 EXPOSE 443
-CMD ["python", "app.py"]
+CMD ["python", "run_gateway.py"]
