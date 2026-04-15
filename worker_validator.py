@@ -1,6 +1,6 @@
 # worker_validator.py
 import pika, json
-from mq_config import get_connection, declare_exchange
+from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 
 def clean_and_validate(data):
     """根据最新取值范围表进行清洗 (注意：身份令牌鉴权已完全交由 API网关 app.py 负责)"""

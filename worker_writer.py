@@ -1,6 +1,6 @@
 # worker_writer.py
 import pika, json, os
-from mq_config import get_connection, declare_exchange
+from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 
 # 运维修改：使用绝对路径，确保文件生成位置固定
 # 注意：请确保运行程序的用户（如 jenkins 或 root）对该目录有写入权限

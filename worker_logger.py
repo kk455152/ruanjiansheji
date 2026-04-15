@@ -1,6 +1,6 @@
 # worker_logger.py
 import pika, json, datetime, os
-from mq_config import get_connection, declare_exchange
+from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 
 # 运维微调：确保日志存放在统一的数据目录下
 DB_DIR = "data_db"
