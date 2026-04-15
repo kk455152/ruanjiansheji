@@ -22,7 +22,7 @@ def get_ssl_paths():
 
 def run_with_local_https_server():
     cert_path, key_path = get_ssl_paths()
-    host = os.environ.get('APP_HOST', '127.0.0.1')
+    host = os.environ.get('APP_HOST', '0.0.0.0')
     port = int(os.environ.get('APP_PORT', '443'))
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_context.load_cert_chain(cert_path, key_path)
