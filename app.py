@@ -1,4 +1,5 @@
 import atexit
+from collections import deque
 import hashlib
 import json
 import os
@@ -15,6 +16,11 @@ from security_utils import TOKEN_SALT, decrypt_data
 
 app = Flask(__name__)
 _TEMP_PEM_FILES = []
+METRICS_WINDOW_SECONDS = float(os.environ.get('GATEWAY_METRICS_WINDOW_SECONDS', '10'))
+METRICS_FILE = os.environ.get('GATEWAY_METRICS_FILE', '/runtime/gateway_metrics.json')
+METRICS_FLUSH_INTERVAL = float(os.environ.get('GATEWAY_METRICS_FLUSH_INTERVAL', '1'))
+_metrics_lock = threading.Lock()
+_accepted_timestamps = deque()
 
 
 def _cleanup_temp_pems():
@@ -138,6 +144,9 @@ class BufferedMessageDispatcher:
         except queue.Full:
             return False
 
+    def queue_size(self):
+        return self._queue.qsize()
+
     def _run(self):
         while not self._stop_event.is_set():
             item = self._queue.get()
@@ -172,6 +181,65 @@ class BufferedMessageDispatcher:
 dispatcher = BufferedMessageDispatcher()
 dispatcher.start()
 atexit.register(dispatcher.stop)
+
+
+def _trim_metric_window(now):
+    cutoff = now - METRICS_WINDOW_SECONDS
+    while _accepted_timestamps and _accepted_timestamps[0] < cutoff:
+        _accepted_timestamps.popleft()
+
+
+def record_accepted_request():
+    now = time.time()
+    with _metrics_lock:
+        _accepted_timestamps.append(now)
+        _trim_metric_window(now)
+
+
+def get_gateway_metrics():
+    now = time.time()
+    with _metrics_lock:
+        _trim_metric_window(now)
+        accepted_count = len(_accepted_timestamps)
+
+    window = max(METRICS_WINDOW_SECONDS, 1.0)
+    return {
+        'updated_at': now,
+        'accepted_per_second': accepted_count / window,
+        'accepted_in_window': accepted_count,
+        'window_seconds': METRICS_WINDOW_SECONDS,
+        'dispatcher_queue_size': dispatcher.queue_size(),
+    }
+
+
+def write_gateway_metrics_file():
+    if not METRICS_FILE:
+        return
+
+    metrics_dir = os.path.dirname(METRICS_FILE)
+    if metrics_dir:
+        os.makedirs(metrics_dir, exist_ok=True)
+
+    tmp_path = f'{METRICS_FILE}.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as file:
+        json.dump(get_gateway_metrics(), file, ensure_ascii=False)
+    os.replace(tmp_path, METRICS_FILE)
+
+
+def gateway_metrics_writer():
+    while True:
+        try:
+            write_gateway_metrics_file()
+        except Exception as exc:
+            app.logger.warning('Failed to write gateway metrics file: %s', exc)
+        time.sleep(METRICS_FLUSH_INTERVAL)
+
+
+threading.Thread(
+    target=gateway_metrics_writer,
+    name='gateway-metrics-writer',
+    daemon=True,
+).start()
 
 
 def validate_and_decrypt(request_json, auth_token, timestamp):
@@ -220,10 +288,16 @@ def handle_simulator_data():
     if not dispatcher.submit(data_decrypted):
         return jsonify({'status': 'error', 'message': 'Gateway queue is busy, please retry'}), 503
 
+    record_accepted_request()
     return jsonify({
         'status': 'success',
         'message': f'Verified data from {request.path} queued for broker delivery',
     }), 200
+
+
+@app.route('/internal/metrics', methods=['GET'])
+def internal_metrics():
+    return jsonify(get_gateway_metrics()), 200
 
 
 if __name__ == '__main__':

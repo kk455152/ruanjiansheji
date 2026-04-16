@@ -2,6 +2,7 @@ import os
 import socket
 import ssl
 
+import werkzeug.serving as serving
 from werkzeug.serving import WSGIRequestHandler, make_server
 
 from app import app, normalize_pem_file
@@ -39,6 +40,10 @@ def get_runtime_port():
     return int(os.environ.get('APP_PORT', '443'))
 
 
+def get_listen_queue():
+    return int(os.environ.get('APP_LISTEN_QUEUE', '1024'))
+
+
 def get_display_host(host):
     return '127.0.0.1' if host == '0.0.0.0' and os.name == 'nt' else host
 
@@ -47,8 +52,19 @@ def build_ssl_context(cert_path, key_path):
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     if hasattr(ssl, 'TLSVersion'):
         ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+    if hasattr(ssl, 'OP_NO_COMPRESSION'):
+        ssl_context.options |= ssl.OP_NO_COMPRESSION
+    if hasattr(ssl, 'OP_NO_RENEGOTIATION'):
+        ssl_context.options |= ssl.OP_NO_RENEGOTIATION
     ssl_context.load_cert_chain(cert_path, key_path)
     return ssl_context
+
+
+def configure_server_queue(listen_queue):
+    for class_name in ('BaseWSGIServer', 'ThreadedWSGIServer'):
+        server_class = getattr(serving, class_name, None)
+        if server_class is not None:
+            server_class.request_queue_size = listen_queue
 
 
 def run_with_stable_https_server():
@@ -56,7 +72,9 @@ def run_with_stable_https_server():
     host = get_runtime_host()
     port = get_runtime_port()
     display_host = get_display_host(host)
+    listen_queue = get_listen_queue()
     ssl_context = build_ssl_context(cert_path, key_path)
+    configure_server_queue(listen_queue)
 
     server = make_server(
         host,
@@ -67,11 +85,13 @@ def run_with_stable_https_server():
         ssl_context=ssl_context,
     )
     server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    server.socket.listen(listen_queue)
 
     print(f'[gateway] HTTPS gateway listening at https://{display_host}:{port}', flush=True)
     if host == '0.0.0.0':
         print('[gateway] Bound to all interfaces for remote access.', flush=True)
     print('[gateway] Running in stable threaded TLS mode.', flush=True)
+    print(f'[gateway] TLS listen queue size: {listen_queue}', flush=True)
     print('[gateway] Keep-alive is disabled per request to avoid long-lived TLS stalls.', flush=True)
     print('[gateway] Press Ctrl+C to stop.', flush=True)
 
