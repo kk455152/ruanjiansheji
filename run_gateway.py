@@ -1,11 +1,39 @@
+import atexit
 import os
 import socket
 import ssl
+import tempfile
 
 import werkzeug.serving as serving
 from werkzeug.serving import WSGIRequestHandler, make_server
 
-from app import app, normalize_pem_file
+_TEMP_PEM_FILES = []
+
+
+def _cleanup_temp_pems():
+    for path in _TEMP_PEM_FILES:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+atexit.register(_cleanup_temp_pems)
+
+
+def normalize_pem_file(path, begin_marker, end_marker):
+    with open(path, 'r', encoding='ascii') as file:
+        content = file.read().strip()
+
+    if content.startswith('-----BEGIN'):
+        return path
+
+    fd, temp_path = tempfile.mkstemp(suffix='.pem')
+    with os.fdopen(fd, 'w', encoding='ascii', newline='\n') as file:
+        file.write(f'{begin_marker}\n{content}\n{end_marker}\n')
+
+    _TEMP_PEM_FILES.append(temp_path)
+    return temp_path
 
 
 class StableTLSRequestHandler(WSGIRequestHandler):
@@ -44,6 +72,14 @@ def get_listen_queue():
     return int(os.environ.get('APP_LISTEN_QUEUE', '1024'))
 
 
+def get_gateway_workers():
+    return int(os.environ.get('GATEWAY_WORKERS', os.environ.get('WEB_CONCURRENCY', '4')))
+
+
+def get_gateway_threads():
+    return int(os.environ.get('GATEWAY_THREADS', '8'))
+
+
 def get_display_host(host):
     return '127.0.0.1' if host == '0.0.0.0' and os.name == 'nt' else host
 
@@ -68,6 +104,8 @@ def configure_server_queue(listen_queue):
 
 
 def run_with_stable_https_server():
+    from app import app
+
     cert_path, key_path = get_ssl_paths()
     host = get_runtime_host()
     port = get_runtime_port()
@@ -101,8 +139,65 @@ def run_with_stable_https_server():
         print('\n[gateway] Local gateway stopped.', flush=True)
 
 
+def run_with_gunicorn():
+    try:
+        import gunicorn.app.wsgiapp  # noqa: F401
+    except ImportError:
+        print('[gateway] Gunicorn unavailable, falling back to stable Werkzeug HTTPS server.', flush=True)
+        run_with_stable_https_server()
+        return
+
+    cert_path, key_path = get_ssl_paths()
+    host = get_runtime_host()
+    port = get_runtime_port()
+    workers = get_gateway_workers()
+    threads = get_gateway_threads()
+    listen_queue = get_listen_queue()
+
+    args = [
+        'gunicorn',
+        'app:app',
+        '--bind',
+        f'{host}:{port}',
+        '--worker-class',
+        'gthread',
+        '--workers',
+        str(workers),
+        '--threads',
+        str(threads),
+        '--backlog',
+        str(listen_queue),
+        '--timeout',
+        os.environ.get('GATEWAY_TIMEOUT', '30'),
+        '--graceful-timeout',
+        os.environ.get('GATEWAY_GRACEFUL_TIMEOUT', '30'),
+        '--keep-alive',
+        os.environ.get('GATEWAY_KEEP_ALIVE', '2'),
+        '--certfile',
+        cert_path,
+        '--keyfile',
+        key_path,
+        '--access-logfile',
+        '-',
+        '--error-logfile',
+        '-',
+        '--log-level',
+        os.environ.get('GATEWAY_LOG_LEVEL', 'info'),
+    ]
+
+    print(
+        f'[gateway] Starting Gunicorn HTTPS gateway on https://{get_display_host(host)}:{port} '
+        f'with workers={workers}, threads={threads}, backlog={listen_queue}',
+        flush=True,
+    )
+    os.execvp('gunicorn', args)
+
+
 def main():
-    run_with_stable_https_server()
+    if os.environ.get('GATEWAY_USE_GUNICORN', 'true').lower() in ('1', 'true', 'yes', 'on'):
+        run_with_gunicorn()
+    else:
+        run_with_stable_https_server()
 
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 import math
+import glob
 import json
 import os
 import signal
@@ -15,6 +16,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 GATEWAY_METRICS_URL = os.environ.get('GATEWAY_METRICS_URL', 'https://gateway/internal/metrics')
 GATEWAY_METRICS_FILE = os.environ.get('GATEWAY_METRICS_FILE', '/runtime/gateway_metrics.json')
+GATEWAY_METRICS_FILE_PATTERN = os.environ.get('GATEWAY_METRICS_FILE_PATTERN')
 GATEWAY_METRICS_STALE_SECONDS = float(os.environ.get('GATEWAY_METRICS_STALE_SECONDS', '15'))
 RABBITMQ_QUEUE_API = os.environ.get(
     'MQ_QUEUE_API',
@@ -86,13 +88,37 @@ def get_gateway_metrics():
     }
 
 
-def get_gateway_file_metrics():
-    with open(GATEWAY_METRICS_FILE, 'r', encoding='utf-8') as file:
-        payload = json.load(file)
+def load_fresh_gateway_metrics_payloads():
+    paths = []
+    if GATEWAY_METRICS_FILE_PATTERN:
+        paths.extend(glob.glob(GATEWAY_METRICS_FILE_PATTERN))
+    elif GATEWAY_METRICS_FILE:
+        paths.append(GATEWAY_METRICS_FILE)
 
-    updated_at = float(payload.get('updated_at', 0) or 0)
-    age = time.time() - updated_at
-    if age > GATEWAY_METRICS_STALE_SECONDS:
+    payloads = []
+    seen = set()
+    now = time.time()
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+
+        try:
+            with open(path, 'r', encoding='utf-8') as file:
+                payload = json.load(file)
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        updated_at = float(payload.get('updated_at', 0) or 0)
+        if now - updated_at <= GATEWAY_METRICS_STALE_SECONDS:
+            payloads.append(payload)
+
+    return payloads
+
+
+def get_gateway_file_metrics():
+    payloads = load_fresh_gateway_metrics_payloads()
+    if not payloads:
         return {
             'messages': 0,
             'ready': 0,
@@ -102,8 +128,8 @@ def get_gateway_file_metrics():
             'deliver_rate': 0.0,
         }
 
-    accepted_rate = float(payload.get('accepted_per_second', 0) or 0)
-    dispatcher_queue_size = int(payload.get('dispatcher_queue_size', 0) or 0)
+    accepted_rate = sum(float(payload.get('accepted_per_second', 0) or 0) for payload in payloads)
+    dispatcher_queue_size = sum(int(payload.get('dispatcher_queue_size', 0) or 0) for payload in payloads)
     return {
         'messages': dispatcher_queue_size,
         'ready': dispatcher_queue_size,
@@ -319,6 +345,8 @@ def apply_scale(client, desired_count):
 
 def main():
     log(f'watching gateway metrics file: {GATEWAY_METRICS_FILE}')
+    if GATEWAY_METRICS_FILE_PATTERN:
+        log(f'watching gateway metrics file pattern: {GATEWAY_METRICS_FILE_PATTERN}')
     log(f'watching gateway metrics: {GATEWAY_METRICS_URL}')
     log(f'fallback RabbitMQ queue metrics: {RABBITMQ_QUEUE_API}')
     log(f'scaling worker-writer containers between {MIN_WORKERS} and {MAX_WORKERS}')

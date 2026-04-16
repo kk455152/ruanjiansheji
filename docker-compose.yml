@@ -19,7 +19,14 @@ services:
     environment:
       - APP_HOST=0.0.0.0
       - APP_LISTEN_QUEUE=1024
+      - GATEWAY_USE_GUNICORN=true
+      - GATEWAY_WORKERS=4
+      - GATEWAY_THREADS=8
+      - GATEWAY_TIMEOUT=30
+      - GATEWAY_KEEP_ALIVE=2
       - GATEWAY_METRICS_FILE=/runtime/gateway_metrics.json
+      - GATEWAY_METRICS_FILE_PATTERN=/runtime/gateway_metrics.*.json
+      - GATEWAY_METRICS_MULTIPROCESS=true
       - MQ_HOST=127.0.0.1
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
@@ -41,6 +48,7 @@ services:
       - MQ_PASSWORD=2728
       - GATEWAY_METRICS_URL=https://172.28.0.1/internal/metrics
       - GATEWAY_METRICS_FILE=/runtime/gateway_metrics.json
+      - GATEWAY_METRICS_FILE_PATTERN=/runtime/gateway_metrics.*.json
       - MQ_QUEUE_API=http://172.28.0.1:15672/api/queues/%2f/writer_v2
       - SCALE_BASE_CONTAINER=smart-speaker-full-deploy_worker-writer_1
       - SCALE_MIN_WORKERS=1

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import queue
+import glob
 import tempfile
 import threading
 import time
@@ -18,6 +19,8 @@ app = Flask(__name__)
 _TEMP_PEM_FILES = []
 METRICS_WINDOW_SECONDS = float(os.environ.get('GATEWAY_METRICS_WINDOW_SECONDS', '10'))
 METRICS_FILE = os.environ.get('GATEWAY_METRICS_FILE', '/runtime/gateway_metrics.json')
+METRICS_FILE_PATTERN = os.environ.get('GATEWAY_METRICS_FILE_PATTERN')
+METRICS_MULTIPROCESS = os.environ.get('GATEWAY_METRICS_MULTIPROCESS', 'false').lower() in ('1', 'true', 'yes', 'on')
 METRICS_FLUSH_INTERVAL = float(os.environ.get('GATEWAY_METRICS_FLUSH_INTERVAL', '1'))
 _metrics_lock = threading.Lock()
 _accepted_timestamps = deque()
@@ -209,6 +212,54 @@ def get_gateway_metrics():
         'accepted_in_window': accepted_count,
         'window_seconds': METRICS_WINDOW_SECONDS,
         'dispatcher_queue_size': dispatcher.queue_size(),
+        'pid': os.getpid(),
+    }
+
+
+def get_metrics_write_path():
+    if not METRICS_MULTIPROCESS:
+        return METRICS_FILE
+
+    base, ext = os.path.splitext(METRICS_FILE)
+    return f'{base}.{os.getpid()}{ext or ".json"}'
+
+
+def aggregate_gateway_metrics():
+    pattern = METRICS_FILE_PATTERN or METRICS_FILE
+    paths = glob.glob(pattern)
+    if not paths and METRICS_FILE:
+        paths = [METRICS_FILE]
+
+    now = time.time()
+    accepted_count = 0
+    dispatcher_queue_size = 0
+    latest_updated_at = 0.0
+    process_count = 0
+
+    for path in paths:
+        try:
+            with open(path, 'r', encoding='utf-8') as file:
+                payload = json.load(file)
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        updated_at = float(payload.get('updated_at', 0) or 0)
+        if now - updated_at > max(METRICS_WINDOW_SECONDS * 2, 15.0):
+            continue
+
+        accepted_count += int(payload.get('accepted_in_window', 0) or 0)
+        dispatcher_queue_size += int(payload.get('dispatcher_queue_size', 0) or 0)
+        latest_updated_at = max(latest_updated_at, updated_at)
+        process_count += 1
+
+    window = max(METRICS_WINDOW_SECONDS, 1.0)
+    return {
+        'updated_at': latest_updated_at or now,
+        'accepted_per_second': accepted_count / window,
+        'accepted_in_window': accepted_count,
+        'window_seconds': METRICS_WINDOW_SECONDS,
+        'dispatcher_queue_size': dispatcher_queue_size,
+        'process_count': process_count,
     }
 
 
@@ -216,14 +267,15 @@ def write_gateway_metrics_file():
     if not METRICS_FILE:
         return
 
-    metrics_dir = os.path.dirname(METRICS_FILE)
+    metrics_path = get_metrics_write_path()
+    metrics_dir = os.path.dirname(metrics_path)
     if metrics_dir:
         os.makedirs(metrics_dir, exist_ok=True)
 
-    tmp_path = f'{METRICS_FILE}.tmp'
+    tmp_path = f'{metrics_path}.tmp'
     with open(tmp_path, 'w', encoding='utf-8') as file:
         json.dump(get_gateway_metrics(), file, ensure_ascii=False)
-    os.replace(tmp_path, METRICS_FILE)
+    os.replace(tmp_path, metrics_path)
 
 
 def gateway_metrics_writer():
@@ -297,6 +349,8 @@ def handle_simulator_data():
 
 @app.route('/internal/metrics', methods=['GET'])
 def internal_metrics():
+    if METRICS_MULTIPROCESS:
+        return jsonify(aggregate_gateway_metrics()), 200
     return jsonify(get_gateway_metrics()), 200
 
 
