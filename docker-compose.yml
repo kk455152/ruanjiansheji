@@ -72,12 +72,12 @@ services:
       - MQ_HOST=172.28.0.1
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
-      - MYSQL_HOST=8.137.165.220
+      - MYSQL_HOST=172.28.0.1
       - MYSQL_PORT=3306
       - MYSQL_DATABASE=smart_speaker
       - MYSQL_USER=team
       - MYSQL_PASSWORD=123456
-      - MONGO_URI=mongodb://y:123@8.137.165.220:27017/musicplayer?authSource=musicplayer
+      - MONGO_URI=mongodb://y:123@172.28.0.1:27017/musicplayer?authSource=musicplayer
       - MONGO_DATABASE=musicplayer
       - MONGO_COLLECTION=device_metrics
     volumes:
