@@ -336,6 +336,7 @@ def handle_simulator_data():
     if error_msg:
         return jsonify({'status': 'error', 'message': error_msg}), 401
 
+    data_decrypted['timestamp'] = int(timestamp)
     data_decrypted['api_path'] = request.path
     if not dispatcher.submit(data_decrypted):
         return jsonify({'status': 'error', 'message': 'Gateway queue is busy, please retry'}), 503

@@ -73,6 +73,14 @@ def is_retryable_payload(payload):
     metric_type = payload.get("type")
     return ENDPOINT_MAP.get(metric_type) is not None
 
+
+def build_user_profile(device_id):
+    normalized = str(device_id).replace("dev_", "user_")
+    return {
+        "user_account": f"{normalized}@smart-speaker.local",
+        "user_password": f"{normalized}_pwd_2026",
+    }
+
 # ==========================================
 # 3. 核心：带加密与鉴权的 HTTP 发送机制 (已对齐队友 C)
 # ==========================================
@@ -216,6 +224,7 @@ def process_data(device_id, metric_type, value):
       "type": metric_type,        
       "value": value
     }
+    payload.update(build_user_profile(device_id))
     
     target_endpoint = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
     
