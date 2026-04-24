@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Smart Speaker Gateway Stress Test" enabled="true">
+      <stringProp name="TestPlan.comments">Token = MD5(TOKEN_SALT + timestamp). data uses OpenSSL-compatible Salted__ AES-CBC encryption.</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="protocol" elementType="Argument">
+            <stringProp name="Argument.name">protocol</stringProp>
+            <stringProp name="Argument.value">https</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="host" elementType="Argument">
+            <stringProp name="Argument.name">host</stringProp>
+            <stringProp name="Argument.value">8.137.165.220</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="port" elementType="Argument">
+            <stringProp name="Argument.name">port</stringProp>
+            <stringProp name="Argument.value">443</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="threads" elementType="Argument">
+            <stringProp name="Argument.name">threads</stringProp>
+            <stringProp name="Argument.value">20</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="ramp_up" elementType="Argument">
+            <stringProp name="Argument.name">ramp_up</stringProp>
+            <stringProp name="Argument.value">10</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="loops" elementType="Argument">
+            <stringProp name="Argument.name">loops</stringProp>
+            <stringProp name="Argument.value">50</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="connect_timeout_ms" elementType="Argument">
+            <stringProp name="Argument.name">connect_timeout_ms</stringProp>
+            <stringProp name="Argument.value">15000</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="read_timeout_ms" elementType="Argument">
+            <stringProp name="Argument.name">read_timeout_ms</stringProp>
+            <stringProp name="Argument.value">15000</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="device_prefix" elementType="Argument">
+            <stringProp name="Argument.name">device_prefix</stringProp>
+            <stringProp name="Argument.value">jmeter_dev</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="metric_type" elementType="Argument">
+            <stringProp name="Argument.name">metric_type</stringProp>
+            <stringProp name="Argument.value">volume</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="metric_value_json" elementType="Argument">
+            <stringProp name="Argument.name">metric_value_json</stringProp>
+            <stringProp name="Argument.value">35</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="token_salt" elementType="Argument">
+            <stringProp name="Argument.name">token_salt</stringProp>
+            <stringProp name="Argument.value">smart_speaker_2026_salt</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="token_time_offset_sec" elementType="Argument">
+            <stringProp name="Argument.name">token_time_offset_sec</stringProp>
+            <stringProp name="Argument.value">100</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="secret_key" elementType="Argument">
+            <stringProp name="Argument.name">secret_key</stringProp>
+            <stringProp name="Argument.value">speaker_key_2026</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+      <stringProp name="TestPlan.user_define_classpath"></stringProp>
+    </TestPlan>
+    <hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Gateway Load Threads" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">${loops}</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">${threads}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${ramp_up}</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </ThreadGroup>
+      <hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Encrypted Gateway Request" enabled="true">
+          <stringProp name="cacheKey">gateway_stress_sampler_v1</stringProp>
+          <stringProp name="filename"></stringProp>
+          <stringProp name="parameters"></stringProp>
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="script">import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import java.util.Base64
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+
+def protocol = vars.get('protocol')
+def host = vars.get('host')
+def port = vars.get('port')
+def tokenSalt = vars.get('token_salt')
+def tokenTimeOffset = Long.parseLong(vars.get('token_time_offset_sec'))
+def secretKeyBytes = vars.get('secret_key').getBytes(StandardCharsets.UTF_8)
+def metricType = vars.get('metric_type')
+def metricValue = new JsonSlurper().parseText(vars.get('metric_value_json'))
+def connectTimeout = Integer.parseInt(vars.get('connect_timeout_ms'))
+def readTimeout = Integer.parseInt(vars.get('read_timeout_ms'))
+
+def endpointMap = [
+    bass_gain      : '/api/bass',
+    signal_strength: '/api/signal',
+    volume         : '/api/volume',
+    is_connected   : '/api/status/connection',
+    is_connecting  : '/api/status/connection',
+    like_status    : '/api/status/like'
+]
+
+def apiPath = endpointMap.get(metricType, '/api/unknown_malicious')
+long correctedTime = (System.currentTimeMillis() / 1000L) + tokenTimeOffset
+def timestamp = correctedTime as long
+
+def md5Hex = { byte[] inputBytes -&gt;
+    MessageDigest md = MessageDigest.getInstance('MD5')
+    md.digest(inputBytes).collect { String.format('%02x', it) }.join()
+}
+
+def evpBytesToKey = { byte[] passphrase, byte[] salt, int keyLen, int ivLen -&gt;
+    ByteArrayOutputStream derived = new ByteArrayOutputStream()
+    byte[] block = new byte[0]
+    while (derived.size() &lt; keyLen + ivLen) {
+        MessageDigest md = MessageDigest.getInstance('MD5')
+        md.update(block)
+        md.update(passphrase)
+        md.update(salt)
+        block = md.digest()
+        derived.write(block)
+    }
+    byte[] allBytes = derived.toByteArray()
+    [allBytes[0..&lt;keyLen] as byte[], allBytes[keyLen..&lt;(keyLen + ivLen)] as byte[]]
+}
+
+def token = md5Hex((tokenSalt + timestamp).getBytes(StandardCharsets.UTF_8))
+def deviceId = vars.get('device_prefix') + '_' + ctx.getThreadNum() + '_' + System.currentTimeMillis()
+def plainPayload = [device_id: deviceId, type: metricType, value: metricValue]
+def jsonBytes = JsonOutput.toJson(plainPayload).getBytes(StandardCharsets.UTF_8)
+
+byte[] salt = new byte[8]
+new SecureRandom().nextBytes(salt)
+def (byte[] aesKey, byte[] iv) = evpBytesToKey(secretKeyBytes, salt, 16, 16)
+Cipher cipher = Cipher.getInstance('AES/CBC/PKCS5Padding')
+cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(aesKey, 'AES'), new IvParameterSpec(iv))
+byte[] ciphertext = cipher.doFinal(jsonBytes)
+byte[] saltedPrefix = 'Salted__'.getBytes(StandardCharsets.US_ASCII)
+byte[] opensslBlob = new byte[saltedPrefix.length + salt.length + ciphertext.length]
+System.arraycopy(saltedPrefix, 0, opensslBlob, 0, saltedPrefix.length)
+System.arraycopy(salt, 0, opensslBlob, saltedPrefix.length, salt.length)
+System.arraycopy(ciphertext, 0, opensslBlob, saltedPrefix.length + salt.length, ciphertext.length)
+def encryptedData = Base64.encoder.encodeToString(opensslBlob)
+
+def requestBody = JsonOutput.toJson([
+    timestamp: timestamp,
+    token    : token,
+    data     : encryptedData,
+    sign     : token
+])
+
+TrustManager[] trustAll = [
+    [
+        getAcceptedIssuers: { -&gt; [] as X509Certificate[] },
+        checkClientTrusted: { X509Certificate[] chain, String authType -&gt; },
+        checkServerTrusted: { X509Certificate[] chain, String authType -&gt; }
+    ] as X509TrustManager
+]
+SSLContext sslContext = SSLContext.getInstance('TLS')
+sslContext.init(null, trustAll, new SecureRandom())
+HostnameVerifier verifier = { String hostname, session -&gt; true } as HostnameVerifier
+
+def targetUrl = new URL(protocol + '://' + host + ':' + port + apiPath)
+HttpsURLConnection conn = null
+OutputStream output = null
+InputStream responseStream = null
+
+SampleResult.sampleStart()
+try {
+    conn = (HttpsURLConnection) targetUrl.openConnection()
+    conn.setSSLSocketFactory(sslContext.getSocketFactory())
+    conn.setHostnameVerifier(verifier)
+    conn.setRequestMethod('POST')
+    conn.setConnectTimeout(connectTimeout)
+    conn.setReadTimeout(readTimeout)
+    conn.setDoOutput(true)
+    conn.setRequestProperty('Content-Type', 'application/json')
+    conn.setRequestProperty('Authorization', token)
+    conn.setRequestProperty('Connection', 'close')
+
+    byte[] bodyBytes = requestBody.getBytes(StandardCharsets.UTF_8)
+    output = conn.getOutputStream()
+    output.write(bodyBytes)
+    output.flush()
+
+    int responseCode = conn.getResponseCode()
+    responseStream = responseCode &gt;= 400 ? conn.getErrorStream() : conn.getInputStream()
+    def responseText = responseStream == null ? '' : responseStream.getText('UTF-8')
+
+    SampleResult.sampleEnd()
+    SampleResult.setResponseCode(String.valueOf(responseCode))
+    SampleResult.setResponseMessage('HTTP ' + responseCode)
+    SampleResult.setSamplerData(requestBody, 'UTF-8')
+    SampleResult.setResponseData(responseText, 'UTF-8')
+    SampleResult.setDataType(org.apache.jmeter.samplers.SampleResult.TEXT)
+    SampleResult.setSuccessful(responseCode == 200 || responseCode == 201)
+
+    vars.put('current_timestamp', String.valueOf(timestamp))
+    vars.put('current_token', token)
+    vars.put('last_token', token)
+    vars.put('last_timestamp', String.valueOf(timestamp))
+    vars.put('last_device_id', deviceId)
+    vars.put('last_api_path', apiPath)
+    log.info('>>> 发送的时间戳: ' + timestamp)
+    log.info('>>> 发送的Token: ' + token)
+} catch (Throwable ex) {
+    SampleResult.sampleEnd()
+    SampleResult.setSuccessful(false)
+    SampleResult.setResponseCode('500')
+    SampleResult.setResponseMessage(ex.getClass().getName() + ': ' + ex.getMessage())
+    SampleResult.setResponseData(org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace(ex), 'UTF-8')
+    SampleResult.setSamplerData(requestBody, 'UTF-8')
+} finally {
+    if (output != null) {
+        output.close()
+    }
+    if (responseStream != null) {
+        responseStream.close()
+    }
+    if (conn != null) {
+        conn.disconnect()
+    }
+}</stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+        <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report" enabled="true">
+          <boolProp name="ResultCollector.error_logging">false</boolProp>
+          <objProp>
+            <name>saveConfig</name>
+            <value class="SampleSaveConfiguration">
+              <time>true</time>
+              <latency>true</latency>
+              <timestamp>true</timestamp>
+              <success>true</success>
+              <label>true</label>
+              <code>true</code>
+              <message>true</message>
+              <threadName>true</threadName>
+              <dataType>true</dataType>
+              <encoding>false</encoding>
+              <assertions>false</assertions>
+              <subresults>false</subresults>
+              <responseData>false</responseData>
+              <samplerData>false</samplerData>
+              <xml>false</xml>
+              <fieldNames>true</fieldNames>
+              <responseHeaders>false</responseHeaders>
+              <requestHeaders>false</requestHeaders>
+              <responseDataOnError>false</responseDataOnError>
+              <saveAssertionResultsFailureMessage>false</saveAssertionResultsFailureMessage>
+              <assertionsResultsToSave>0</assertionsResultsToSave>
+              <bytes>true</bytes>
+              <sentBytes>true</sentBytes>
+              <url>false</url>
+              <threadCounts>true</threadCounts>
+              <idleTime>true</idleTime>
+              <connectTime>true</connectTime>
+            </value>
+          </objProp>
+          <stringProp name="filename"></stringProp>
+        </ResultCollector>
+        <hashTree/>
+        <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="View Results Tree" enabled="true">
+          <boolProp name="ResultCollector.error_logging">false</boolProp>
+          <objProp>
+            <name>saveConfig</name>
+            <value class="SampleSaveConfiguration">
+              <time>true</time>
+              <latency>true</latency>
+              <timestamp>true</timestamp>
+              <success>true</success>
+              <label>true</label>
+              <code>true</code>
+              <message>true</message>
+              <threadName>true</threadName>
+              <dataType>true</dataType>
+              <encoding>false</encoding>
+              <assertions>false</assertions>
+              <subresults>false</subresults>
+              <responseData>false</responseData>
+              <samplerData>false</samplerData>
+              <xml>false</xml>
+              <fieldNames>true</fieldNames>
+              <responseHeaders>false</responseHeaders>
+              <requestHeaders>false</requestHeaders>
+              <responseDataOnError>true</responseDataOnError>
+              <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+              <assertionsResultsToSave>0</assertionsResultsToSave>
+              <bytes>true</bytes>
+              <sentBytes>true</sentBytes>
+              <url>false</url>
+              <threadCounts>true</threadCounts>
+              <idleTime>true</idleTime>
+              <connectTime>true</connectTime>
+            </value>
+          </objProp>
+          <stringProp name="filename"></stringProp>
+        </ResultCollector>
+        <hashTree/>
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
