@@ -14,6 +14,7 @@ from flask import Flask, jsonify, request
 
 from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
+from storage_backends import persist_payload
 
 app = Flask(__name__)
 _TEMP_PEM_FILES = []
@@ -325,6 +326,7 @@ def ensure_connection_close(response):
 @app.route('/api/volume', methods=['POST'])
 @app.route('/api/status/connection', methods=['POST'])
 @app.route('/api/status/like', methods=['POST'])
+@app.route('/api/song-info', methods=['POST'])
 def handle_simulator_data():
     request_json = request.get_json(silent=True)
     if not isinstance(request_json, dict):
@@ -338,6 +340,20 @@ def handle_simulator_data():
 
     data_decrypted['timestamp'] = int(timestamp)
     data_decrypted['api_path'] = request.path
+
+    if data_decrypted.get('type') in ('song_info', '歌曲信息', '姝屾洸淇℃伅'):
+        try:
+            backend_name = persist_payload(data_decrypted)
+        except Exception as exc:
+            app.logger.error('Song info persistence failed: %s', exc)
+            return jsonify({'status': 'error', 'message': 'Song info persistence failed'}), 502
+
+        record_accepted_request()
+        return jsonify({
+            'status': 'success',
+            'message': f'Verified song info from {request.path} persisted via {backend_name}',
+        }), 200
+
     if not dispatcher.submit(data_decrypted):
         return jsonify({'status': 'error', 'message': 'Gateway queue is busy, please retry'}), 503
 

@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import pymysql
 from pymongo import MongoClient
+from song_info_provider import fetch_song_info
 
 METRIC_TYPES = {
     "signal_strength",
@@ -15,6 +16,7 @@ METRIC_TYPES = {
     "is_connecting",
 }
 PREFERENCE_TYPES = {"like_status"}
+SONG_INFO_TYPES = {"song_info", "歌曲信息"}
 
 DEFAULT_MONGO_URI = "mongodb://y:123@8.137.165.220:27017/musicplayer?authSource=musicplayer"
 DEFAULT_MYSQL_HOST = "8.137.165.220"
@@ -53,6 +55,10 @@ def get_mongo_collection_name():
     return os.environ.get("MONGO_COLLECTION", "device_metrics")
 
 
+def get_song_collection_name():
+    return os.environ.get("MONGO_SONG_COLLECTION", "song_info")
+
+
 def get_mysql_config():
     return {
         "host": os.environ.get("MYSQL_HOST", DEFAULT_MYSQL_HOST),
@@ -80,6 +86,11 @@ def get_mongo_collection():
                 _mongo_client.admin.command("ping")
     database = _mongo_client[get_mongo_database_name()]
     return database[get_mongo_collection_name()]
+
+
+def get_song_collection():
+    database = get_mongo_collection().database
+    return database[get_song_collection_name()]
 
 
 def get_mysql_connection():
@@ -145,6 +156,12 @@ def normalize_reported_timestamp(payload):
     if raw_value is None:
         return int(datetime.now().timestamp())
     return int(raw_value)
+
+
+def normalize_metric_type(metric_type):
+    if metric_type in SONG_INFO_TYPES:
+        return "song_info"
+    return metric_type
 
 
 def get_next_preference_id(cursor):
@@ -228,7 +245,7 @@ def upsert_user_preference(payload, user_id):
 
 def upsert_device_metric(payload, account, password):
     collection = get_mongo_collection()
-    metric_type = payload.get("type")
+    metric_type = normalize_metric_type(payload.get("type"))
     device_id = payload.get("device_id", "unknown_device")
     reported_at = normalize_reported_timestamp(payload)
     now = utcnow()
@@ -254,8 +271,41 @@ def upsert_device_metric(payload, account, password):
     )
 
 
+def upsert_song_info(payload, account, password):
+    collection = get_song_collection()
+    device_id = payload.get("device_id", "unknown_device")
+    reported_at = normalize_reported_timestamp(payload)
+    now = utcnow()
+    song_payload = payload.get("song_payload") or fetch_song_info(payload.get("value"))
+
+    update_fields = {
+        "device_id": device_id,
+        "type": "song_info",
+        "timestamp": reported_at,
+        "updated_at": now,
+        "keyword": song_payload["keyword"],
+        "provider": song_payload["provider"],
+        "provider_url": song_payload["provider_url"],
+        "fetched_at": song_payload["fetched_at"],
+        "song": song_payload["song"],
+        "user.account": account,
+        "user.password_hash": build_password_hash(password),
+    }
+    if payload.get("api_path"):
+        update_fields["last_api_path"] = payload.get("api_path")
+
+    collection.update_one(
+        {"device_id": device_id},
+        {
+            "$set": update_fields,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
 def persist_payload(payload):
-    metric_type = payload.get("type")
+    metric_type = normalize_metric_type(payload.get("type"))
     device_id = payload.get("device_id", "unknown_device")
     account, password = infer_user_credentials(payload)
     user_id = upsert_user(account, password, device_id)
@@ -263,6 +313,10 @@ def persist_payload(payload):
     if metric_type in PREFERENCE_TYPES:
         upsert_user_preference(payload, user_id)
         return "mysql.user_preferences"
+
+    if metric_type == "song_info":
+        upsert_song_info(payload, account, password)
+        return "mongodb.song_info"
 
     if metric_type in METRIC_TYPES:
         upsert_device_metric(payload, account, password)
@@ -273,6 +327,10 @@ def persist_payload(payload):
 
 def get_metric_document(device_id):
     return get_mongo_collection().find_one({"device_id": device_id}, {"_id": 0})
+
+
+def get_song_document(device_id):
+    return get_song_collection().find_one({"device_id": device_id}, {"_id": 0})
 
 
 def get_user_record(account):

@@ -11,6 +11,7 @@ from requests.adapters import HTTPAdapter
 
 # 【引入核心安全包】
 from security_utils import encrypt_data, generate_token
+from song_info_provider import fetch_song_info
 
 # ==========================================
 # 1. 初始化设置与文件准备 
@@ -37,8 +38,18 @@ ENDPOINT_MAP = {
     "volume": "/api/volume",
     "is_connected": "/api/status/connection",
     "is_connecting": "/api/status/connection",
-    "like_status": "/api/status/like"
+    "like_status": "/api/status/like",
+    "song_info": "/api/song-info",
+    "歌曲信息": "/api/song-info",
 }
+
+SONG_KEYWORDS = [
+    "稻香",
+    "晴天",
+    "夜曲",
+    "青花瓷",
+    "七里香",
+]
 
 def init_env():
     if not os.path.exists(LOG_DIR):
@@ -80,6 +91,14 @@ def build_user_profile(device_id):
         "user_account": f"{normalized}@smart-speaker.local",
         "user_password": f"{normalized}_pwd_2026",
     }
+
+
+def get_song_keyword():
+    return random.choice(SONG_KEYWORDS)
+
+
+def send_song_info(device_id, keyword=None):
+    process_data(device_id, "歌曲信息", keyword or get_song_keyword())
 
 # ==========================================
 # 3. 核心：带加密与鉴权的 HTTP 发送机制 (已对齐队友 C)
@@ -224,6 +243,12 @@ def process_data(device_id, metric_type, value):
       "type": metric_type,        
       "value": value
     }
+    if metric_type in ("song_info", "姝屾洸淇℃伅"):
+        try:
+            payload["song_payload"] = fetch_song_info(value)
+        except Exception as exc:
+            log_message(f"[歌曲信息获取失败] {device_id} | {value}: {exc}")
+            return
     payload.update(build_user_profile(device_id))
     
     target_endpoint = ENDPOINT_MAP.get(metric_type, "/api/unknown_malicious")
