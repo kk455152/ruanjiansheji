@@ -147,6 +147,29 @@ services:
         condition: service_healthy
     restart: always
 
+  daily-stats-job:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: python daily_stats_job.py --interval-seconds 86400
+    profiles:
+      - jobs
+    environment:
+      - MYSQL_HOST=172.28.0.1
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=smart_speaker
+      - MYSQL_USER=team
+      - MYSQL_PASSWORD=123456
+      - MONGO_URI=mongodb://y:123@172.28.0.1:27017/musicplayer?authSource=musicplayer
+      - MONGO_DATABASE=musicplayer
+      - MONGO_SONG_COLLECTION=song_info
+      - MONGO_PLAY_LOG_COLLECTION=play_logs
+      - SONG_INFO_PROVIDER_MODE=auto
+      - SONG_INFO_PROVIDER_BASE_URL=https://netease-cloud-music-api-one-rouge.vercel.app
+      - SONG_INFO_FALLBACK_URL=https://music-api.gdstudio.xyz/api.php
+      - SONG_INFO_PROVIDER_TIMEOUT=10
+    restart: unless-stopped
+
   portainer:
     image: m.daocloud.io/docker.io/portainer/portainer-ce:latest
     container_name: portainer

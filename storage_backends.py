@@ -93,6 +93,11 @@ def get_song_collection():
     return database[get_song_collection_name()]
 
 
+def get_play_log_collection():
+    database = get_mongo_collection().database
+    return database[os.environ.get("MONGO_PLAY_LOG_COLLECTION", "play_logs")]
+
+
 def get_mysql_connection():
     global _mysql_connection
     if _mysql_connection is None or not _mysql_connection.open:
@@ -137,6 +142,7 @@ def ensure_mysql_schema():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """
         )
+        cursor.execute(DAILY_STATS_TABLE_SQL)
     _mysql_schema_ready = True
 
 
@@ -162,6 +168,94 @@ def normalize_metric_type(metric_type):
     if metric_type in SONG_INFO_TYPES:
         return "song_info"
     return metric_type
+
+
+DAILY_STATS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS Daily_Stats (
+    stat_date DATE NOT NULL COMMENT '统计日期',
+    total_play_count INT NOT NULL DEFAULT 0 COMMENT '当日总播放次数',
+    unique_song_count INT NOT NULL DEFAULT 0 COMMENT '当日播放过的去重歌曲数',
+    unique_user_count INT NOT NULL DEFAULT 0 COMMENT '当日活跃用户数',
+    unique_device_count INT NOT NULL DEFAULT 0 COMMENT '当日活跃设备数',
+    total_play_duration_seconds BIGINT NOT NULL DEFAULT 0 COMMENT '当日累计播放时长，单位秒',
+    avg_play_duration_seconds DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '单次平均播放时长，单位秒',
+    hottest_song_id VARCHAR(100) DEFAULT NULL COMMENT '当日最热歌曲 ID',
+    hottest_song_name VARCHAR(255) DEFAULT NULL COMMENT '当日最热歌曲名',
+    hottest_artist VARCHAR(255) DEFAULT NULL COMMENT '当日最热歌曲歌手',
+    hottest_play_count INT NOT NULL DEFAULT 0 COMMENT '当日最热歌曲播放次数',
+    generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '统计生成时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP COMMENT '统计更新时间',
+    PRIMARY KEY (stat_date),
+    KEY idx_daily_stats_hottest_song_id (hottest_song_id),
+    KEY idx_daily_stats_generated_at (generated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+"""
+
+
+def clean_artist_names(artists):
+    if not artists:
+        return []
+    cleaned = []
+    for artist in artists:
+        if isinstance(artist, str):
+            name = artist.strip()
+        elif isinstance(artist, dict):
+            name = str(artist.get("name") or "").strip()
+        else:
+            name = str(artist).strip()
+        if name:
+            cleaned.append(name)
+    return cleaned
+
+
+def normalize_duration_seconds(duration_ms):
+    if duration_ms is None:
+        return None
+    try:
+        return max(0, int(round(float(duration_ms) / 1000)))
+    except (TypeError, ValueError):
+        return None
+
+
+def build_song_document(song_payload, account=None, password=None, device_id=None, reported_at=None):
+    song = song_payload.get("song") or {}
+    song_id = str(song.get("song_id") or "").strip()
+    name = str(song.get("name") or song_payload.get("keyword") or "").strip()
+    artists = clean_artist_names(song.get("artists"))
+    now = utcnow()
+
+    document = {
+        "doc_type": "song",
+        "song_id": song_id,
+        "name": name,
+        "artists": artists,
+        "artist_text": " / ".join(artists),
+        "album": str(song.get("album") or "").strip(),
+        "duration_ms": song.get("duration_ms"),
+        "duration_seconds": normalize_duration_seconds(song.get("duration_ms")),
+        "cover_url": str(song.get("cover_url") or "").strip(),
+        "source": {
+            "platform": "netease",
+            "provider": song_payload.get("provider") or "",
+            "provider_url": song_payload.get("provider_url") or "",
+            "keyword": song_payload.get("keyword") or "",
+            "fetched_at": song_payload.get("fetched_at") or now.isoformat(),
+        },
+        "updated_at": now,
+    }
+
+    if reported_at is not None:
+        document["reported_timestamp"] = int(reported_at)
+    if device_id:
+        document["last_device_id"] = device_id
+    if account:
+        document["user"] = {
+            "account": account,
+            "password_hash": build_password_hash(password or ""),
+        }
+
+    return document
 
 
 def get_next_preference_id(cursor):
@@ -275,30 +369,26 @@ def upsert_song_info(payload, account, password):
     collection = get_song_collection()
     device_id = payload.get("device_id", "unknown_device")
     reported_at = normalize_reported_timestamp(payload)
-    now = utcnow()
     song_payload = payload.get("song_payload") or fetch_song_info(payload.get("value"))
-
-    update_fields = {
-        "device_id": device_id,
-        "type": "song_info",
-        "timestamp": reported_at,
-        "updated_at": now,
-        "keyword": song_payload["keyword"],
-        "provider": song_payload["provider"],
-        "provider_url": song_payload["provider_url"],
-        "fetched_at": song_payload["fetched_at"],
-        "song": song_payload["song"],
-        "user.account": account,
-        "user.password_hash": build_password_hash(password),
-    }
+    update_fields = build_song_document(
+        song_payload,
+        account=account,
+        password=password,
+        device_id=device_id,
+        reported_at=reported_at,
+    )
+    update_fields["type"] = "song_info"
+    update_fields["device_id"] = device_id
+    update_fields["timestamp"] = reported_at
     if payload.get("api_path"):
         update_fields["last_api_path"] = payload.get("api_path")
 
+    query = {"song_id": update_fields["song_id"]} if update_fields["song_id"] else {"device_id": device_id}
     collection.update_one(
-        {"device_id": device_id},
+        query,
         {
             "$set": update_fields,
-            "$setOnInsert": {"created_at": now},
+            "$setOnInsert": {"created_at": utcnow()},
         },
         upsert=True,
     )

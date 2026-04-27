@@ -243,7 +243,7 @@ def process_data(device_id, metric_type, value):
       "type": metric_type,        
       "value": value
     }
-    if metric_type in ("song_info", "姝屾洸淇℃伅"):
+    if metric_type in ("song_info", "歌曲信息", "姝屾洸淇℃伅"):
         try:
             payload["song_payload"] = fetch_song_info(value)
         except Exception as exc:
