@@ -10,6 +10,13 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=migrate
       - RABBITMQ_DEFAULT_PASS=2728
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
 
   gateway:
     build:
@@ -30,6 +37,9 @@ services:
       - MQ_HOST=127.0.0.1
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     volumes:
       - ./runtime:/runtime
     restart: always
@@ -49,8 +59,8 @@ services:
       - GATEWAY_METRICS_URL=https://172.28.0.1/internal/metrics
       - GATEWAY_METRICS_FILE=/runtime/gateway_metrics.json
       - GATEWAY_METRICS_FILE_PATTERN=/runtime/gateway_metrics.*.json
-      - MQ_QUEUE_API=http://172.28.0.1:15672/api/queues/%2f/writer_v2
-      - SCALE_BASE_CONTAINER=smart-speaker-full-deploy_worker-writer_1
+      - MQ_QUEUE_API=http://rabbitmq:15672/api/queues/%2f/writer_v2
+      - SCALE_BASE_CONTAINER=smart-speaker-full-deploy-worker-writer-1
       - SCALE_MIN_WORKERS=1
       - SCALE_MAX_WORKERS=5
       - SCALE_UP_PUBLISH_RATE=15
@@ -61,6 +71,9 @@ services:
       - SCALE_COOLDOWN_SECONDS=20
       - SCALE_DOWN_STABLE_CHECKS=3
       - SCALE_TARGET_RATE_PER_WORKER=10
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     restart: always
 
   worker-writer:
@@ -69,7 +82,7 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_writer.py
     environment:
-      - MQ_HOST=172.28.0.1
+      - MQ_HOST=rabbitmq
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
       - MYSQL_HOST=172.28.0.1
@@ -85,6 +98,9 @@ services:
       - SONG_INFO_PROVIDER_BASE_URL=https://netease-cloud-music-api-one-rouge.vercel.app
       - SONG_INFO_FALLBACK_URL=https://music-api.gdstudio.xyz/api.php
       - SONG_INFO_PROVIDER_TIMEOUT=10
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     volumes:
       - /www/wwwroot/mysite/data_db:/www/wwwroot/mysite/data_db
     restart: always
@@ -95,9 +111,12 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_logger.py
     environment:
-      - MQ_HOST=172.28.0.1
+      - MQ_HOST=rabbitmq
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     restart: always
 
   worker-validator:
@@ -106,9 +125,12 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_validator.py
     environment:
-      - MQ_HOST=172.28.0.1
+      - MQ_HOST=rabbitmq
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     restart: always
 
   worker-reader:
@@ -117,16 +139,23 @@ services:
       dockerfile: Dockerfile.worker
     command: python worker_reader.py
     environment:
-      - MQ_HOST=172.28.0.1
+      - MQ_HOST=rabbitmq
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     restart: always
 
   portainer:
-    image: portainer/portainer-ce:latest
+    image: m.daocloud.io/docker.io/portainer/portainer-ce:latest
     container_name: portainer
     ports:
       - "9000:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
     restart: always
+
+volumes:
+  portainer_data:

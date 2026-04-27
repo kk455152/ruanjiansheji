@@ -46,7 +46,7 @@ def start_reader():
         ch.start_consuming()
 
     except Exception as conn_err:
-        print(f"[CRITICAL] 读取模块连接异常: {conn_err}")
+        print(f"[CRITICAL] 读取模块连接异常: {type(conn_err).__name__}: {conn_err!r}")
 
 if __name__ == "__main__":
     start_reader()

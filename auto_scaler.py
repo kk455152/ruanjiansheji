@@ -29,7 +29,7 @@ AUTH = (
 
 BASE_CONTAINER_NAME = os.environ.get(
     'SCALE_BASE_CONTAINER',
-    'smart-speaker-full-deploy_worker-writer_1',
+    'smart-speaker-full-deploy-worker-writer-1',
 )
 SCALE_CONTAINER_PREFIX = os.environ.get('SCALE_CONTAINER_PREFIX', 'smart-speaker-autoscale-writer')
 ROLE_LABEL = os.environ.get('SCALE_ROLE_LABEL', 'smart-speaker.worker-writer.autoscaled')

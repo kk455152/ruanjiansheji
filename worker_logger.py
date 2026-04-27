@@ -48,4 +48,4 @@ try:
     print(f' [*] 全量日志模块已就绪，存储路径: {DB_DIR}/system_access.log')
     ch.start_consuming()
 except Exception as e:
-    print(f"[CRITICAL] 日志模块启动失败: {e}")
+    print(f"[CRITICAL] 日志模块启动失败: {type(e).__name__}: {e!r}")

@@ -40,4 +40,4 @@ if __name__ == "__main__":
     try:
         start_writer()
     except Exception as conn_err:
-        print(f"[CRITICAL] Writer failed to start: {conn_err}")
+        print(f"[CRITICAL] Writer failed to start: {type(conn_err).__name__}: {conn_err!r}")

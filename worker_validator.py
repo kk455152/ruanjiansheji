@@ -65,4 +65,4 @@ try:
     print(" [*] Validator is ready.")
     ch.start_consuming()
 except Exception as exc:
-    print(f"[CRITICAL] Validator failed to start: {exc}")
+    print(f"[CRITICAL] Validator failed to start: {type(exc).__name__}: {exc!r}")
