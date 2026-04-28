@@ -16,6 +16,8 @@ from security_utils import TOKEN_SALT, decrypt_data
 app = Flask(__name__)
 _TEMP_PEM_FILES = []
 
+from db_api_service import db_api
+app.register_blueprint(db_api)
 
 def _cleanup_temp_pems():
     for path in _TEMP_PEM_FILES:
