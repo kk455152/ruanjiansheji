@@ -26,6 +26,8 @@ METRICS_FLUSH_INTERVAL = float(os.environ.get('GATEWAY_METRICS_FLUSH_INTERVAL', 
 _metrics_lock = threading.Lock()
 _accepted_timestamps = deque()
 
+from db_api_service import db_api
+app.register_blueprint(db_api)
 
 def _cleanup_temp_pems():
     for path in _TEMP_PEM_FILES:
