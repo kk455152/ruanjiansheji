@@ -11,24 +11,59 @@ db_api = Blueprint("db_api", __name__, url_prefix="/api/db")
 
 
 # =========================================================
-# 表结构配置：根据你们 PowerDesigner / MySQL 表设计图整理
+# 表结构配置：严格按照当前 smart_speaker 数据库真实存在的表
+# 不包含 operation_log，因为当前 MySQL 中没有该表
+# 不包含 users / user_preferences，因为它们不在 PowerDesigner 设计图主表范围内
 # =========================================================
 
 TABLE_CONFIG = {
     "user": {
         "table": "user",
         "pk": ["user_id"],
-        "columns": ["user_id", "username", "password_hash", "phone", "created_at"],
-        "insert_columns": ["username", "password_hash", "phone", "created_at"],
-        "update_columns": ["username", "password_hash", "phone"],
+        "columns": [
+            "user_id",
+            "username",
+            "password_hash",
+            "phone",
+            "created_at",
+        ],
+        "insert_columns": [
+            "username",
+            "password_hash",
+            "phone",
+            "created_at",
+        ],
+        "update_columns": [
+            "username",
+            "password_hash",
+            "phone",
+        ],
     },
+
     "device": {
         "table": "device",
         "pk": ["device_id"],
-        "columns": ["device_id", "device_number", "model_name", "status", "last_active"],
-        "insert_columns": ["device_number", "model_name", "status", "last_active"],
-        "update_columns": ["device_number", "model_name", "status", "last_active"],
+        "columns": [
+            "device_id",
+            "device_number",
+            "model_name",
+            "status",
+            "last_active",
+        ],
+        "insert_columns": [
+            "device_number",
+            "model_name",
+            "status",
+            "last_active",
+        ],
+        "update_columns": [
+            "device_number",
+            "model_name",
+            "status",
+            "last_active",
+        ],
     },
+
     "auth_token": {
         "table": "auth_token",
         "pk": ["auth_id"],
@@ -55,6 +90,7 @@ TABLE_CONFIG = {
             "expires_at",
         ],
     },
+
     "media_mapping": {
         "table": "media_mapping",
         "pk": ["mapping_id"],
@@ -84,44 +120,30 @@ TABLE_CONFIG = {
             "cover_url",
         ],
     },
-    "operation_log": {
-        "table": "operation_log",
-        "pk": ["log_id"],
-        "columns": [
-            "log_id",
-            "user_id",
-            "device_id",
-            "action_id",
-            "created_at",
-            "search_keyword",
-            "time_offset",
-            "action_param",
-        ],
-        "insert_columns": [
-            "user_id",
-            "device_id",
-            "action_id",
-            "created_at",
-            "search_keyword",
-            "time_offset",
-            "action_param",
-        ],
-        "update_columns": [
-            "user_id",
-            "device_id",
-            "action_id",
-            "search_keyword",
-            "time_offset",
-            "action_param",
-        ],
-    },
+
     "action_dict": {
         "table": "action_dict",
         "pk": ["action_id"],
-        "columns": ["action_id", "action_code", "action_name", "category"],
-        "insert_columns": ["action_code", "action_name", "category"],
-        "update_columns": ["action_code", "action_name", "category"],
+        "columns": [
+            "action_id",
+            "action_code",
+            "action_name",
+            "category",
+        ],
+        # action_id 在当前真实表中不是 auto_increment，所以新增时需要允许传 action_id
+        "insert_columns": [
+            "action_id",
+            "action_code",
+            "action_name",
+            "category",
+        ],
+        "update_columns": [
+            "action_code",
+            "action_name",
+            "category",
+        ],
     },
+
     "play_history": {
         "table": "play_history",
         "pk": ["history_id"],
@@ -147,35 +169,66 @@ TABLE_CONFIG = {
             "user_id",
             "mapping_id",
             "play_duration",
+            "created_at",
             "style",
         ],
     },
+
     "friendship": {
         "table": "friendship",
+        # 当前真实表字段顺序是 user_id_2、user_id_1，但接口统一按 user_id_1、user_id_2 传参
         "pk": ["user_id_1", "user_id_2"],
-        "columns": ["user_id_1", "user_id_2"],
-        "insert_columns": ["user_id_1", "user_id_2"],
+        "columns": [
+            "user_id_1",
+            "user_id_2",
+        ],
+        "insert_columns": [
+            "user_id_1",
+            "user_id_2",
+        ],
+        # friendship 只有联合主键，没有业务字段可修改
         "update_columns": [],
     },
+
     "user_device_binding": {
         "table": "user_device_binding",
         "pk": ["user_id", "device_id"],
-        "columns": ["user_id", "device_id", "custom_device_name", "is_primary"],
+        "columns": [
+            "user_id",
+            "device_id",
+            "custom_device_name",
+            "is_primary",
+        ],
         "insert_columns": [
             "user_id",
             "device_id",
             "custom_device_name",
             "is_primary",
         ],
-        "update_columns": ["custom_device_name", "is_primary"],
+        "update_columns": [
+            "custom_device_name",
+            "is_primary",
+        ],
     },
+
     "user_feedback": {
         "table": "user_feedback",
         "pk": ["feedback_id"],
-        "columns": ["feedback_id", "user_id", "content"],
-        "insert_columns": ["user_id", "content"],
-        "update_columns": ["user_id", "content"],
+        "columns": [
+            "feedback_id",
+            "user_id",
+            "content",
+        ],
+        "insert_columns": [
+            "user_id",
+            "content",
+        ],
+        "update_columns": [
+            "user_id",
+            "content",
+        ],
     },
+
     "Daily_Stats": {
         "table": "Daily_Stats",
         "pk": ["stat_date"],
@@ -187,7 +240,7 @@ TABLE_CONFIG = {
             "unique_device_count",
             "total_play_duration_seconds",
             "avg_play_duration_seconds",
-            "hottest_song_external_id",
+            "hottest_song_id",
             "hottest_song_name",
             "hottest_artist",
             "hottest_play_count",
@@ -202,7 +255,7 @@ TABLE_CONFIG = {
             "unique_device_count",
             "total_play_duration_seconds",
             "avg_play_duration_seconds",
-            "hottest_song_external_id",
+            "hottest_song_id",
             "hottest_song_name",
             "hottest_artist",
             "hottest_play_count",
@@ -216,7 +269,7 @@ TABLE_CONFIG = {
             "unique_device_count",
             "total_play_duration_seconds",
             "avg_play_duration_seconds",
-            "hottest_song_external_id",
+            "hottest_song_id",
             "hottest_song_name",
             "hottest_artist",
             "hottest_play_count",
@@ -314,6 +367,7 @@ def pick_allowed_fields(body, allowed_columns):
 
 # =========================================================
 # 健康检查
+# GET /api/db/health
 # =========================================================
 
 @db_api.route("/health", methods=["GET"])
@@ -337,7 +391,8 @@ def health_check():
 
 
 # =========================================================
-# 查询所有支持的表
+# 查询所有当前接口支持的表
+# GET /api/db/tables
 # =========================================================
 
 @db_api.route("/tables", methods=["GET"])
@@ -483,7 +538,7 @@ def get_record(table_key, pk_value):
 
     if len(config["pk"]) != 1:
         return error(
-            f"{table_key} 是联合主键表，请使用查询参数访问，例如 ?user_id=1&device_id=2",
+            f"{table_key} 是联合主键表，请使用 detail 接口访问",
             400,
         )
 
@@ -532,7 +587,7 @@ def update_record(table_key, pk_value):
 
     if len(config["pk"]) != 1:
         return error(
-            f"{table_key} 是联合主键表，请使用专用联合主键接口修改",
+            f"{table_key} 是联合主键表，请使用 detail 接口修改",
             400,
         )
 
@@ -598,7 +653,7 @@ def delete_record(table_key, pk_value):
 
     if len(config["pk"]) != 1:
         return error(
-            f"{table_key} 是联合主键表，请使用专用联合主键接口删除",
+            f"{table_key} 是联合主键表，请使用 detail 接口删除",
             400,
         )
 
@@ -632,8 +687,9 @@ def delete_record(table_key, pk_value):
 
 
 # =========================================================
-# 联合主键表：friendship 查询单条
-# GET /api/db/friendship/detail?user_id_1=1&user_id_2=2
+# 联合主键表：friendship
+# GET    /api/db/friendship/detail?user_id_1=1&user_id_2=2
+# DELETE /api/db/friendship/detail?user_id_1=1&user_id_2=2
 # =========================================================
 
 @db_api.route("/friendship/detail", methods=["GET"])
@@ -641,20 +697,10 @@ def get_friendship_detail():
     return get_composite_record("friendship")
 
 
-# =========================================================
-# 联合主键表：friendship 修改
-# friendship 本身只有两个主键字段，没有可修改字段
-# =========================================================
-
 @db_api.route("/friendship/detail", methods=["PUT", "PATCH"])
 def update_friendship_detail():
-    return error("friendship 表没有可修改字段，如需变更请删除后重新新增", 400)
+    return error("friendship 表只有两个主键字段，没有可修改字段，如需变更请删除后重新新增", 400)
 
-
-# =========================================================
-# 联合主键表：friendship 删除
-# DELETE /api/db/friendship/detail?user_id_1=1&user_id_2=2
-# =========================================================
 
 @db_api.route("/friendship/detail", methods=["DELETE"])
 def delete_friendship_detail():
@@ -662,8 +708,10 @@ def delete_friendship_detail():
 
 
 # =========================================================
-# 联合主键表：user_device_binding 查询单条
-# GET /api/db/user_device_binding/detail?user_id=1&device_id=1
+# 联合主键表：user_device_binding
+# GET    /api/db/user_device_binding/detail?user_id=1&device_id=1
+# PUT    /api/db/user_device_binding/detail?user_id=1&device_id=1
+# DELETE /api/db/user_device_binding/detail?user_id=1&device_id=1
 # =========================================================
 
 @db_api.route("/user_device_binding/detail", methods=["GET"])
@@ -671,21 +719,10 @@ def get_user_device_binding_detail():
     return get_composite_record("user_device_binding")
 
 
-# =========================================================
-# 联合主键表：user_device_binding 修改
-# PUT /api/db/user_device_binding/detail?user_id=1&device_id=1
-# body: {"custom_device_name": "客厅音箱", "is_primary": 1}
-# =========================================================
-
 @db_api.route("/user_device_binding/detail", methods=["PUT", "PATCH"])
 def update_user_device_binding_detail():
     return update_composite_record("user_device_binding")
 
-
-# =========================================================
-# 联合主键表：user_device_binding 删除
-# DELETE /api/db/user_device_binding/detail?user_id=1&device_id=1
-# =========================================================
 
 @db_api.route("/user_device_binding/detail", methods=["DELETE"])
 def delete_user_device_binding_detail():
