@@ -12,6 +12,8 @@ from requests.adapters import HTTPAdapter
 # 【引入核心安全包】
 from security_utils import encrypt_data, generate_token
 from song_info_provider import fetch_song_info
+from daily_stats_job import run_once as run_daily_stats_once
+from storage_backends import persist_payload
 
 # ==========================================
 # 1. 初始化设置与文件准备 
@@ -50,6 +52,19 @@ SONG_KEYWORDS = [
     "青花瓷",
     "七里香",
 ]
+DAILY_STATS_PLAY_LOGS = int(os.environ.get("DAILY_STATS_PLAY_LOGS", "10"))
+ENABLE_BOOTSTRAP_STATS = os.environ.get("ENABLE_BOOTSTRAP_STATS", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+EXIT_AFTER_BOOTSTRAP = os.environ.get("EXIT_AFTER_BOOTSTRAP", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
 
 def init_env():
     if not os.path.exists(LOG_DIR):
@@ -99,6 +114,72 @@ def get_song_keyword():
 
 def send_song_info(device_id, keyword=None):
     process_data(device_id, "歌曲信息", keyword or get_song_keyword())
+
+
+def persist_local_member_b_payload(device_id, metric_type, value):
+    payload = {
+        "device_id": device_id,
+        "type": metric_type,
+        "value": value,
+        "timestamp": int(time.time()),
+        "api_path": "/local/member-b-bootstrap",
+    }
+    payload.update(build_user_profile(device_id))
+    if metric_type in ("song_info", "歌曲信息", "姝屾洸淇℃伅"):
+        payload["song_payload"] = fetch_song_info(value)
+
+    backend_name = persist_payload(payload)
+    log_message(f"[本地落库成功] {device_id} | {metric_type} -> {backend_name}")
+
+
+def build_daily_stats_args(skip_seed=False, skip_generate=False):
+    return argparse.Namespace(
+        date=None,
+        keywords=",".join(SONG_KEYWORDS),
+        generate_count=DAILY_STATS_PLAY_LOGS,
+        skip_seed=skip_seed,
+        skip_generate=skip_generate,
+    )
+
+
+def run_member_b_daily_stats_job():
+    """读取网易云歌曲数据，生成播放日志，并汇总写入 MySQL Daily_Stats。"""
+    try:
+        result = run_daily_stats_once(build_daily_stats_args())
+    except Exception as exc:
+        log_message(f"[每日统计失败] Daily_Stats 写入异常: {type(exc).__name__}: {exc}")
+        return None
+
+    stats = result.get("stats", {})
+    log_message(
+        "[每日统计成功] "
+        f"日期={result.get('stat_date')} | "
+        f"网易云歌曲={result.get('seeded_song_count')} 首 | "
+        f"播放日志={result.get('generated_play_log_count')} 条 | "
+        f"总播放={stats.get('total_play_count')} | "
+        f"最热歌曲={stats.get('hottest_song_name')}"
+    )
+    return result
+
+
+def bootstrap_member_b_mysql_data(device_list):
+    """稳定触发 users、user_preferences 和 Daily_Stats 三类 MySQL 写入。"""
+    normal_devices = [device_id for device_id in device_list if device_id != "dev_false"]
+    if not normal_devices:
+        return
+
+    log_message("\n[-] 成员B联调预热：读取网易云歌曲并触发 MySQL/MongoDB 写入...")
+    for index, device_id in enumerate(normal_devices):
+        keyword = SONG_KEYWORDS[index % len(SONG_KEYWORDS)]
+        send_song_info(device_id, keyword)
+        persist_local_member_b_payload(device_id, "歌曲信息", keyword)
+        process_data(device_id, "like_status", index % 2 == 0)
+        persist_local_member_b_payload(device_id, "like_status", index % 2 == 0)
+
+    if ENABLE_BOOTSTRAP_STATS:
+        run_member_b_daily_stats_job()
+    else:
+        log_message("[每日统计跳过] ENABLE_BOOTSTRAP_STATS=false")
 
 # ==========================================
 # 3. 核心：带加密与鉴权的 HTTP 发送机制 (已对齐队友 C)
@@ -358,6 +439,11 @@ if __name__ == "__main__":
     thread_retry = threading.Thread(target=background_retry_worker)
     thread_retry.daemon = True 
     thread_retry.start()
+
+    bootstrap_member_b_mysql_data(device_list)
+    if EXIT_AFTER_BOOTSTRAP:
+        log_message("\n[-] 成员B联调预热已完成，EXIT_AFTER_BOOTSTRAP=true，本次测试正常退出。")
+        raise SystemExit(0)
     
     for dev_id in device_list:
         if dev_id == "dev_false":

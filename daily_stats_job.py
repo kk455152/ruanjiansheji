@@ -15,6 +15,7 @@ from storage_backends import (
     get_mysql_config,
     get_song_collection,
     get_play_log_collection,
+    persist_play_log_to_relational,
     utcnow,
 )
 
@@ -125,6 +126,8 @@ def generate_play_logs(stat_date, count):
     logs = [build_play_log(random.choice(songs), stat_date, index) for index in range(count)]
     if logs:
         get_play_log_collection().insert_many(logs)
+        for log in logs:
+            persist_play_log_to_relational(log)
     return logs
 
 

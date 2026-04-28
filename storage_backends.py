@@ -1,6 +1,6 @@
 import os
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from urllib.parse import urlparse
 
@@ -143,6 +143,7 @@ def ensure_mysql_schema():
             """
         )
         cursor.execute(DAILY_STATS_TABLE_SQL)
+        ensure_member_b_relational_schema(cursor)
     _mysql_schema_ready = True
 
 
@@ -191,6 +192,138 @@ CREATE TABLE IF NOT EXISTS Daily_Stats (
     KEY idx_daily_stats_generated_at (generated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
+
+
+MEMBER_B_RELATIONAL_SCHEMA_SQL = [
+    """
+    CREATE TABLE IF NOT EXISTS action_dict (
+        action_id INT NOT NULL,
+        action_code VARCHAR(50) NOT NULL,
+        action_name VARCHAR(100) NOT NULL,
+        category VARCHAR(50) NOT NULL,
+        PRIMARY KEY (action_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS `user` (
+        user_id BIGINT NOT NULL AUTO_INCREMENT,
+        username VARCHAR(50) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        phone VARCHAR(20),
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS device (
+        device_id BIGINT NOT NULL AUTO_INCREMENT,
+        device_number VARCHAR(64) NOT NULL,
+        model_name VARCHAR(50) NOT NULL,
+        status TINYINT NOT NULL,
+        last_active DATETIME NOT NULL,
+        PRIMARY KEY (device_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_token (
+        auth_id BIGINT NOT NULL AUTO_INCREMENT,
+        user_id BIGINT,
+        platform_type VARCHAR(20) NOT NULL,
+        access_token TEXT NOT NULL,
+        refresh_token VARCHAR(512) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        PRIMARY KEY (auth_id),
+        CONSTRAINT FK_Reference_13 FOREIGN KEY (user_id)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS media_mapping (
+        mapping_id BIGINT NOT NULL AUTO_INCREMENT,
+        user_id BIGINT,
+        song_title VARCHAR(255) NOT NULL,
+        artist VARCHAR(100) NOT NULL,
+        platform VARCHAR(20) NOT NULL,
+        external_id VARCHAR(100) NOT NULL,
+        cover_url VARCHAR(512) NOT NULL,
+        PRIMARY KEY (mapping_id),
+        CONSTRAINT FK_Reference_14 FOREIGN KEY (user_id)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS play_history (
+        history_id BIGINT NOT NULL AUTO_INCREMENT,
+        device_id BIGINT NOT NULL,
+        user_id BIGINT NOT NULL,
+        mapping_id BIGINT,
+        play_duration BIGINT,
+        created_at DATETIME,
+        style VARCHAR(50),
+        PRIMARY KEY (history_id),
+        CONSTRAINT FK_Reference_16 FOREIGN KEY (user_id)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+        CONSTRAINT FK_Reference_18 FOREIGN KEY (device_id)
+            REFERENCES device (device_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+        CONSTRAINT FK_Reference_Music FOREIGN KEY (mapping_id)
+            REFERENCES media_mapping (mapping_id) ON DELETE SET NULL ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_device_binding (
+        user_id BIGINT NOT NULL,
+        device_id BIGINT NOT NULL,
+        custom_device_name VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+        is_primary TINYINT NOT NULL,
+        PRIMARY KEY (user_id, device_id),
+        CONSTRAINT FK_Reference_8 FOREIGN KEY (device_id)
+            REFERENCES device (device_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+        CONSTRAINT FK_Reference_9 FOREIGN KEY (user_id)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_feedback (
+        content TEXT NOT NULL,
+        feedback_id BIGINT NOT NULL AUTO_INCREMENT,
+        user_id BIGINT,
+        PRIMARY KEY (feedback_id),
+        CONSTRAINT FK_Reference_11 FOREIGN KEY (user_id)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS friendship (
+        user_id_2 BIGINT NOT NULL,
+        user_id_1 BIGINT NOT NULL,
+        PRIMARY KEY (user_id_2, user_id_1),
+        CONSTRAINT FK_Reference_12 FOREIGN KEY (user_id_1)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+        CONSTRAINT FK_Reference_19 FOREIGN KEY (user_id_2)
+            REFERENCES `user` (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """,
+]
+
+ACTION_DICT_ROWS = [
+    (1, "PLAY", "Play song", "music"),
+    (2, "LIKE", "Like song", "preference"),
+    (3, "DISLIKE", "Dislike song", "preference"),
+    (4, "VOLUME_CHANGE", "Volume report", "device"),
+    (5, "SIGNAL_REPORT", "Signal report", "device"),
+]
+
+
+def ensure_member_b_relational_schema(cursor):
+    for statement in MEMBER_B_RELATIONAL_SCHEMA_SQL:
+        cursor.execute(statement)
+    cursor.executemany(
+        """
+        INSERT IGNORE INTO action_dict (action_id, action_code, action_name, category)
+        VALUES (%s, %s, %s, %s)
+        """,
+        ACTION_DICT_ROWS,
+    )
 
 
 def clean_artist_names(artists):
@@ -256,6 +389,278 @@ def build_song_document(song_payload, account=None, password=None, device_id=Non
         }
 
     return document
+
+
+def mysql_now():
+    return datetime.now()
+
+
+def truncate_text(value, limit):
+    return str(value or "")[:limit]
+
+
+def datetime_from_payload_timestamp(payload):
+    try:
+        return datetime.fromtimestamp(int(payload.get("timestamp")))
+    except (TypeError, ValueError, OSError):
+        return mysql_now()
+
+
+def ensure_course_auth_token(cursor, user_id, account):
+    token_seed = build_password_hash(f"{account}:netease")
+    refresh_seed = build_password_hash(f"{account}:netease:refresh")
+    expires_at = mysql_now() + timedelta(days=30)
+    cursor.execute(
+        """
+        SELECT auth_id
+        FROM auth_token
+        WHERE user_id = %s AND platform_type = %s
+        ORDER BY auth_id ASC
+        LIMIT 1
+        """,
+        (user_id, "netease"),
+    )
+    row = cursor.fetchone()
+    if row:
+        cursor.execute(
+            """
+            UPDATE auth_token
+            SET access_token = %s, refresh_token = %s, expires_at = %s
+            WHERE auth_id = %s
+            """,
+            (token_seed, refresh_seed, expires_at, row["auth_id"]),
+        )
+        return
+
+    cursor.execute(
+        """
+        INSERT INTO auth_token (user_id, platform_type, access_token, refresh_token, expires_at)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (user_id, "netease", token_seed, refresh_seed, expires_at),
+    )
+
+
+def upsert_course_user(cursor, account, password):
+    password_hash = build_password_hash(password)
+    cursor.execute(
+        """
+        SELECT user_id, password_hash
+        FROM `user`
+        WHERE username = %s
+        ORDER BY user_id ASC
+        LIMIT 1
+        """,
+        (account,),
+    )
+    row = cursor.fetchone()
+    if row:
+        if row["password_hash"] != password_hash:
+            cursor.execute(
+                "UPDATE `user` SET password_hash = %s WHERE user_id = %s",
+                (password_hash, row["user_id"]),
+            )
+        user_id = int(row["user_id"])
+    else:
+        cursor.execute(
+            """
+            INSERT INTO `user` (username, password_hash)
+            VALUES (%s, %s)
+            """,
+            (account, password_hash),
+        )
+        user_id = int(cursor.lastrowid)
+
+    ensure_course_auth_token(cursor, user_id, account)
+    return user_id
+
+
+def upsert_course_device(cursor, device_number):
+    now = mysql_now()
+    cursor.execute(
+        """
+        SELECT device_id
+        FROM device
+        WHERE device_number = %s
+        ORDER BY device_id ASC
+        LIMIT 1
+        """,
+        (device_number,),
+    )
+    row = cursor.fetchone()
+    if row:
+        cursor.execute(
+            """
+            UPDATE device
+            SET status = %s, last_active = %s
+            WHERE device_id = %s
+            """,
+            (1, now, row["device_id"]),
+        )
+        return int(row["device_id"])
+
+    cursor.execute(
+        """
+        INSERT INTO device (device_number, model_name, status, last_active)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (device_number, "smart-speaker-simulator", 1, now),
+    )
+    return int(cursor.lastrowid)
+
+
+def upsert_course_binding(cursor, user_id, device_id, device_number):
+    cursor.execute(
+        """
+        INSERT INTO user_device_binding (user_id, device_id, custom_device_name, is_primary)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            custom_device_name = VALUES(custom_device_name),
+            is_primary = VALUES(is_primary)
+        """,
+        (user_id, device_id, truncate_text(device_number, 50), 1),
+    )
+
+
+def ensure_course_context(payload, account, password):
+    connection = get_mysql_connection()
+    device_number = str(payload.get("device_id") or "unknown_device")
+    with connection.cursor() as cursor:
+        user_id = upsert_course_user(cursor, account, password)
+        device_id = upsert_course_device(cursor, device_number)
+        upsert_course_binding(cursor, user_id, device_id, device_number)
+        return user_id, device_id
+
+
+def upsert_course_media_mapping(cursor, user_id, song_document):
+    external_id = truncate_text(song_document.get("song_id"), 100)
+    song_title = truncate_text(song_document.get("name"), 255) or "unknown song"
+    artist = truncate_text(song_document.get("artist_text"), 100) or "unknown artist"
+    cover_url = truncate_text(song_document.get("cover_url"), 512)
+
+    cursor.execute(
+        """
+        SELECT mapping_id
+        FROM media_mapping
+        WHERE user_id = %s AND platform = %s AND external_id = %s
+        ORDER BY mapping_id ASC
+        LIMIT 1
+        """,
+        (user_id, "netease", external_id),
+    )
+    row = cursor.fetchone()
+    if row:
+        cursor.execute(
+            """
+            UPDATE media_mapping
+            SET song_title = %s, artist = %s, cover_url = %s
+            WHERE mapping_id = %s
+            """,
+            (song_title, artist, cover_url, row["mapping_id"]),
+        )
+        return int(row["mapping_id"])
+
+    cursor.execute(
+        """
+        INSERT INTO media_mapping (user_id, song_title, artist, platform, external_id, cover_url)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (user_id, song_title, artist, "netease", external_id, cover_url),
+    )
+    return int(cursor.lastrowid)
+
+
+def insert_course_play_history(cursor, user_id, device_id, mapping_id, play_duration, created_at, style):
+    cursor.execute(
+        """
+        INSERT INTO play_history (device_id, user_id, mapping_id, play_duration, created_at, style)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (
+            device_id,
+            user_id,
+            mapping_id,
+            int(play_duration or 0),
+            created_at,
+            truncate_text(style, 50),
+        ),
+    )
+
+
+def persist_song_document_to_relational(payload, account, password, song_document, style="song_info"):
+    connection = get_mysql_connection()
+    device_number = str(payload.get("device_id") or "unknown_device")
+    with connection.cursor() as cursor:
+        user_id = upsert_course_user(cursor, account, password)
+        device_id = upsert_course_device(cursor, device_number)
+        upsert_course_binding(cursor, user_id, device_id, device_number)
+        mapping_id = upsert_course_media_mapping(cursor, user_id, song_document)
+        insert_course_play_history(
+            cursor,
+            user_id,
+            device_id,
+            mapping_id,
+            song_document.get("duration_seconds") or 0,
+            datetime_from_payload_timestamp(payload),
+            style,
+        )
+        return {
+            "user_id": user_id,
+            "device_id": device_id,
+            "mapping_id": mapping_id,
+        }
+
+
+def persist_like_feedback_to_relational(payload, account, password):
+    connection = get_mysql_connection()
+    device_number = str(payload.get("device_id") or "unknown_device")
+    like_status = bool(payload.get("value"))
+    with connection.cursor() as cursor:
+        user_id = upsert_course_user(cursor, account, password)
+        device_id = upsert_course_device(cursor, device_number)
+        upsert_course_binding(cursor, user_id, device_id, device_number)
+        cursor.execute(
+            """
+            INSERT INTO user_feedback (content, user_id)
+            VALUES (%s, %s)
+            """,
+            (f"like_status={like_status}; device_number={device_number}", user_id),
+        )
+        return {"user_id": user_id, "device_id": device_id}
+
+
+def persist_play_log_to_relational(play_log):
+    account = play_log.get("user_account") or "daily_stats_user@smart-speaker.local"
+    password = play_log.get("user_password") or f"{account}_pwd_2026"
+    device_number = str(play_log.get("device_id") or "unknown_device")
+    payload = {"device_id": device_number}
+    song_document = {
+        "song_id": str(play_log.get("song_id") or ""),
+        "name": play_log.get("song_name") or "unknown song",
+        "artist_text": play_log.get("artist_text") or " / ".join(play_log.get("artists") or []),
+        "cover_url": play_log.get("cover_url") or "",
+        "duration_seconds": play_log.get("duration_seconds") or play_log.get("play_duration_seconds") or 0,
+    }
+    played_at = play_log.get("played_at")
+    if not isinstance(played_at, datetime):
+        played_at = mysql_now()
+
+    connection = get_mysql_connection()
+    with connection.cursor() as cursor:
+        user_id = upsert_course_user(cursor, account, password)
+        device_id = upsert_course_device(cursor, device_number)
+        upsert_course_binding(cursor, user_id, device_id, device_number)
+        mapping_id = upsert_course_media_mapping(cursor, user_id, song_document)
+        insert_course_play_history(
+            cursor,
+            user_id,
+            device_id,
+            mapping_id,
+            play_log.get("play_duration_seconds") or song_document.get("duration_seconds") or 0,
+            played_at.replace(tzinfo=None) if played_at.tzinfo else played_at,
+            "daily_stats_job",
+        )
+    return payload
 
 
 def get_next_preference_id(cursor):
@@ -392,6 +797,7 @@ def upsert_song_info(payload, account, password):
         },
         upsert=True,
     )
+    return update_fields
 
 
 def persist_payload(payload):
@@ -399,18 +805,21 @@ def persist_payload(payload):
     device_id = payload.get("device_id", "unknown_device")
     account, password = infer_user_credentials(payload)
     user_id = upsert_user(account, password, device_id)
+    ensure_course_context(payload, account, password)
 
     if metric_type in PREFERENCE_TYPES:
         upsert_user_preference(payload, user_id)
-        return "mysql.user_preferences"
+        persist_like_feedback_to_relational(payload, account, password)
+        return "mysql.user_preferences+mysql.user_feedback"
 
     if metric_type == "song_info":
-        upsert_song_info(payload, account, password)
-        return "mongodb.song_info"
+        song_document = upsert_song_info(payload, account, password)
+        persist_song_document_to_relational(payload, account, password, song_document)
+        return "mongodb.song_info+mysql.media_mapping+mysql.play_history"
 
     if metric_type in METRIC_TYPES:
         upsert_device_metric(payload, account, password)
-        return "mongodb.device_metrics"
+        return "mongodb.device_metrics+mysql.user_device_binding"
 
     return "mysql.users"
 
