@@ -3,270 +3,87 @@ import threading
 import urllib.parse
 import webbrowser
 
-import requests
-import urllib3
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template
 
-from song_info_provider import (
-    get_binaryify_base_url,
-    get_gdstudio_search_url,
-    get_provider_timeout,
-    get_real_ip,
-)
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from song_info_provider import fetch_song_info
 
 app = Flask(__name__, template_folder="templates")
 
 GUI_HOST = os.environ.get("GUI_HOST", "127.0.0.1")
 GUI_PORT = int(os.environ.get("GUI_PORT", "5080"))
-GUI_OPEN_BROWSER = os.environ.get("GUI_OPEN_BROWSER", "true").lower() in ("1", "true", "yes", "on")
-SEARCH_LIMIT = int(os.environ.get("GUI_SEARCH_LIMIT", "8"))
+GUI_WAKE_KEYWORD = os.environ.get("GUI_WAKE_KEYWORD", "稻香").strip() or "稻香"
 
 
-def build_http_session():
-    session = requests.Session()
-    session.trust_env = False
-    session.headers.update(
-        {
-            "User-Agent": "smart-speaker-gui/1.0",
-            "Accept": "application/json,text/plain,*/*",
-        }
-    )
-    return session
+def build_song_context(keyword):
+    payload = fetch_song_info(keyword)
+    song = payload["song"]
+    song_id = str(song.get("song_id") or "")
+    if not song_id:
+        raise RuntimeError("Song source returned empty song_id")
 
-
-def normalize_binaryify_song(song):
-    album = song.get("al") or {}
-    artists = [artist.get("name") for artist in song.get("ar", []) if artist.get("name")]
     return {
-        "song_id": str(song.get("id", "")),
-        "name": song.get("name", ""),
-        "artists": artists,
-        "album": album.get("name", ""),
-        "cover_url": album.get("picUrl", ""),
-        "provider": "binaryify",
-    }
-
-
-def normalize_gdstudio_song(song):
-    return {
-        "song_id": str(song.get("id") or song.get("url_id") or ""),
-        "name": song.get("name", ""),
-        "artists": song.get("artist") or [],
+        "keyword": keyword,
+        "provider": payload.get("provider", ""),
+        "provider_url": payload.get("provider_url", ""),
+        "song_id": song_id,
+        "song_name": song.get("name", keyword),
+        "artists": " / ".join(song.get("artists") or []) or "未知歌手",
         "album": song.get("album", ""),
-        "cover_url": "",
-        "provider": "gdstudio_fallback",
+        "cover_url": song.get("cover_url", ""),
+        "app_uri": f"orpheus://song/{song_id}/?autoplay=1",
+        "app_uri_fallback": f"orpheus://song/{song_id}",
+        "web_url": f"https://music.163.com/#/song?id={song_id}",
     }
 
 
-def search_binaryify(keyword, limit):
-    session = build_http_session()
-    response = session.get(
-        f"{get_binaryify_base_url()}/cloudsearch",
-        params={
-            "keywords": keyword,
-            "limit": limit,
-            "type": 1,
-            "realIP": get_real_ip(),
-        },
-        timeout=get_provider_timeout(),
-        verify=False,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    songs = ((payload or {}).get("result") or {}).get("songs") or []
-    return [normalize_binaryify_song(song) for song in songs]
+def try_open_app_uri(song_context):
+    if os.name != "nt":
+        return False
 
-
-def search_gdstudio(keyword, limit):
-    session = build_http_session()
-    response = session.get(
-        get_gdstudio_search_url(),
-        params={
-            "types": "search",
-            "source": "netease",
-            "count": limit,
-            "name": keyword,
-        },
-        timeout=get_provider_timeout(),
-        verify=False,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, list):
-        return []
-    return [normalize_gdstudio_song(song) for song in payload]
-
-
-def search_songs(keyword, limit):
-    errors = []
-
-    try:
-        songs = search_binaryify(keyword, limit)
-        if songs:
-            return songs, "binaryify", errors
-        errors.append("binaryify returned no songs")
-    except Exception as exc:
-        errors.append(f"binaryify: {exc}")
-
-    try:
-        songs = search_gdstudio(keyword, limit)
-        if songs:
-            return songs, "gdstudio_fallback", errors
-        errors.append("gdstudio returned no songs")
-    except Exception as exc:
-        errors.append(f"gdstudio: {exc}")
-
-    raise RuntimeError("; ".join(errors) or "No song source succeeded")
-
-
-def fetch_binaryify_play_url(song_id):
-    session = build_http_session()
-    endpoints = (
-        ("/song/url/v1", {"id": song_id, "level": "standard", "realIP": get_real_ip()}),
-        ("/song/url", {"id": song_id, "realIP": get_real_ip()}),
-    )
-
-    last_error = None
-    for path, params in endpoints:
+    for candidate in (
+        song_context["app_uri"],
+        song_context["app_uri_fallback"],
+        "orpheus://",
+    ):
         try:
-            response = session.get(
-                f"{get_binaryify_base_url()}{path}",
-                params=params,
-                timeout=get_provider_timeout(),
-                verify=False,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            data = (payload or {}).get("data") or []
-            if data and data[0].get("url"):
-                return data[0]["url"]
-        except Exception as exc:
-            last_error = exc
-
-    if last_error is not None:
-        raise RuntimeError(f"binaryify play url failed: {last_error}")
-    raise RuntimeError("binaryify play url returned empty data")
+            os.startfile(candidate)  # type: ignore[attr-defined]
+            return True
+        except OSError:
+            continue
+        except Exception:
+            continue
+    return False
 
 
-def fetch_gdstudio_play_url(song_id):
-    session = build_http_session()
-    response = session.get(
-        get_gdstudio_search_url(),
-        params={
-            "types": "url",
-            "source": "netease",
-            "id": song_id,
-        },
-        timeout=get_provider_timeout(),
-        verify=False,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if payload.get("url"):
-        return payload["url"]
-    raise RuntimeError("gdstudio play url returned empty data")
-
-
-def fetch_gdstudio_cover_url(song_id):
-    session = build_http_session()
-    response = session.get(
-        get_gdstudio_search_url(),
-        params={
-            "types": "pic",
-            "source": "netease",
-            "id": song_id,
-        },
-        timeout=get_provider_timeout(),
-        verify=False,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    return payload.get("url", "")
-
-
-def fetch_playback_payload(song_id, provider, fallback_cover_url):
-    if provider == "binaryify":
-        return {
-            "play_url": fetch_binaryify_play_url(song_id),
-            "cover_url": fallback_cover_url,
-        }
-
-    play_url = fetch_gdstudio_play_url(song_id)
-    cover_url = fallback_cover_url or fetch_gdstudio_cover_url(song_id)
-    return {
-        "play_url": play_url,
-        "cover_url": cover_url,
-    }
+def open_browser_later():
+    webbrowser.open(f"http://{GUI_HOST}:{GUI_PORT}/")
 
 
 @app.route("/")
 def index():
-    return render_template("song_player.html")
+    return render_template("cloudmusic_launcher.html", **app.config["SONG_CONTEXT"])
 
 
-@app.route("/api/search")
-def api_search():
-    keyword = (request.args.get("q") or "").strip()
-    if not keyword:
-        return jsonify({"ok": False, "message": "Missing search keyword"}), 400
-
-    limit = request.args.get("limit", type=int) or SEARCH_LIMIT
-
-    try:
-        songs, provider, warnings = search_songs(keyword, limit)
-    except Exception as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 502
-
-    return jsonify(
-        {
-            "ok": True,
-            "keyword": keyword,
-            "provider": provider,
-            "warnings": warnings,
-            "songs": songs,
-        }
-    )
-
-
-@app.route("/api/play")
-def api_play():
-    song_id = (request.args.get("song_id") or "").strip()
-    provider = (request.args.get("provider") or "").strip() or "binaryify"
-    cover_url = (request.args.get("cover_url") or "").strip()
-
-    if not song_id:
-        return jsonify({"ok": False, "message": "Missing song_id"}), 400
-
-    try:
-        payload = fetch_playback_payload(song_id, provider, cover_url)
-    except Exception as exc:
-        return jsonify({"ok": False, "message": str(exc)}), 502
-
-    return jsonify({"ok": True, **payload})
-
-
-@app.route("/api/source")
-def api_source():
-    return jsonify(
-        {
-            "ok": True,
-            "binaryify_base_url": get_binaryify_base_url(),
-            "gdstudio_base_url": get_gdstudio_search_url(),
-        }
-    )
-
-
-def open_browser_later():
-    url = f"http://{GUI_HOST}:{GUI_PORT}/"
-    webbrowser.open(url)
+@app.route("/api/context")
+def api_context():
+    return jsonify({"ok": True, **app.config["SONG_CONTEXT"]})
 
 
 def main():
-    if GUI_OPEN_BROWSER:
-        threading.Timer(1.0, open_browser_later).start()
-    print(f"[gui] music player available at http://{GUI_HOST}:{GUI_PORT}/", flush=True)
+    song_context = build_song_context(GUI_WAKE_KEYWORD)
+    app.config["SONG_CONTEXT"] = song_context
+
+    launched = try_open_app_uri(song_context)
+    if launched:
+        print(
+            f"[gui] 已尝试唤起网易云客户端: {song_context['song_name']} "
+            f"({song_context['song_id']})",
+            flush=True,
+        )
+        return
+
+    print("[gui] 本机未直接唤起网易云客户端，正在打开本地引导页。", flush=True)
+    threading.Timer(0.8, open_browser_later).start()
     app.run(host=GUI_HOST, port=GUI_PORT, debug=False)
 
 

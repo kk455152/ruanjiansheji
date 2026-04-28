@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网易云唤起页</title>
+  <style>
+    :root {
+      --bg1: #0b1020;
+      --bg2: #171d33;
+      --accent: #ff4d4f;
+      --accent2: #ff8a5b;
+      --text: #f5f7ff;
+      --muted: #aeb7d4;
+      --panel: rgba(16, 22, 42, 0.84);
+      --line: rgba(255, 255, 255, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(255, 77, 79, 0.2), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(255, 138, 91, 0.18), transparent 22%),
+        linear-gradient(135deg, var(--bg1), var(--bg2));
+    }
+
+    .card {
+      width: min(760px, 100%);
+      padding: 30px;
+      border-radius: 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(14px);
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 77, 79, 0.14);
+      border: 1px solid rgba(255, 77, 79, 0.25);
+      color: #ffd8d8;
+      font-size: 13px;
+    }
+
+    h1 {
+      margin: 16px 0 10px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.06;
+      letter-spacing: -0.04em;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 15px;
+    }
+
+    .song-box {
+      margin-top: 22px;
+      padding: 18px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .song-title {
+      margin: 0 0 8px;
+      font-size: 24px;
+      color: var(--text);
+    }
+
+    .actions {
+      margin-top: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 170px;
+      padding: 14px 18px;
+      border-radius: 16px;
+      text-decoration: none;
+      font-weight: 700;
+      transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      opacity: 0.95;
+    }
+
+    .button-primary {
+      color: #151515;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+
+    .button-secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--line);
+    }
+
+    .hint {
+      margin-top: 18px;
+      font-size: 13px;
+      color: #c5cbe0;
+    }
+
+    code {
+      word-break: break-all;
+      color: #ffe0d7;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="tag">CloudMusic App Launcher</div>
+    <h1>正在尝试唤起网易云客户端</h1>
+    <p>
+      这次唤起会先调用你已经接入的网易云歌曲来源接口，
+      拿到歌曲 ID 后，再跳转到网易云客户端。
+    </p>
+
+    <section class="song-box">
+      <h2 class="song-title">{{ song_name }}</h2>
+      <p>歌手：{{ artists }}</p>
+      <p>专辑：{{ album or "未知专辑" }}</p>
+      <p>来源：{{ provider }} | 歌曲 ID：{{ song_id }}</p>
+    </section>
+
+    <div class="actions">
+      <a class="button button-primary" href="{{ app_uri }}">立即打开网易云 App</a>
+      <a class="button button-secondary" href="{{ web_url }}" target="_blank" rel="noreferrer">打开网页版兜底</a>
+    </div>
+
+    <p class="hint">
+      如果没有自动拉起客户端，通常说明本机还没有安装或注册网易云桌面端协议。
+      当前协议：<code>{{ app_uri }}</code>
+    </p>
+  </main>
+
+  <script>
+    setTimeout(() => {
+      window.location.href = {{ app_uri|tojson }};
+    }, 400);
+  </script>
+</body>
+</html>
