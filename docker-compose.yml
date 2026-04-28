@@ -23,6 +23,8 @@ services:
       context: .
       dockerfile: Dockerfile.gateway
     network_mode: host
+    env_file:
+      - .env.db_api
     environment:
       - APP_HOST=0.0.0.0
       - APP_LISTEN_QUEUE=1024
