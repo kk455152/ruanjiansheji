@@ -16,3 +16,4 @@ pycryptodome
 
 pymysql
 python-dotenv
+pymongo
