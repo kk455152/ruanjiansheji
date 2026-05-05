@@ -1,8 +1,9 @@
 import os
 import hashlib
+import socket
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import pymysql
 from pymongo import MongoClient
@@ -19,6 +20,8 @@ PREFERENCE_TYPES = {"like_status"}
 SONG_INFO_TYPES = {"song_info", "歌曲信息"}
 
 DEFAULT_MONGO_URI = "mongodb://y:123@8.137.165.220:27017/musicplayer?authSource=musicplayer"
+DEFAULT_MONGO_HOST = "8.137.165.220"
+LOCAL_MONGO_HOST = "127.0.0.1"
 DEFAULT_MYSQL_HOST = "8.137.165.220"
 DEFAULT_MYSQL_PORT = 3306
 DEFAULT_MYSQL_DATABASE = "smart_speaker"
@@ -37,7 +40,38 @@ def utcnow():
 
 
 def get_mongo_uri():
-    return os.environ.get("MONGO_URI", DEFAULT_MONGO_URI)
+    explicit_uri = os.environ.get("MONGO_URI")
+    if explicit_uri:
+        return explicit_uri
+
+    return select_reachable_mongo_uri(DEFAULT_MONGO_URI)
+
+
+def can_connect(host, port, timeout):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def select_reachable_mongo_uri(uri):
+    parsed = urlparse(uri)
+    host = parsed.hostname
+    port = parsed.port or 27017
+    probe_timeout = float(os.environ.get("MONGO_HOST_PROBE_TIMEOUT", "1"))
+
+    if host != DEFAULT_MONGO_HOST:
+        return uri
+
+    if can_connect(host, port, probe_timeout):
+        return uri
+
+    if not can_connect(LOCAL_MONGO_HOST, port, probe_timeout):
+        return uri
+
+    netloc = parsed.netloc.replace(host, LOCAL_MONGO_HOST, 1)
+    return urlunparse(parsed._replace(netloc=netloc))
 
 
 def get_mongo_database_name():
@@ -72,6 +106,37 @@ def get_mysql_config():
     }
 
 
+def quote_mysql_identifier(identifier):
+    return f"`{str(identifier).replace('`', '``')}`"
+
+
+def should_auto_create_mysql_database():
+    return os.environ.get("MYSQL_AUTO_CREATE_DATABASE", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def ensure_mysql_database_exists(config):
+    if not should_auto_create_mysql_database():
+        return
+
+    database = config.get("database")
+    if not database:
+        return
+
+    bootstrap_config = dict(config)
+    bootstrap_config.pop("database", None)
+    with pymysql.connect(**bootstrap_config) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"CREATE DATABASE IF NOT EXISTS {quote_mysql_identifier(database)} "
+                "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+
+
 def get_mongo_collection():
     global _mongo_client
     if _mongo_client is None:
@@ -103,7 +168,9 @@ def get_mysql_connection():
     if _mysql_connection is None or not _mysql_connection.open:
         with _mysql_connection_lock:
             if _mysql_connection is None or not _mysql_connection.open:
-                _mysql_connection = pymysql.connect(**get_mysql_config())
+                config = get_mysql_config()
+                ensure_mysql_database_exists(config)
+                _mysql_connection = pymysql.connect(**config)
     ensure_mysql_schema()
     return _mysql_connection
 
@@ -122,7 +189,7 @@ def ensure_mysql_schema():
             """
             CREATE TABLE IF NOT EXISTS users (
                 user_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) NOT NULL,
+                username VARCHAR(255) NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -133,7 +200,7 @@ def ensure_mysql_schema():
             CREATE TABLE IF NOT EXISTS user_preferences (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
-                device_id VARCHAR(50) NOT NULL,
+                device_id VARCHAR(128) NOT NULL,
                 like_status TINYINT NOT NULL DEFAULT '0',
                 KEY idx_preferences_user_id (user_id),
                 CONSTRAINT fk_user_preferences_user
@@ -144,6 +211,7 @@ def ensure_mysql_schema():
         )
         cursor.execute(DAILY_STATS_TABLE_SQL)
         ensure_member_b_relational_schema(cursor)
+        ensure_mysql_column_capacity(cursor)
     _mysql_schema_ready = True
 
 
@@ -207,7 +275,7 @@ MEMBER_B_RELATIONAL_SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS `user` (
         user_id BIGINT NOT NULL AUTO_INCREMENT,
-        username VARCHAR(50) NOT NULL,
+        username VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         phone VARCHAR(20),
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -217,7 +285,7 @@ MEMBER_B_RELATIONAL_SCHEMA_SQL = [
     """
     CREATE TABLE IF NOT EXISTS device (
         device_id BIGINT NOT NULL AUTO_INCREMENT,
-        device_number VARCHAR(64) NOT NULL,
+        device_number VARCHAR(128) NOT NULL,
         model_name VARCHAR(50) NOT NULL,
         status TINYINT NOT NULL,
         last_active DATETIME NOT NULL,
@@ -312,6 +380,16 @@ ACTION_DICT_ROWS = [
     (4, "VOLUME_CHANGE", "Volume report", "device"),
     (5, "SIGNAL_REPORT", "Signal report", "device"),
 ]
+
+
+def ensure_mysql_column_capacity(cursor):
+    for statement in (
+        "ALTER TABLE users MODIFY username VARCHAR(255) NOT NULL",
+        "ALTER TABLE user_preferences MODIFY device_id VARCHAR(128) NOT NULL",
+        "ALTER TABLE `user` MODIFY username VARCHAR(255) NOT NULL",
+        "ALTER TABLE device MODIFY device_number VARCHAR(128) NOT NULL",
+    ):
+        cursor.execute(statement)
 
 
 def ensure_member_b_relational_schema(cursor):

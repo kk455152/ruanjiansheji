@@ -1,8 +1,13 @@
 import os
+import socket
 
 import pika
 
-MQ_HOST = os.environ.get('MQ_HOST', '8.137.165.220')
+DEFAULT_MQ_HOST = '8.137.165.220'
+LOCAL_MQ_HOST = '127.0.0.1'
+
+_explicit_mq_host = os.environ.get('MQ_HOST')
+MQ_HOST = _explicit_mq_host or DEFAULT_MQ_HOST
 MQ_PORT = int(os.environ.get('MQ_PORT', '5672'))
 MQ_USER = os.environ.get('MQ_USER', 'migrate')
 MQ_PASSWORD = os.environ.get('MQ_PASSWORD', '2728')
@@ -17,10 +22,32 @@ EXCHANGE_NAME = 'smart_speaker_exchange'
 RAW_DATA_QUEUE = 'speaker_data'
 
 
+def _can_connect(host, port, timeout):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def get_mq_host():
+    if _explicit_mq_host:
+        return _explicit_mq_host
+
+    probe_timeout = float(os.environ.get('MQ_HOST_PROBE_TIMEOUT', '1'))
+    if _can_connect(MQ_HOST, MQ_PORT, probe_timeout):
+        return MQ_HOST
+
+    if _can_connect(LOCAL_MQ_HOST, MQ_PORT, probe_timeout):
+        return LOCAL_MQ_HOST
+
+    return MQ_HOST
+
+
 def build_connection_parameters():
     credentials = pika.PlainCredentials(MQ_USER, MQ_PASSWORD)
     return pika.ConnectionParameters(
-        host=MQ_HOST,
+        host=get_mq_host(),
         port=MQ_PORT,
         credentials=credentials,
         heartbeat=MQ_HEARTBEAT,
