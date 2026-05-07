@@ -16,18 +16,45 @@ from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
 from storage_backends import persist_payload
 
+# =========================
+# Flask App
+# =========================
 app = Flask(__name__)
+
+# =========================
+# 注册数据库查询 API 接口
+# 这些文件现在都在项目根目录，所以直接这样 import
+# =========================
+from auth_routes import auth_bp
+from device_routes import device_bp
+from stats_routes import stats_bp
+from mongo_routes import mongo_bp
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(device_bp)
+app.register_blueprint(stats_bp)
+app.register_blueprint(mongo_bp)
+
+
+# =========================
+# 原来的网关配置，不要乱改
+# =========================
 _TEMP_PEM_FILES = []
+
 METRICS_WINDOW_SECONDS = float(os.environ.get('GATEWAY_METRICS_WINDOW_SECONDS', '10'))
 METRICS_FILE = os.environ.get('GATEWAY_METRICS_FILE', '/runtime/gateway_metrics.json')
 METRICS_FILE_PATTERN = os.environ.get('GATEWAY_METRICS_FILE_PATTERN')
-METRICS_MULTIPROCESS = os.environ.get('GATEWAY_METRICS_MULTIPROCESS', 'false').lower() in ('1', 'true', 'yes', 'on')
+METRICS_MULTIPROCESS = os.environ.get('GATEWAY_METRICS_MULTIPROCESS', 'false').lower() in (
+    '1',
+    'true',
+    'yes',
+    'on'
+)
 METRICS_FLUSH_INTERVAL = float(os.environ.get('GATEWAY_METRICS_FLUSH_INTERVAL', '1'))
+
 _metrics_lock = threading.Lock()
 _accepted_timestamps = deque()
 
-from db_api_service import db_api
-app.register_blueprint(db_api)
 
 def _cleanup_temp_pems():
     for path in _TEMP_PEM_FILES:
@@ -72,6 +99,7 @@ class RabbitPublisher:
                 channel.close()
             except Exception:
                 pass
+
         if connection is not None:
             try:
                 connection.close()
@@ -115,14 +143,17 @@ class BufferedMessageDispatcher:
         self.maxsize = int(os.environ.get('GATEWAY_QUEUE_MAXSIZE', '2000'))
         self.max_retries = int(os.environ.get('GATEWAY_PUBLISH_RETRIES', '5'))
         self.retry_delay = float(os.environ.get('GATEWAY_PUBLISH_RETRY_DELAY', '1.5'))
+
         self._queue = queue.Queue(maxsize=self.maxsize)
         self._publisher = RabbitPublisher()
         self._stop_event = threading.Event()
+
         self._worker = threading.Thread(
             target=self._run,
             name='gateway-publisher',
             daemon=True,
         )
+
         self._started = False
         self._start_lock = threading.Lock()
 
@@ -138,12 +169,18 @@ class BufferedMessageDispatcher:
             self._queue.put_nowait(None)
         except queue.Full:
             pass
+
         self._publisher.close()
 
     def submit(self, payload):
         self.start()
+
         serialized = json.dumps(payload, ensure_ascii=False)
-        item = {'body': serialized, 'attempt': 1}
+        item = {
+            'body': serialized,
+            'attempt': 1
+        }
+
         try:
             self._queue.put_nowait(item)
             return True
@@ -156,6 +193,7 @@ class BufferedMessageDispatcher:
     def _run(self):
         while not self._stop_event.is_set():
             item = self._queue.get()
+
             if item is None:
                 self._queue.task_done()
                 continue
@@ -165,21 +203,34 @@ class BufferedMessageDispatcher:
 
             try:
                 self._publisher.publish(body)
+
             except Exception as exc:
                 app.logger.warning(
                     'Broker publish attempt %s failed: %s',
                     attempt,
                     exc,
                 )
+
                 self._publisher.close()
+
                 if attempt < self.max_retries and not self._stop_event.is_set():
                     time.sleep(self.retry_delay)
+
                     try:
-                        self._queue.put_nowait({'body': body, 'attempt': attempt + 1})
+                        self._queue.put_nowait({
+                            'body': body,
+                            'attempt': attempt + 1
+                        })
                     except queue.Full:
-                        app.logger.error('Gateway publish queue is full while retrying a message.')
+                        app.logger.error(
+                            'Gateway publish queue is full while retrying a message.'
+                        )
                 else:
-                    app.logger.error('Gateway dropped a message after %s publish attempts.', attempt)
+                    app.logger.error(
+                        'Gateway dropped a message after %s publish attempts.',
+                        attempt
+                    )
+
             finally:
                 self._queue.task_done()
 
@@ -191,12 +242,14 @@ atexit.register(dispatcher.stop)
 
 def _trim_metric_window(now):
     cutoff = now - METRICS_WINDOW_SECONDS
+
     while _accepted_timestamps and _accepted_timestamps[0] < cutoff:
         _accepted_timestamps.popleft()
 
 
 def record_accepted_request():
     now = time.time()
+
     with _metrics_lock:
         _accepted_timestamps.append(now)
         _trim_metric_window(now)
@@ -204,11 +257,13 @@ def record_accepted_request():
 
 def get_gateway_metrics():
     now = time.time()
+
     with _metrics_lock:
         _trim_metric_window(now)
         accepted_count = len(_accepted_timestamps)
 
     window = max(METRICS_WINDOW_SECONDS, 1.0)
+
     return {
         'updated_at': now,
         'accepted_per_second': accepted_count / window,
@@ -230,6 +285,7 @@ def get_metrics_write_path():
 def aggregate_gateway_metrics():
     pattern = METRICS_FILE_PATTERN or METRICS_FILE
     paths = glob.glob(pattern)
+
     if not paths and METRICS_FILE:
         paths = [METRICS_FILE]
 
@@ -243,10 +299,12 @@ def aggregate_gateway_metrics():
         try:
             with open(path, 'r', encoding='utf-8') as file:
                 payload = json.load(file)
+
         except (OSError, json.JSONDecodeError):
             continue
 
         updated_at = float(payload.get('updated_at', 0) or 0)
+
         if now - updated_at > max(METRICS_WINDOW_SECONDS * 2, 15.0):
             continue
 
@@ -256,6 +314,7 @@ def aggregate_gateway_metrics():
         process_count += 1
 
     window = max(METRICS_WINDOW_SECONDS, 1.0)
+
     return {
         'updated_at': latest_updated_at or now,
         'accepted_per_second': accepted_count / window,
@@ -272,12 +331,15 @@ def write_gateway_metrics_file():
 
     metrics_path = get_metrics_write_path()
     metrics_dir = os.path.dirname(metrics_path)
+
     if metrics_dir:
         os.makedirs(metrics_dir, exist_ok=True)
 
     tmp_path = f'{metrics_path}.tmp'
+
     with open(tmp_path, 'w', encoding='utf-8') as file:
         json.dump(get_gateway_metrics(), file, ensure_ascii=False)
+
     os.replace(tmp_path, metrics_path)
 
 
@@ -285,8 +347,13 @@ def gateway_metrics_writer():
     while True:
         try:
             write_gateway_metrics_file()
+
         except Exception as exc:
-            app.logger.warning('Failed to write gateway metrics file: %s', exc)
+            app.logger.warning(
+                'Failed to write gateway metrics file: %s',
+                exc
+            )
+
         time.sleep(METRICS_FLUSH_INTERVAL)
 
 
@@ -303,14 +370,17 @@ def validate_and_decrypt(request_json, auth_token, timestamp):
 
     raw_string = f'{TOKEN_SALT}{timestamp}'
     expected_token = hashlib.md5(raw_string.encode('utf-8')).hexdigest()
+
     if auth_token != expected_token:
         return None, 'Unauthorized: Invalid Token'
 
     encrypted_payload = request_json.get('data')
+
     if not encrypted_payload:
         return None, 'Missing Payload'
 
     decrypted_dict = decrypt_data(encrypted_payload)
+
     if not decrypted_dict:
         return None, 'Decryption Failed: Illegal data or Key mismatch'
 
@@ -323,6 +393,10 @@ def ensure_connection_close(response):
     return response
 
 
+# =========================
+# 原有模拟器 / 设备上报接口
+# 这些接口不要和前端查询接口混在一起
+# =========================
 @app.route('/api/bass', methods=['POST'])
 @app.route('/api/signal', methods=['POST'])
 @app.route('/api/volume', methods=['POST'])
@@ -331,35 +405,65 @@ def ensure_connection_close(response):
 @app.route('/api/song-info', methods=['POST'])
 def handle_simulator_data():
     request_json = request.get_json(silent=True)
+
     if not isinstance(request_json, dict):
-        return jsonify({'status': 'error', 'message': 'Invalid JSON Payload'}), 400
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid JSON Payload'
+        }), 400
 
     auth_token = request.headers.get('Authorization')
     timestamp = request_json.get('timestamp')
-    data_decrypted, error_msg = validate_and_decrypt(request_json, auth_token, timestamp)
+
+    data_decrypted, error_msg = validate_and_decrypt(
+        request_json,
+        auth_token,
+        timestamp
+    )
+
     if error_msg:
-        return jsonify({'status': 'error', 'message': error_msg}), 401
+        return jsonify({
+            'status': 'error',
+            'message': error_msg
+        }), 401
 
     data_decrypted['timestamp'] = int(timestamp)
     data_decrypted['api_path'] = request.path
 
-    if data_decrypted.get('type') in ('song_info', '歌曲信息', '姝屾洸淇℃伅'):
+    if data_decrypted.get('type') in (
+        'song_info',
+        '歌曲信息',
+        '姝屾洸淇℃伅'
+    ):
         try:
             backend_name = persist_payload(data_decrypted)
+
         except Exception as exc:
-            app.logger.error('Song info persistence failed: %s', exc)
-            return jsonify({'status': 'error', 'message': 'Song info persistence failed'}), 502
+            app.logger.error(
+                'Song info persistence failed: %s',
+                exc
+            )
+
+            return jsonify({
+                'status': 'error',
+                'message': 'Song info persistence failed'
+            }), 502
 
         record_accepted_request()
+
         return jsonify({
             'status': 'success',
             'message': f'Verified song info from {request.path} persisted via {backend_name}',
         }), 200
 
     if not dispatcher.submit(data_decrypted):
-        return jsonify({'status': 'error', 'message': 'Gateway queue is busy, please retry'}), 503
+        return jsonify({
+            'status': 'error',
+            'message': 'Gateway queue is busy, please retry'
+        }), 503
 
     record_accepted_request()
+
     return jsonify({
         'status': 'success',
         'message': f'Verified data from {request.path} queued for broker delivery',
@@ -370,12 +474,31 @@ def handle_simulator_data():
 def internal_metrics():
     if METRICS_MULTIPROCESS:
         return jsonify(aggregate_gateway_metrics()), 200
+
     return jsonify(get_gateway_metrics()), 200
 
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({
+        'code': 200,
+        'msg': 'ok'
+    }), 200
+
+
 if __name__ == '__main__':
-    cert_path = normalize_pem_file('cert.pem', '-----BEGIN CERTIFICATE-----', '-----END CERTIFICATE-----')
-    key_path = normalize_pem_file('key.pem', '-----BEGIN PRIVATE KEY-----', '-----END PRIVATE KEY-----')
+    cert_path = normalize_pem_file(
+        'cert.pem',
+        '-----BEGIN CERTIFICATE-----',
+        '-----END CERTIFICATE-----'
+    )
+
+    key_path = normalize_pem_file(
+        'key.pem',
+        '-----BEGIN PRIVATE KEY-----',
+        '-----END PRIVATE KEY-----'
+    )
+
     app.run(
         host='0.0.0.0',
         port=int(os.environ.get('APP_PORT', '443')),
