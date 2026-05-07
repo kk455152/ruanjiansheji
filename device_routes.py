@@ -8,6 +8,12 @@ from auth_guard import require_auth
 device_bp = Blueprint("device", __name__, url_prefix="/device")
 
 
+def format_datetime(value):
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return value
+
+
 @device_bp.route("/list", methods=["GET"])
 @require_auth
 def device_list():
@@ -27,7 +33,7 @@ def device_list():
                 FROM user_device_binding b
                 JOIN device d ON d.device_id = b.device_id
                 WHERE b.user_id = %s
-                ORDER BY b.created_at DESC
+                ORDER BY d.device_id ASC
                 """,
                 (g.user_id,)
             )
@@ -35,14 +41,20 @@ def device_list():
             devices = cursor.fetchall()
 
         for item in devices:
-            if item.get("last_active"):
-                item["last_active"] = item["last_active"].strftime("%Y-%m-%d %H:%M:%S")
+            item["last_active"] = format_datetime(item.get("last_active"))
 
         return jsonify({
             "code": 200,
             "msg": "获取设备列表成功",
             "data": devices
         }), 200
+
+    except Exception as e:
+        return jsonify({
+            "code": 400,
+            "msg": "获取设备列表失败",
+            "error_details": str(e)
+        }), 400
 
     finally:
         conn.close()
@@ -51,7 +63,7 @@ def device_list():
 @device_bp.route("/bind", methods=["POST"])
 @require_auth
 def bind_device():
-    body = request.get_json() or {}
+    body = request.get_json(silent=True) or {}
 
     device_number = body.get("device_number", "").strip()
     custom_device_name = body.get("custom_device_name", "").strip()
