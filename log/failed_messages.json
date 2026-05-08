@@ -1,1 +1,130 @@
-[]
+[
+    {
+        "device_id": "dev_01",
+        "type": "\u6b4c\u66f2\u4fe1\u606f",
+        "value": "\u7a3b\u9999",
+        "song_payload": {
+            "keyword": "\u7a3b\u9999",
+            "provider": "binaryify",
+            "provider_url": "https://netease-cloud-music-api-one-rouge.vercel.app",
+            "fetched_at": "2026-04-29T07:23:18.453158+00:00",
+            "song": {
+                "song_id": "2651425710",
+                "name": "\u7a3b\u9999",
+                "artists": [
+                    "Lucky\u5c0f\u7231"
+                ],
+                "album": "\u7a3b\u9999(\u6df1\u60c5\u7248)",
+                "duration_ms": 231609,
+                "cover_url": "https://p2.music.126.net/QEPznCZl7MPwDKnlTAOfvA==/109951170200689777.jpg",
+                "raw": {
+                    "name": "\u7a3b\u9999",
+                    "mainTitle": null,
+                    "additionalTitle": null,
+                    "id": 2651425710,
+                    "pst": 0,
+                    "t": 0,
+                    "ar": [
+                        {
+                            "id": 96154669,
+                            "name": "Lucky\u5c0f\u7231",
+                            "tns": [],
+                            "alias": []
+                        }
+                    ],
+                    "alia": [],
+                    "pop": 100,
+                    "st": 0,
+                    "rt": "",
+                    "fee": 1,
+                    "v": 41,
+                    "crbt": null,
+                    "cf": "",
+                    "al": {
+                        "id": 255318240,
+                        "name": "\u7a3b\u9999(\u6df1\u60c5\u7248)",
+                        "picUrl": "https://p2.music.126.net/QEPznCZl7MPwDKnlTAOfvA==/109951170200689777.jpg",
+                        "tns": [],
+                        "pic_str": "109951170200689777",
+                        "pic": 109951170200689780
+                    },
+                    "dt": 231609,
+                    "h": {
+                        "br": 320000,
+                        "fid": 0,
+                        "size": 9267244,
+                        "vd": 842,
+                        "sr": 44100
+                    },
+                    "m": {
+                        "br": 192000,
+                        "fid": 0,
+                        "size": 5560364,
+                        "vd": 3420,
+                        "sr": 44100
+                    },
+                    "l": {
+                        "br": 128000,
+                        "fid": 0,
+                        "size": 3706924,
+                        "vd": 4995,
+                        "sr": 44100
+                    },
+                    "sq": {
+                        "br": 1563040,
+                        "fid": 0,
+                        "size": 45251818,
+                        "vd": 849,
+                        "sr": 44100
+                    },
+                    "hr": null,
+                    "a": null,
+                    "cd": "01",
+                    "no": 1,
+                    "rtUrl": null,
+                    "ftype": 0,
+                    "rtUrls": [],
+                    "djId": 0,
+                    "copyright": 1,
+                    "s_id": 0,
+                    "mark": 17179877376,
+                    "originCoverType": 2,
+                    "originSongSimpleData": {
+                        "songId": 185709,
+                        "name": "\u7a3b\u9999",
+                        "artists": [
+                            {
+                                "id": 6452,
+                                "name": "\u5468\u6770\u4f26"
+                            }
+                        ],
+                        "albumMeta": {
+                            "id": 18877,
+                            "name": "\u9b54\u6770\u5ea7"
+                        }
+                    },
+                    "tagPicList": null,
+                    "resourceState": true,
+                    "version": 7,
+                    "songJumpInfo": null,
+                    "entertainmentTags": null,
+                    "awardTags": null,
+                    "displayTags": null,
+                    "artistClassics": false,
+                    "markTags": [],
+                    "songFeature": null,
+                    "single": 0,
+                    "noCopyrightRcmd": null,
+                    "mv": 0,
+                    "rtype": 0,
+                    "rurl": null,
+                    "mst": 9,
+                    "cp": 1416729,
+                    "publishTime": 1732636800000
+                }
+            }
+        },
+        "user_account": "user_01@smart-speaker.local",
+        "user_password": "user_01_pwd_2026"
+    }
+]
