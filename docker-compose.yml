@@ -27,8 +27,10 @@ services:
       - .env.db_api
     environment:
       - APP_HOST=0.0.0.0
+      - APP_PORT=5000
       - APP_LISTEN_QUEUE=1024
       - GATEWAY_USE_GUNICORN=true
+      - GATEWAY_TLS=false
       - GATEWAY_WORKERS=4
       - GATEWAY_THREADS=8
       - GATEWAY_TIMEOUT=30
@@ -39,6 +41,7 @@ services:
       - MQ_HOST=127.0.0.1
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
+      - MYSQL_FALLBACK_HOSTS=172.25.91.167,172.28.0.1,127.0.0.1,8.137.165.220
       - MONGO_URI=mongodb://y:123@127.0.0.1:27017/musicplayer?authSource=musicplayer
       - MONGO_DATABASE=musicplayer
       - MONGO_DB=musicplayer
@@ -95,6 +98,7 @@ services:
       - MYSQL_DATABASE=smart_speaker
       - MYSQL_USER=team
       - MYSQL_PASSWORD=123456
+      - MYSQL_FALLBACK_HOSTS=172.25.91.167,172.28.0.1,127.0.0.1,8.137.165.220
       - MONGO_URI=mongodb://y:123@172.28.0.1:27017/musicplayer?authSource=musicplayer
       - MONGO_DATABASE=musicplayer
       - MONGO_COLLECTION=device_metrics
@@ -165,6 +169,7 @@ services:
       - MYSQL_DATABASE=smart_speaker
       - MYSQL_USER=team
       - MYSQL_PASSWORD=123456
+      - MYSQL_FALLBACK_HOSTS=172.25.91.167,172.28.0.1,127.0.0.1,8.137.165.220
       - MONGO_URI=mongodb://y:123@172.28.0.1:27017/musicplayer?authSource=musicplayer
       - MONGO_DATABASE=musicplayer
       - MONGO_SONG_COLLECTION=song_info

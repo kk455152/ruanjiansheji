@@ -28,6 +28,12 @@ DEFAULT_MYSQL_PORT = 3306
 DEFAULT_MYSQL_DATABASE = "smart_speaker"
 DEFAULT_MYSQL_USER = "team"
 DEFAULT_MYSQL_PASSWORD = "123456"
+DEFAULT_MYSQL_FALLBACK_HOSTS = (
+    "172.25.91.167",
+    "172.28.0.1",
+    "127.0.0.1",
+    DEFAULT_MYSQL_HOST,
+)
 
 _mongo_client = None
 _mongo_client_lock = Lock()
@@ -133,9 +139,10 @@ def get_listening_summary_collection():
 
 
 def get_mysql_config():
+    port = int(os.environ.get("MYSQL_PORT", str(DEFAULT_MYSQL_PORT)))
     return {
-        "host": os.environ.get("MYSQL_HOST", DEFAULT_MYSQL_HOST),
-        "port": int(os.environ.get("MYSQL_PORT", str(DEFAULT_MYSQL_PORT))),
+        "host": select_reachable_mysql_host(os.environ.get("MYSQL_HOST", DEFAULT_MYSQL_HOST), port),
+        "port": port,
         "user": os.environ.get("MYSQL_USER", DEFAULT_MYSQL_USER),
         "password": os.environ.get("MYSQL_PASSWORD", DEFAULT_MYSQL_PASSWORD),
         "database": os.environ.get("MYSQL_DATABASE", DEFAULT_MYSQL_DATABASE),
@@ -992,6 +999,31 @@ def build_device_settings(payload):
         },
         "auto_firmware_update": bool(payload.get("auto_firmware_update", True)),
     }
+
+
+def get_mysql_fallback_hosts():
+    configured = os.environ.get("MYSQL_FALLBACK_HOSTS", "")
+    candidates = [item.strip() for item in configured.split(",") if item.strip()]
+    candidates.extend(DEFAULT_MYSQL_FALLBACK_HOSTS)
+    deduped = []
+    for host in candidates:
+        if host and host not in deduped:
+            deduped.append(host)
+    return deduped
+
+
+def select_reachable_mysql_host(primary_host, port):
+    timeout = float(os.environ.get("MYSQL_HOST_PROBE_TIMEOUT", "1"))
+    if can_connect(primary_host, port, timeout):
+        return primary_host
+
+    for host in get_mysql_fallback_hosts():
+        if host == primary_host:
+            continue
+        if can_connect(host, port, timeout):
+            return host
+
+    return primary_host
 
 
 def upsert_device_binding_document(payload, account, course_device_id):

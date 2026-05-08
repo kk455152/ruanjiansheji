@@ -68,6 +68,10 @@ def get_runtime_port():
     return int(os.environ.get('APP_PORT', '443'))
 
 
+def is_tls_enabled():
+    return os.environ.get('GATEWAY_TLS', 'true').lower() in ('1', 'true', 'yes', 'on')
+
+
 def get_listen_queue():
     return int(os.environ.get('APP_LISTEN_QUEUE', '1024'))
 
@@ -106,12 +110,15 @@ def configure_server_queue(listen_queue):
 def run_with_stable_https_server():
     from app import app
 
-    cert_path, key_path = get_ssl_paths()
     host = get_runtime_host()
     port = get_runtime_port()
     display_host = get_display_host(host)
     listen_queue = get_listen_queue()
-    ssl_context = build_ssl_context(cert_path, key_path)
+    tls_enabled = is_tls_enabled()
+    ssl_context = None
+    if tls_enabled:
+        cert_path, key_path = get_ssl_paths()
+        ssl_context = build_ssl_context(cert_path, key_path)
     configure_server_queue(listen_queue)
 
     server = make_server(
@@ -125,7 +132,8 @@ def run_with_stable_https_server():
     server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
     server.socket.listen(listen_queue)
 
-    print(f'[gateway] HTTPS gateway listening at https://{display_host}:{port}', flush=True)
+    protocol = 'https' if tls_enabled else 'http'
+    print(f'[gateway] Gateway listening at {protocol}://{display_host}:{port}', flush=True)
     if host == '0.0.0.0':
         print('[gateway] Bound to all interfaces for remote access.', flush=True)
     print('[gateway] Running in stable threaded TLS mode.', flush=True)
@@ -147,12 +155,12 @@ def run_with_gunicorn():
         run_with_stable_https_server()
         return
 
-    cert_path, key_path = get_ssl_paths()
     host = get_runtime_host()
     port = get_runtime_port()
     workers = get_gateway_workers()
     threads = get_gateway_threads()
     listen_queue = get_listen_queue()
+    tls_enabled = is_tls_enabled()
 
     args = [
         'gunicorn',
@@ -173,10 +181,6 @@ def run_with_gunicorn():
         os.environ.get('GATEWAY_GRACEFUL_TIMEOUT', '30'),
         '--keep-alive',
         os.environ.get('GATEWAY_KEEP_ALIVE', '2'),
-        '--certfile',
-        cert_path,
-        '--keyfile',
-        key_path,
         '--access-logfile',
         '-',
         '--error-logfile',
@@ -185,8 +189,18 @@ def run_with_gunicorn():
         os.environ.get('GATEWAY_LOG_LEVEL', 'info'),
     ]
 
+    if tls_enabled:
+        cert_path, key_path = get_ssl_paths()
+        args.extend([
+            '--certfile',
+            cert_path,
+            '--keyfile',
+            key_path,
+        ])
+
+    protocol = 'https' if tls_enabled else 'http'
     print(
-        f'[gateway] Starting Gunicorn HTTPS gateway on https://{get_display_host(host)}:{port} '
+        f'[gateway] Starting Gunicorn gateway on {protocol}://{get_display_host(host)}:{port} '
         f'with workers={workers}, threads={threads}, backlog={listen_queue}',
         flush=True,
     )
