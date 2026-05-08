@@ -39,6 +39,9 @@ services:
       - MQ_HOST=127.0.0.1
       - MQ_USER=migrate
       - MQ_PASSWORD=2728
+      - MONGO_URI=mongodb://y:123@127.0.0.1:27017/musicplayer?authSource=musicplayer
+      - MONGO_DATABASE=musicplayer
+      - MONGO_DB=musicplayer
     depends_on:
       rabbitmq:
         condition: service_healthy

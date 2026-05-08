@@ -1,6 +1,7 @@
 import os
 import hashlib
 import socket
+import uuid
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from urllib.parse import urlparse, urlunparse
@@ -33,6 +34,7 @@ _mongo_client_lock = Lock()
 _mysql_connection = None
 _mysql_connection_lock = Lock()
 _mysql_schema_ready = False
+_mongo_schema_ready = False
 
 
 def utcnow():
@@ -91,6 +93,43 @@ def get_mongo_collection_name():
 
 def get_song_collection_name():
     return os.environ.get("MONGO_SONG_COLLECTION", "song_info")
+
+
+def get_named_mongo_collection(env_name, default_name):
+    database = get_mongo_collection().database
+    return database[os.environ.get(env_name, default_name)]
+
+
+def get_media_metadata_collection():
+    return get_named_mongo_collection("MONGO_MEDIA_METADATA_COLLECTION", "media_metadata")
+
+
+def get_user_profile_collection():
+    return get_named_mongo_collection("MONGO_USER_PROFILE_COLLECTION", "user_profiles")
+
+
+def get_music_auth_collection():
+    return get_named_mongo_collection("MONGO_MUSIC_AUTH_COLLECTION", "music_service_auth")
+
+
+def get_device_binding_collection():
+    return get_named_mongo_collection("MONGO_DEVICE_BINDING_COLLECTION", "device_bindings")
+
+
+def get_user_feedback_collection():
+    return get_named_mongo_collection("MONGO_USER_FEEDBACK_COLLECTION", "user_feedback")
+
+
+def get_friendship_collection():
+    return get_named_mongo_collection("MONGO_FRIENDSHIP_COLLECTION", "friendships")
+
+
+def get_listen_room_collection():
+    return get_named_mongo_collection("MONGO_LISTEN_ROOM_COLLECTION", "listen_rooms")
+
+
+def get_listening_summary_collection():
+    return get_named_mongo_collection("MONGO_LISTENING_SUMMARY_COLLECTION", "listening_summaries")
 
 
 def get_mysql_config():
@@ -161,6 +200,36 @@ def get_song_collection():
 def get_play_log_collection():
     database = get_mongo_collection().database
     return database[os.environ.get("MONGO_PLAY_LOG_COLLECTION", "play_logs")]
+
+
+def create_index_safely(collection, keys, **kwargs):
+    try:
+        collection.create_index(keys, **kwargs)
+    except Exception:
+        # Existing classroom data may contain duplicates; writes should not fail
+        # just because an optional index cannot be created.
+        pass
+
+
+def ensure_mongo_schema():
+    global _mongo_schema_ready
+    if _mongo_schema_ready:
+        return
+
+    create_index_safely(get_mongo_collection(), "device_id", unique=True)
+    create_index_safely(get_song_collection(), "song_id", unique=True, sparse=True)
+    create_index_safely(get_song_collection(), "name")
+    create_index_safely(get_play_log_collection(), [("user_account", 1), ("played_at", -1)])
+    create_index_safely(get_play_log_collection(), [("device_id", 1), ("played_at", -1)])
+    create_index_safely(get_media_metadata_collection(), "song_id", unique=True, sparse=True)
+    create_index_safely(get_user_profile_collection(), "account", unique=True)
+    create_index_safely(get_music_auth_collection(), [("account", 1), ("platform_type", 1)], unique=True)
+    create_index_safely(get_device_binding_collection(), [("account", 1), ("device_number", 1)], unique=True)
+    create_index_safely(get_user_feedback_collection(), [("account", 1), ("created_at", -1)])
+    create_index_safely(get_friendship_collection(), [("account", 1), ("friend_account", 1)], unique=True)
+    create_index_safely(get_listen_room_collection(), "room_id", unique=True)
+    create_index_safely(get_listening_summary_collection(), [("account", 1), ("period_type", 1), ("period_key", 1)], unique=True)
+    _mongo_schema_ready = True
 
 
 def get_mysql_connection():
@@ -820,7 +889,379 @@ def upsert_user_preference(payload, user_id):
         )
 
 
+def display_name_from_account(account):
+    name = str(account or "smart_speaker_user").split("@", 1)[0]
+    return name.replace("_", " ")
+
+
+def week_key(now):
+    year, week_number, _ = now.isocalendar()
+    return f"{year}-W{week_number:02d}"
+
+
+def upsert_user_profile_document(payload, account, password, legacy_user_id, course_user_id):
+    now = utcnow()
+    collection = get_user_profile_collection()
+    collection.update_one(
+        {"account": account},
+        {
+            "$set": {
+                "doc_type": "user_profile",
+                "account": account,
+                "display_name": payload.get("nickname") or display_name_from_account(account),
+                "password_hash": build_password_hash(password),
+                "legacy_user_id": legacy_user_id,
+                "course_user_id": course_user_id,
+                "default_device_number": str(payload.get("device_id") or "unknown_device"),
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "created_at": now,
+                "phone": payload.get("phone"),
+                "profile_source": "gateway_report",
+            },
+        },
+        upsert=True,
+    )
+
+
+def upsert_music_service_auth_documents(account, course_user_id):
+    now = utcnow()
+    expires_at = now + timedelta(days=30)
+    collection = get_music_auth_collection()
+    services = [
+        {
+            "platform_type": "netease",
+            "platform_name": "网易云音乐",
+            "permissions": ["private_fm", "liked_songs", "daily_recommend", "play_history"],
+        },
+        {
+            "platform_type": "qq_music",
+            "platform_name": "QQ 音乐",
+            "permissions": ["favorite_playlists", "recent_play", "recommendations"],
+        },
+    ]
+
+    for service in services:
+        token_seed = build_password_hash(f"{account}:{service['platform_type']}")
+        refresh_seed = build_password_hash(f"{account}:{service['platform_type']}:refresh")
+        collection.update_one(
+            {
+                "account": account,
+                "platform_type": service["platform_type"],
+            },
+            {
+                "$set": {
+                    "doc_type": "music_service_auth",
+                    "account": account,
+                    "course_user_id": course_user_id,
+                    "platform_type": service["platform_type"],
+                    "platform_name": service["platform_name"],
+                    "status": "bound",
+                    "permissions": service["permissions"],
+                    "access_token_hash": token_seed,
+                    "refresh_token_hash": refresh_seed,
+                    "expires_at": expires_at,
+                    "sync_state": {
+                        "status": "ready",
+                        "progress": 100,
+                        "last_synced_at": now,
+                    },
+                    "updated_at": now,
+                },
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+        )
+
+
+def build_device_settings(payload):
+    device_name = payload.get("custom_device_name") or payload.get("device_name") or "客厅音箱"
+    return {
+        "custom_device_name": device_name,
+        "firmware_version": payload.get("firmware_version") or "2.4.8",
+        "default_room": payload.get("default_room") or "客厅",
+        "network_name": payload.get("network_name") or "Home-5G",
+        "volume_limit": int(payload.get("volume_limit", 80)),
+        "low_battery_threshold": int(payload.get("low_battery_threshold", 20)),
+        "power_saving_mode": bool(payload.get("power_saving_mode", False)),
+        "do_not_disturb": payload.get("do_not_disturb") or {
+            "enabled": True,
+            "start": "23:00",
+            "end": "07:00",
+        },
+        "auto_firmware_update": bool(payload.get("auto_firmware_update", True)),
+    }
+
+
+def upsert_device_binding_document(payload, account, course_device_id):
+    now = utcnow()
+    device_number = str(payload.get("device_id") or "unknown_device")
+    metric_type = normalize_metric_type(payload.get("type"))
+    update_fields = {
+        "doc_type": "device_binding",
+        "account": account,
+        "device_number": device_number,
+        "course_device_id": course_device_id,
+        "model_name": payload.get("model_name") or "SH-Mini A1",
+        "status": "online",
+        "battery_percent": int(payload.get("battery_percent", 82)),
+        "is_primary": True,
+        "settings": build_device_settings(payload),
+        "last_active": now,
+        "updated_at": now,
+    }
+
+    if metric_type in METRIC_TYPES:
+        update_fields[f"latest_metrics.{metric_type}"] = payload.get("value")
+
+    get_device_binding_collection().update_one(
+        {
+            "account": account,
+            "device_number": device_number,
+        },
+        {
+            "$set": update_fields,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def upsert_friendship_seed_documents(account):
+    now = utcnow()
+    collection = get_friendship_collection()
+    friends = [
+        ("aqing@smart-speaker.local", "阿青", "just_shared"),
+        ("xiaobei@smart-speaker.local", "小北", "listening"),
+    ]
+    for friend_account, nickname, status in friends:
+        collection.update_one(
+            {
+                "account": account,
+                "friend_account": friend_account,
+            },
+            {
+                "$set": {
+                    "doc_type": "friendship",
+                    "account": account,
+                    "friend_account": friend_account,
+                    "friend_nickname": nickname,
+                    "status": status,
+                    "source": "design_seed",
+                    "updated_at": now,
+                },
+                "$setOnInsert": {"created_at": now},
+            },
+            upsert=True,
+        )
+
+
+def upsert_listen_room_seed_document(account, device_id):
+    now = utcnow()
+    room_id = f"room:{account}:{device_id}"
+    get_listen_room_collection().update_one(
+        {"room_id": room_id},
+        {
+            "$set": {
+                "doc_type": "listen_room",
+                "room_id": room_id,
+                "owner_account": account,
+                "device_id": device_id,
+                "room_name": "雨后电台",
+                "platform": "netease",
+                "sync_delay_seconds": 0.2,
+                "members": [
+                    {"account": account, "nickname": "我", "role": "host", "status": "online"},
+                    {"account": "aqing@smart-speaker.local", "nickname": "青", "role": "member", "status": "online"},
+                    {"account": "xiaobei@smart-speaker.local", "nickname": "北", "role": "member", "status": "online"},
+                ],
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def upsert_listening_summary_base(account):
+    now = utcnow()
+    get_listening_summary_collection().update_one(
+        {
+            "account": account,
+            "period_type": "weekly",
+            "period_key": week_key(now),
+        },
+        {
+            "$set": {
+                "doc_type": "listening_summary",
+                "account": account,
+                "period_type": "weekly",
+                "period_key": week_key(now),
+                "top_percent": 12,
+                "favorite_style": "华语流行",
+                "favorite_style_ratio": 0.42,
+                "active_time_range": "21:00-23:00",
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "created_at": now,
+                "stats": {
+                    "total_minutes": 0,
+                    "song_count": 0,
+                    "play_count": 0,
+                },
+            },
+        },
+        upsert=True,
+    )
+
+
+def upsert_member_b_mongo_context(payload, account, password, legacy_user_id, course_user_id, course_device_id):
+    ensure_mongo_schema()
+    device_id = str(payload.get("device_id") or "unknown_device")
+    upsert_user_profile_document(payload, account, password, legacy_user_id, course_user_id)
+    upsert_music_service_auth_documents(account, course_user_id)
+    upsert_device_binding_document(payload, account, course_device_id)
+    upsert_friendship_seed_documents(account)
+    upsert_listen_room_seed_document(account, device_id)
+    upsert_listening_summary_base(account)
+
+
+def upsert_media_metadata_document(song_document, account):
+    song_id = str(song_document.get("song_id") or "").strip()
+    if not song_id:
+        return
+
+    now = utcnow()
+    get_media_metadata_collection().update_one(
+        {"song_id": song_id},
+        {
+            "$set": {
+                "doc_type": "media_metadata",
+                "song_id": song_id,
+                "external_id": song_id,
+                "name": song_document.get("name") or "",
+                "song_title": song_document.get("name") or "",
+                "artists": song_document.get("artists") or [],
+                "artist_text": song_document.get("artist_text") or "",
+                "album": song_document.get("album") or "",
+                "platform": "netease",
+                "cover_url": song_document.get("cover_url") or "",
+                "duration_ms": song_document.get("duration_ms"),
+                "duration_seconds": song_document.get("duration_seconds"),
+                "source": song_document.get("source") or {},
+                "last_user_account": account,
+                "last_device_id": song_document.get("last_device_id"),
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def upsert_play_log_document(payload, account, song_document):
+    now = utcnow()
+    reported_at = datetime_from_payload_timestamp(payload)
+    song_id = str(song_document.get("song_id") or "").strip()
+    device_id = str(payload.get("device_id") or "unknown_device")
+    event_id = str(payload.get("event_id") or uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"{account}:{device_id}:{song_id}:{payload.get('timestamp')}",
+    ))
+    play_duration = song_document.get("duration_seconds") or 0
+
+    get_play_log_collection().update_one(
+        {"event_id": event_id},
+        {
+            "$set": {
+                "doc_type": "play_history",
+                "event_id": event_id,
+                "source": "gateway_song_info",
+                "song_id": song_id,
+                "song_name": song_document.get("name") or "",
+                "artists": song_document.get("artists") or [],
+                "artist_text": song_document.get("artist_text") or "",
+                "album": song_document.get("album") or "",
+                "cover_url": song_document.get("cover_url") or "",
+                "platform": "netease",
+                "device_id": device_id,
+                "user_account": account,
+                "played_at": reported_at,
+                "play_duration_seconds": play_duration,
+                "updated_at": now,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def bump_listening_summary_for_song(account, song_document):
+    now = utcnow()
+    duration_minutes = int((song_document.get("duration_seconds") or 0) / 60)
+    get_listening_summary_collection().update_one(
+        {
+            "account": account,
+            "period_type": "weekly",
+            "period_key": week_key(now),
+        },
+        {
+            "$set": {
+                "doc_type": "listening_summary",
+                "account": account,
+                "period_type": "weekly",
+                "period_key": week_key(now),
+                "last_song": {
+                    "song_id": song_document.get("song_id"),
+                    "name": song_document.get("name"),
+                    "artist_text": song_document.get("artist_text"),
+                },
+                "updated_at": now,
+            },
+            "$inc": {
+                "stats.total_minutes": duration_minutes,
+                "stats.song_count": 1,
+                "stats.play_count": 1,
+            },
+            "$addToSet": {
+                "song_ids": song_document.get("song_id"),
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def insert_user_feedback_document(payload, account):
+    now = utcnow()
+    device_id = str(payload.get("device_id") or "unknown_device")
+    like_status = bool(payload.get("value"))
+    event_id = str(payload.get("event_id") or uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"{account}:{device_id}:like_status:{payload.get('timestamp')}:{like_status}",
+    ))
+    get_user_feedback_collection().update_one(
+        {"event_id": event_id},
+        {
+            "$set": {
+                "doc_type": "user_feedback",
+                "event_id": event_id,
+                "account": account,
+                "device_id": device_id,
+                "feedback_type": "like_status",
+                "value": like_status,
+                "content": f"like_status={like_status}; device_number={device_id}",
+                "created_at": now,
+            },
+        },
+        upsert=True,
+    )
+
+
 def upsert_device_metric(payload, account, password):
+    ensure_mongo_schema()
     collection = get_mongo_collection()
     metric_type = normalize_metric_type(payload.get("type"))
     device_id = payload.get("device_id", "unknown_device")
@@ -849,6 +1290,7 @@ def upsert_device_metric(payload, account, password):
 
 
 def upsert_song_info(payload, account, password):
+    ensure_mongo_schema()
     collection = get_song_collection()
     device_id = payload.get("device_id", "unknown_device")
     reported_at = normalize_reported_timestamp(payload)
@@ -883,23 +1325,35 @@ def persist_payload(payload):
     device_id = payload.get("device_id", "unknown_device")
     account, password = infer_user_credentials(payload)
     user_id = upsert_user(account, password, device_id)
-    ensure_course_context(payload, account, password)
+    course_user_id, course_device_id = ensure_course_context(payload, account, password)
+    upsert_member_b_mongo_context(
+        payload,
+        account,
+        password,
+        user_id,
+        course_user_id,
+        course_device_id,
+    )
 
     if metric_type in PREFERENCE_TYPES:
         upsert_user_preference(payload, user_id)
         persist_like_feedback_to_relational(payload, account, password)
-        return "mysql.user_preferences+mysql.user_feedback"
+        insert_user_feedback_document(payload, account)
+        return "mysql.user_preferences+mysql.user_feedback+mongodb.user_feedback"
 
     if metric_type == "song_info":
         song_document = upsert_song_info(payload, account, password)
+        upsert_media_metadata_document(song_document, account)
+        upsert_play_log_document(payload, account, song_document)
+        bump_listening_summary_for_song(account, song_document)
         persist_song_document_to_relational(payload, account, password, song_document)
-        return "mongodb.song_info+mysql.media_mapping+mysql.play_history"
+        return "mongodb.song_info+mongodb.media_metadata+mongodb.play_logs+mongodb.listening_summaries+mysql.media_mapping+mysql.play_history"
 
     if metric_type in METRIC_TYPES:
         upsert_device_metric(payload, account, password)
-        return "mongodb.device_metrics+mysql.user_device_binding"
+        return "mongodb.device_metrics+mongodb.device_bindings+mysql.user_device_binding"
 
-    return "mysql.users"
+    return "mongodb.user_profiles+mysql.users"
 
 
 def get_metric_document(device_id):
