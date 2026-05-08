@@ -1,4 +1,4 @@
-<navigation-bar title="听歌数据" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<navigation-bar title="听歌数据" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
 <scroll-view class="page-shell data-page" scroll-y type="list">
   <text class="eyebrow">个人听歌总结与播放历史</text>
   <view class="title">听歌数据</view>

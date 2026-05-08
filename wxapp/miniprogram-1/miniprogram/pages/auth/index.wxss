@@ -5,7 +5,7 @@
 
 .eyebrow,
 .muted {
-  color: #817250;
+  color: #6f8aa8;
   font-size: 24rpx;
 }
 
@@ -32,7 +32,7 @@
   width: 18rpx;
   height: 18rpx;
   border-radius: 50%;
-  background: #2f2a1b;
+  background: linear-gradient(135deg, #ff77b7, #68bfff);
 }
 
 button {

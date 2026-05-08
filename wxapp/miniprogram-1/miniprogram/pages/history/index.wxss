@@ -17,8 +17,8 @@
 }
 
 .active {
-  background: #2f2a1b;
-  color: #fff3c4;
+  background: linear-gradient(135deg, #ff77b7, #68bfff);
+  color: #ffffff;
 }
 
 .history-row {
@@ -35,12 +35,12 @@
 }
 
 .muted {
-  color: #817250;
+  color: #6f8aa8;
   font-size: 24rpx;
 }
 
 .action {
   margin-top: 8rpx;
-  color: #725a1d;
+  color: #38678f;
   font-weight: 700;
 }

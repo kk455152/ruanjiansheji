@@ -1,4 +1,4 @@
-<navigation-bar title="设备管理" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<navigation-bar title="设备管理" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
 <scroll-view class="page-shell device-page" scroll-y type="list">
   <text class="eyebrow">绑定、查看电量、修改设备名</text>
   <view class="title">设备管理</view>
@@ -32,7 +32,7 @@
       <text>音量上限</text>
       <text>{{volumeLimit}}%</text>
     </view>
-    <slider value="{{volumeLimit}}" min="20" max="100" activeColor="#7d6a33" backgroundColor="#efe3a2" bindchange="changeLimit" />
+    <slider value="{{volumeLimit}}" min="20" max="100" activeColor="#ff77b7" backgroundColor="#d8efff" bindchange="changeLimit" />
     <view class="setting-line">
       <text>低电量提醒</text>
       <text>20%</text>

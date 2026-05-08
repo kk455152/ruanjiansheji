@@ -1,10 +1,11 @@
 /**app.wxss**/
 page {
   min-height: 100vh;
-  color: #2d2a20;
+  color: #1f3555;
   background:
-    radial-gradient(circle at 10% 8%, rgba(255, 220, 116, 0.38), transparent 28%),
-    linear-gradient(180deg, #fff8e5 0%, #f6edd9 48%, #fffaf0 100%);
+    radial-gradient(circle at 8% 10%, rgba(255, 173, 210, 0.52), transparent 30%),
+    radial-gradient(circle at 88% 4%, rgba(125, 202, 255, 0.5), transparent 30%),
+    linear-gradient(180deg, #fff2fa 0%, #eef7ff 46%, #f7fbff 100%);
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -17,8 +18,8 @@ page {
 .glass-card {
   border: 2rpx solid rgba(255, 255, 255, 0.72);
   border-radius: 36rpx;
-  background: rgba(255, 255, 255, 0.64);
-  box-shadow: 0 24rpx 70rpx rgba(87, 70, 34, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 24rpx 70rpx rgba(71, 116, 168, 0.16);
 }
 
 .pill {
@@ -26,24 +27,24 @@ page {
   align-items: center;
   justify-content: center;
   border-radius: 999rpx;
-  background: #efe3a2;
-  color: #3a321b;
+  background: linear-gradient(135deg, #ffd7ea, #d8efff);
+  color: #23476b;
 }
 
 .primary-button {
   height: 92rpx;
   border: 0;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #2f2a1b, #756437);
-  color: #fff7dd;
+  background: linear-gradient(135deg, #ff77b7, #68bfff);
+  color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 18rpx 44rpx rgba(83, 68, 35, 0.24);
+  box-shadow: 0 18rpx 44rpx rgba(102, 171, 238, 0.34);
 }
 
 .ghost-button {
   height: 80rpx;
-  border: 2rpx solid rgba(92, 75, 37, 0.2);
+  border: 2rpx solid rgba(103, 171, 236, 0.28);
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.66);
-  color: #4c4124;
+  background: rgba(255, 255, 255, 0.72);
+  color: #315779;
 }

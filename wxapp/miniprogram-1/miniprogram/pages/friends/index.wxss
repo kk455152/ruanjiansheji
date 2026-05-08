@@ -4,7 +4,7 @@
 
 .eyebrow,
 .muted {
-  color: #817250;
+  color: #6f8aa8;
   font-size: 24rpx;
 }
 
@@ -19,7 +19,7 @@
 }
 
 .room-status {
-  color: #735f25;
+  color: #38678f;
   font-weight: 700;
 }
 
@@ -39,13 +39,13 @@
   width: 72rpx;
   height: 72rpx;
   margin-right: -10rpx;
-  border: 4rpx solid #fff6d8;
+  border: 4rpx solid #f7fbff;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #2f2a1b;
-  color: #fff0bb;
+  background: linear-gradient(135deg, #ff77b7, #68bfff);
+  color: #ffffff;
   font-weight: 800;
 }
 

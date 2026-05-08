@@ -1,4 +1,4 @@
-<navigation-bar title="声盒 Mini" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<navigation-bar title="声盒 Mini" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
 <scroll-view class="page-shell home" scroll-y type="list">
   <view class="hero">
     <view>
@@ -23,7 +23,7 @@
     <button class="primary-button play-button" loading="{{sending}}" bindtap="playRecommend">播放推荐歌曲</button>
     <view class="volume-row">
       <text>音量 {{volume}}%</text>
-      <slider value="{{volume}}" min="0" max="100" activeColor="#7d6a33" backgroundColor="#efe3a2" bindchange="changeVolume" />
+      <slider value="{{volume}}" min="0" max="100" activeColor="#ff77b7" backgroundColor="#d8efff" bindchange="changeVolume" />
     </view>
   </view>
 

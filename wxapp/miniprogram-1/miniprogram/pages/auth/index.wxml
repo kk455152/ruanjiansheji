@@ -1,4 +1,4 @@
-<navigation-bar title="账号授权" color="#2d2a20" background="transparent"></navigation-bar>
+<navigation-bar title="账号授权" color="#1f3555" background="transparent"></navigation-bar>
 <view class="page-shell auth-page">
   <view class="glass-card auth-card">
     <text class="eyebrow">连接{{service}}</text>

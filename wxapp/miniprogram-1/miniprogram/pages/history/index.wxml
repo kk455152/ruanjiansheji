@@ -1,4 +1,4 @@
-<navigation-bar title="播放历史" color="#2d2a20" background="transparent"></navigation-bar>
+<navigation-bar title="播放历史" color="#1f3555" background="transparent"></navigation-bar>
 <scroll-view class="page-shell history-page" scroll-y type="list">
   <view class="search glass-card">
     <input placeholder="搜索歌曲、歌手或来源" value="{{keyword}}" bindinput="inputKeyword" />

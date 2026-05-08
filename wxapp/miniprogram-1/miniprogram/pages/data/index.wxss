@@ -1,7 +1,7 @@
 .eyebrow,
 .muted,
 .metric-label {
-  color: #817250;
+  color: #6f8aa8;
   font-size: 24rpx;
 }
 

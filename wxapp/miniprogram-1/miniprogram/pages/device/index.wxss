@@ -1,6 +1,6 @@
 .eyebrow,
 .muted {
-  color: #817250;
+  color: #6f8aa8;
   font-size: 24rpx;
 }
 
@@ -38,8 +38,8 @@
   width: 240rpx;
   height: 240rpx;
   margin: 34rpx auto 12rpx;
-  border: 20rpx solid #efe3a2;
-  border-top-color: #2f2a1b;
+  border: 20rpx solid #d8efff;
+  border-top-color: #ff77b7;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -63,7 +63,7 @@
   margin: 24rpx 0;
   padding: 22rpx;
   border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .recommend-row {

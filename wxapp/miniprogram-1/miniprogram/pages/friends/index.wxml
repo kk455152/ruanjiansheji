@@ -1,4 +1,4 @@
-<navigation-bar title="听歌好友" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<navigation-bar title="听歌好友" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
 <scroll-view class="page-shell friends" scroll-y type="list">
   <view class="headline">
     <text class="eyebrow">和好友同步播放、互相分享歌曲</text>
