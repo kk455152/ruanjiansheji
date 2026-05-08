@@ -1,0 +1,46 @@
+.search {
+  padding: 24rpx;
+}
+
+.search input {
+  height: 64rpx;
+}
+
+.filter-row {
+  display: flex;
+  gap: 14rpx;
+  margin: 24rpx 0;
+}
+
+.filter-row .pill {
+  padding: 12rpx 24rpx;
+}
+
+.active {
+  background: #2f2a1b;
+  color: #fff3c4;
+}
+
+.history-row {
+  margin-bottom: 18rpx;
+  padding: 26rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.song-name {
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.muted {
+  color: #817250;
+  font-size: 24rpx;
+}
+
+.action {
+  margin-top: 8rpx;
+  color: #725a1d;
+  font-weight: 700;
+}

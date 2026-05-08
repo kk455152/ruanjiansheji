@@ -1,54 +1,65 @@
-// index.ts
-// 获取应用实例
-const app = getApp<IAppOption>()
-const defaultAvatarUrl = 'https://mmbiz.qpic.cn/mmbiz/icTdbqWNOwNRna42FI242Lcia07jQodd2FJGIYQfG0LAJGFxM4FbnQP6yfMxBgJ0F3YRqJCJ1aPAK2dQagdusBZg/0'
+import { reportConnection, reportSongInfo, reportVolume } from '../../services/secure-request'
 
 Component({
   data: {
-    motto: 'Hello World',
-    userInfo: {
-      avatarUrl: defaultAvatarUrl,
-      nickName: '',
-    },
-    hasUserInfo: false,
-    canIUseGetUserProfile: wx.canIUse('getUserProfile'),
-    canIUseNicknameComp: wx.canIUse('input.type.nickname'),
+    connected: true,
+    battery: 82,
+    volume: 63,
+    currentSong: '城市夜航',
+    source: '网易云音乐',
+    syncStatus: '点击操作后连接后端',
+    sending: false,
+    serviceList: [
+      { name: 'QQ 音乐', status: '待授权', path: '/pages/auth/index?service=qq' },
+      { name: '网易云音乐', status: '待授权', path: '/pages/auth/index?service=netease' },
+    ],
   },
   methods: {
-    // 事件处理函数
-    bindViewTap() {
-      wx.navigateTo({
-        url: '../logs/logs',
-      })
+    async pingConnection() {
+      try {
+        await reportConnection(true)
+        this.setData({ syncStatus: '后端已连接' })
+      } catch (error) {
+        this.setData({ syncStatus: '后端待连接' })
+      }
     },
-    onChooseAvatar(e: any) {
-      const { avatarUrl } = e.detail
-      const { nickName } = this.data.userInfo
-      this.setData({
-        "userInfo.avatarUrl": avatarUrl,
-        hasUserInfo: nickName && avatarUrl && avatarUrl !== defaultAvatarUrl,
-      })
+    openAuth(event: WechatMiniprogram.TouchEvent) {
+      const path = event.currentTarget.dataset.path as string
+      wx.navigateTo({ url: path })
     },
-    onInputChange(e: any) {
-      const nickName = e.detail.value
-      const { avatarUrl } = this.data.userInfo
-      this.setData({
-        "userInfo.nickName": nickName,
-        hasUserInfo: nickName && avatarUrl && avatarUrl !== defaultAvatarUrl,
-      })
+    goFriends() {
+      wx.switchTab({ url: '/pages/friends/index' })
     },
-    getUserProfile() {
-      // 推荐使用wx.getUserProfile获取用户信息，开发者每次通过该接口获取用户个人信息均需用户确认，开发者妥善保管用户快速填写的头像昵称，避免重复弹窗
-      wx.getUserProfile({
-        desc: '展示用户信息', // 声明获取用户个人信息后的用途，后续会展示在弹窗中，请谨慎填写
-        success: (res) => {
-          console.log(res)
-          this.setData({
-            userInfo: res.userInfo,
-            hasUserInfo: true
-          })
-        }
-      })
+    goData() {
+      wx.switchTab({ url: '/pages/data/index' })
+    },
+    goDevice() {
+      wx.switchTab({ url: '/pages/device/index' })
+    },
+    goHistory() {
+      wx.navigateTo({ url: '/pages/history/index' })
+    },
+    async changeVolume(event: WechatMiniprogram.SliderChanging) {
+      const value = Number(event.detail.value)
+      this.setData({ volume: value })
+      try {
+        await reportVolume(value)
+        wx.showToast({ title: '音量已同步', icon: 'success' })
+      } catch (error) {
+        wx.showToast({ title: '同步失败', icon: 'error' })
+      }
+    },
+    async playRecommend() {
+      this.setData({ sending: true })
+      try {
+        await reportSongInfo('稻香')
+        this.setData({ currentSong: '稻香', source: '网易云音乐', syncStatus: '歌曲已同步' })
+        wx.showToast({ title: '已发送到后端', icon: 'success' })
+      } catch (error) {
+        wx.showToast({ title: '发送失败', icon: 'error' })
+      } finally {
+        this.setData({ sending: false })
+      }
     },
   },
 })

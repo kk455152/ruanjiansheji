@@ -1,0 +1,15 @@
+<navigation-bar title="账号授权" color="#2d2a20" background="transparent"></navigation-bar>
+<view class="page-shell auth-page">
+  <view class="glass-card auth-card">
+    <text class="eyebrow">连接{{service}}</text>
+    <view class="title">允许声盒 Mini 访问你的{{service}}</view>
+    <text class="muted">{{slogan}}</text>
+    <view class="section-title">授权内容</view>
+    <view class="permission" wx:for="{{permissions}}" wx:key="*this">
+      <text class="dot"></text>
+      <text>{{item}}</text>
+    </view>
+    <button class="primary-button" loading="{{binding}}" bindtap="bindService">同意并绑定{{service}}</button>
+    <button class="ghost-button" bindtap="skip">稍后再说</button>
+  </view>
+</view>

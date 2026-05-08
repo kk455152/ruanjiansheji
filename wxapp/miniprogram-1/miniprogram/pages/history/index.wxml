@@ -1,0 +1,17 @@
+<navigation-bar title="播放历史" color="#2d2a20" background="transparent"></navigation-bar>
+<scroll-view class="page-shell history-page" scroll-y type="list">
+  <view class="search glass-card">
+    <input placeholder="搜索歌曲、歌手或来源" value="{{keyword}}" bindinput="inputKeyword" />
+  </view>
+  <view class="filter-row">
+    <text class="pill active">全部</text>
+    <text class="pill">QQ</text>
+    <text class="pill">网易云</text>
+  </view>
+  <view class="glass-card history-row" wx:for="{{histories}}" wx:key="name" data-name="{{item.name}}" bindtap="replay">
+    <text class="song-name">{{item.name}}</text>
+    <text class="muted">{{item.source}}</text>
+    <text class="action">在音箱上重新播放</text>
+  </view>
+  <button class="ghost-button">清理 30 天前历史</button>
+</scroll-view>

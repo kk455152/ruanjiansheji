@@ -1,25 +1,44 @@
 {
   "pages": [
     "pages/index/index",
+    "pages/friends/index",
+    "pages/data/index",
+    "pages/device/index",
+    "pages/history/index",
+    "pages/auth/index",
     "pages/logs/logs"
   ],
   "window": {
     "navigationBarTextStyle": "black",
-    "navigationStyle": "custom"
+    "navigationStyle": "custom",
+    "backgroundColor": "#f7f0dd",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#897b57",
+    "selectedColor": "#2d2a20",
+    "backgroundColor": "#fff9e8",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/friends/index",
+        "text": "好友"
+      },
+      {
+        "pagePath": "pages/data/index",
+        "text": "数据"
+      },
+      {
+        "pagePath": "pages/device/index",
+        "text": "设备"
+      }
+    ]
   },
   "style": "v2",
-  "renderer": "skyline",
-  "rendererOptions": {
-    "skyline": {
-      "defaultDisplayBlock": true,
-      "defaultContentBox": true,
-      "tagNameStyleIsolation": "legacy",
-      "disableABTest": true,
-      "sdkVersionBegin": "3.0.0",
-      "sdkVersionEnd": "15.255.255"
-    }
-  },
-  "componentFramework": "glass-easel",
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"
 }

@@ -1,0 +1,30 @@
+<navigation-bar title="听歌好友" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<scroll-view class="page-shell friends" scroll-y type="list">
+  <view class="headline">
+    <text class="eyebrow">和好友同步播放、互相分享歌曲</text>
+    <view class="title">听歌好友</view>
+  </view>
+
+  <view class="glass-card room-card">
+    <text class="room-status">一起听进行中 {{members.length}} 人</text>
+    <view class="room-name">{{roomName}}</view>
+    <text class="muted">你、阿青、小北正在听</text>
+    <view class="avatars">
+      <view class="avatar" wx:for="{{members}}" wx:key="name">{{item.short}}</view>
+    </view>
+    <view class="action-row">
+      <button class="primary-button half" bindtap="joinListen">一起听歌</button>
+      <button class="ghost-button half" loading="{{sharing}}" bindtap="shareSong">分享歌曲</button>
+    </view>
+  </view>
+
+  <view class="section-title">最近听歌好友</view>
+  <view class="glass-card friend-row" wx:for="{{friends}}" wx:key="name">
+    <view class="friend-avatar">{{item.short}}</view>
+    <view class="friend-copy">
+      <text class="friend-name">{{item.name}}</text>
+      <text class="muted">{{item.desc}}</text>
+    </view>
+    <text class="pill join-pill">加入</text>
+  </view>
+</scroll-view>

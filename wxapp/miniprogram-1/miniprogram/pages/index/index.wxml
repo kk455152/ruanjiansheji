@@ -1,28 +1,56 @@
-<!--index.wxml-->
-<navigation-bar title="Weixin" back="{{false}}" color="black" background="#FFF"></navigation-bar>
-<scroll-view class="scrollarea" scroll-y type="list">
-  <view class="container">
-    <view class="userinfo">
-      <block wx:if="{{canIUseNicknameComp && !hasUserInfo}}">
-        <button class="avatar-wrapper" open-type="chooseAvatar" bind:chooseavatar="onChooseAvatar">
-          <image class="avatar" src="{{userInfo.avatarUrl}}"></image>
-        </button>
-        <view class="nickname-wrapper">
-          <text class="nickname-label">昵称</text>
-          <input type="nickname" class="nickname-input" placeholder="请输入昵称" bind:change="onInputChange" />
-        </view>
-      </block>
-      <block wx:elif="{{!hasUserInfo}}">
-        <button wx:if="{{canIUseGetUserProfile}}" bindtap="getUserProfile"> 获取头像昵称 </button>
-        <view wx:else> 请使用2.10.4及以上版本基础库 </view>
-      </block>
-      <block wx:else>
-        <image bindtap="bindViewTap" class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="cover"></image>
-        <text class="userinfo-nickname">{{userInfo.nickName}}</text>
-      </block>
+<navigation-bar title="声盒 Mini" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<scroll-view class="page-shell home" scroll-y type="list">
+  <view class="hero">
+    <view>
+      <text class="eyebrow">智能音箱小程序</text>
+      <view class="title">声盒 Mini</view>
+      <text class="subtitle">用微信连接你的智能音箱</text>
     </view>
-    <view class="usermotto">
-      <text class="user-motto">{{motto}}</text>
+    <view class="battery pill">{{battery}}%</view>
+  </view>
+
+  <view class="glass-card now-card">
+    <view class="status-row">
+      <text>{{connected ? '客厅音箱 · 已连接' : '客厅音箱 · 待连接'}}</text>
+      <text class="status">{{syncStatus}}</text>
+    </view>
+    <view class="disc">
+      <view class="disc-inner">♪</view>
+    </view>
+    <text class="section-label">正在播放</text>
+    <view class="song">{{currentSong}}</view>
+    <text class="subtitle">来自{{source}}</text>
+    <button class="primary-button play-button" loading="{{sending}}" bindtap="playRecommend">播放推荐歌曲</button>
+    <view class="volume-row">
+      <text>音量 {{volume}}%</text>
+      <slider value="{{volume}}" min="0" max="100" activeColor="#7d6a33" backgroundColor="#efe3a2" bindchange="changeVolume" />
+    </view>
+  </view>
+
+  <view class="section-title">请求连接的软件</view>
+  <view class="service-grid">
+    <view class="glass-card service-card" wx:for="{{serviceList}}" wx:key="name" data-path="{{item.path}}" bindtap="openAuth">
+      <text>{{item.name}}</text>
+      <text class="status">{{item.status}}</text>
+    </view>
+  </view>
+
+  <view class="feature-grid">
+    <view class="glass-card feature-card" bindtap="goFriends">
+      <text class="feature-title">听歌好友</text>
+      <text>一起听 / 分享</text>
+    </view>
+    <view class="glass-card feature-card" bindtap="goData">
+      <text class="feature-title">听歌数据</text>
+      <text>个人总结</text>
+    </view>
+    <view class="glass-card feature-card" bindtap="goDevice">
+      <text class="feature-title">设备管理</text>
+      <text>绑定 / 电量 / 名称</text>
+    </view>
+    <view class="glass-card feature-card" bindtap="goHistory">
+      <text class="feature-title">播放历史</text>
+      <text>最近 48 首</text>
     </view>
   </view>
 </scroll-view>

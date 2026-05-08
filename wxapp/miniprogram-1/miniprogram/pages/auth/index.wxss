@@ -1,0 +1,40 @@
+.auth-card {
+  margin-top: 90rpx;
+  padding: 40rpx;
+}
+
+.eyebrow,
+.muted {
+  color: #817250;
+  font-size: 24rpx;
+}
+
+.title {
+  margin: 18rpx 0;
+  font-size: 50rpx;
+  line-height: 1.18;
+  font-weight: 900;
+}
+
+.section-title {
+  margin: 46rpx 0 20rpx;
+  font-weight: 800;
+}
+
+.permission {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  background: #2f2a1b;
+}
+
+button {
+  margin-top: 26rpx;
+}

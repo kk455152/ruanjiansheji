@@ -1,0 +1,83 @@
+.eyebrow,
+.muted {
+  color: #817250;
+  font-size: 24rpx;
+}
+
+.title {
+  margin: 10rpx 0 28rpx;
+  font-size: 52rpx;
+  font-weight: 800;
+}
+
+.device-card,
+.setting-card {
+  margin-bottom: 22rpx;
+  padding: 32rpx;
+}
+
+.device-head,
+.setting-line,
+.recommend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.device-name {
+  font-size: 40rpx;
+  font-weight: 800;
+}
+
+.status {
+  width: 96rpx;
+  height: 50rpx;
+}
+
+.battery-ring {
+  width: 240rpx;
+  height: 240rpx;
+  margin: 34rpx auto 12rpx;
+  border: 20rpx solid #efe3a2;
+  border-top-color: #2f2a1b;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 54rpx;
+  font-weight: 900;
+}
+
+.center {
+  display: block;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.name-input {
+  margin: 24rpx 0;
+  padding: 22rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.recommend-row {
+  justify-content: flex-start;
+  gap: 14rpx;
+  margin-bottom: 26rpx;
+}
+
+.small {
+  padding: 10rpx 18rpx;
+  font-size: 24rpx;
+}
+
+.setting-line {
+  margin: 22rpx 0;
+  font-weight: 700;
+}

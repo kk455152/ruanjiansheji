@@ -1,63 +1,117 @@
-/**index.wxss**/
-page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+.home {
+  padding-top: 18rpx;
 }
 
-.scrollarea {
-  flex: 1;
-  overflow-y: hidden;
-}
-
-.userinfo {
+.hero,
+.status-row,
+.volume-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  color: #aaa;
-  width: 80%;
+  justify-content: space-between;
 }
 
-.userinfo-avatar {
-  overflow: hidden;
-  width: 128rpx;
-  height: 128rpx;
-  margin: 20rpx;
-  border-radius: 50%;
+.eyebrow,
+.section-label,
+.subtitle,
+.status,
+.feature-card text:last-child {
+  color: #817250;
+  font-size: 24rpx;
 }
 
-.usermotto {
-  margin-top: 200px;
+.title {
+  margin-top: 10rpx;
+  font-size: 58rpx;
+  font-weight: 800;
+  letter-spacing: 1rpx;
 }
 
-.avatar-wrapper {
-  padding: 0;
-  width: 56px !important;
-  border-radius: 8px;
-  margin-top: 40px;
-  margin-bottom: 40px;
+.battery {
+  width: 112rpx;
+  height: 56rpx;
+  font-weight: 700;
 }
 
-.avatar {
-  display: block;
-  width: 56px;
-  height: 56px;
+.now-card {
+  margin-top: 34rpx;
+  padding: 34rpx;
 }
 
-.nickname-wrapper {
+.disc {
+  width: 320rpx;
+  height: 320rpx;
+  margin: 38rpx auto 24rpx;
   display: flex;
-  width: 100%;
-  padding: 16px;
-  box-sizing: border-box;
-  border-top: .5px solid rgba(0, 0, 0, 0.1);
-  border-bottom: .5px solid rgba(0, 0, 0, 0.1);
-  color: black;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: conic-gradient(from 20deg, #252116, #6d5b31, #e8d786, #252116);
+  box-shadow: inset 0 0 0 24rpx rgba(255, 248, 224, 0.14), 0 34rpx 80rpx rgba(74, 56, 20, 0.18);
 }
 
-.nickname-label {
-  width: 105px;
+.disc-inner {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff5cc;
+  font-size: 54rpx;
 }
 
-.nickname-input {
+.song {
+  margin: 10rpx 0;
+  font-size: 48rpx;
+  font-weight: 800;
+}
+
+.play-button {
+  margin: 32rpx 0 22rpx;
+}
+
+.volume-row {
+  gap: 26rpx;
+}
+
+.volume-row slider {
   flex: 1;
+}
+
+.section-title {
+  margin: 38rpx 0 18rpx;
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.service-grid,
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
+}
+
+.service-card,
+.feature-card {
+  padding: 28rpx;
+}
+
+.service-card {
+  min-height: 96rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  font-weight: 700;
+}
+
+.feature-card {
+  min-height: 140rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.feature-title {
+  font-size: 30rpx;
+  font-weight: 800;
 }

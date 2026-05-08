@@ -1,0 +1,45 @@
+<navigation-bar title="设备管理" back="{{false}}" color="#2d2a20" background="transparent"></navigation-bar>
+<scroll-view class="page-shell device-page" scroll-y type="list">
+  <text class="eyebrow">绑定、查看电量、修改设备名</text>
+  <view class="title">设备管理</view>
+
+  <view class="glass-card device-card">
+    <view class="device-head">
+      <view>
+        <view class="device-name">{{deviceName}}</view>
+        <text class="muted">SH-Mini A1 · 固件 2.4.8</text>
+      </view>
+      <text class="pill status">{{isOnline ? '在线' : '离线'}}</text>
+    </view>
+    <view class="battery-ring">{{battery}}%</view>
+    <text class="muted center">预计还可播放 11 小时 20 分钟</text>
+    <button class="ghost-button" bindtap="toggleConnection">{{isOnline ? '断开设备' : '连接设备'}}</button>
+  </view>
+
+  <view class="glass-card setting-card">
+    <text class="section-title">自定义设备名</text>
+    <input class="name-input" value="{{deviceName}}" bindinput="inputName" maxlength="20" />
+    <view class="recommend-row">
+      <text class="pill small">卧室音箱</text>
+      <text class="pill small">书房音箱</text>
+      <text class="pill small">儿童房</text>
+    </view>
+    <button class="primary-button" bindtap="saveName">保存设备名</button>
+  </view>
+
+  <view class="glass-card setting-card">
+    <view class="setting-line">
+      <text>音量上限</text>
+      <text>{{volumeLimit}}%</text>
+    </view>
+    <slider value="{{volumeLimit}}" min="20" max="100" activeColor="#7d6a33" backgroundColor="#efe3a2" bindchange="changeLimit" />
+    <view class="setting-line">
+      <text>低电量提醒</text>
+      <text>20%</text>
+    </view>
+    <view class="setting-line">
+      <text>夜间勿扰</text>
+      <text>23:00 - 07:00</text>
+    </view>
+  </view>
+</scroll-view>

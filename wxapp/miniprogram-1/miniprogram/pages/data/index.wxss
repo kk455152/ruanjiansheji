@@ -1,0 +1,59 @@
+.eyebrow,
+.muted,
+.metric-label {
+  color: #817250;
+  font-size: 24rpx;
+}
+
+.title {
+  margin: 10rpx 0 28rpx;
+  font-size: 52rpx;
+  font-weight: 800;
+}
+
+.summary-card {
+  padding: 34rpx;
+}
+
+.rank {
+  width: 140rpx;
+  height: 52rpx;
+  font-weight: 800;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
+  margin: 32rpx 0;
+}
+
+.metric-number {
+  display: block;
+  font-size: 64rpx;
+  font-weight: 900;
+}
+
+.insight,
+.section-line {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+
+.section-line {
+  margin: 38rpx 0 18rpx;
+  font-weight: 800;
+}
+
+.history-row {
+  margin-bottom: 16rpx;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.song-name {
+  font-weight: 800;
+}
