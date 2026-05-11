@@ -10,10 +10,12 @@ import time
 import pika
 from flask import Flask, jsonify, request
 
+from api_routes import api_bp
 from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
 
 app = Flask(__name__)
+app.register_blueprint(api_bp)
 _TEMP_PEM_FILES = []
 
 
