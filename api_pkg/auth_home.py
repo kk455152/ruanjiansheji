@@ -17,7 +17,7 @@ from .common import (
 
 @api_bp.get("/_health")
 def health():
-    return ok("api routes loaded", {"time": now_str(), "mode": "mysql-mongo-real-with-fallback"})
+    return ok("api routes loaded", {"time": now_str(), "mode": "mysql-mongo-real-with-visible-fallback"})
 
 
 @api_bp.post("/auth/wechat-login")
@@ -33,7 +33,7 @@ def wechat_login():
     if not encrypted_data or not iv:
         return ok("请求参数错误", {"field": "encryptedData/iv", "reason": "encryptedData 和 iv 不能为空"}, 400)
 
-    nickname = body.get("nickname") or body.get("nickName") or "微信用户"
+    nickname = body.get("nickname") or body.get("nickName") or "【兜底数据】微信用户"
     avatar = body.get("avatar") or body.get("avatarUrl") or ""
 
     user_id, nickname = create_or_get_wechat_user(code, nickname=nickname)

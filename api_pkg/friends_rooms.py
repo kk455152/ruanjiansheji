@@ -49,7 +49,7 @@ def friends_listening():
             "members": [m.get("username") or f"用户{m.get('user_id')}" for m in members],
         }
     else:
-        room_data = {"roomId": "room_001", "roomName": "雨后电台", "songName": get_song()["songName"], "memberCount": 3, "members": ["我", "阿青", "小北"]}
+        room_data = {"roomId": "room_001", "roomName": "【兜底数据】雨后电台", "songName": get_song()["songName"], "memberCount": 3, "members": ["【兜底数据】我", "【兜底数据】阿青", "【兜底数据】小北"]}
 
     friends = friend_rows(limit=10)
 
@@ -80,8 +80,8 @@ def friend_rows(limit=10, keyword=None):
 
     if not rows:
         rows = [
-            {"user_id": "u_002", "username": "阿青"},
-            {"user_id": "u_003", "username": "小北"},
+            {"user_id": "u_002", "username": "【兜底数据】阿青"},
+            {"user_id": "u_003", "username": "【兜底数据】小北"},
         ]
 
     result = []
@@ -93,7 +93,7 @@ def friend_rows(limit=10, keyword=None):
                 "name": name,
                 "nickname": name,
                 "avatar": "",
-                "status": "正在听歌" if name != "阿青" else "刚分享了《晨光》",
+                "status": "【兜底数据】正在听歌" if name != "【兜底数据】阿青" else "【兜底数据】刚分享了《晨光》",
                 "isOnline": True,
             }
         )
@@ -199,11 +199,11 @@ def listen_room_join():
         "加入一起听房间成功",
         {
             "roomId": room_id,
-            "roomName": "雨后电台",
+            "roomName": "【兜底数据】雨后电台",
             "songId": song["songId"],
             "songName": song["songName"],
             "memberCount": 4,
-            "members": [{"userId": 10001, "nickname": "我", "role": "owner"}],
+            "members": [{"userId": 10001, "nickname": "【兜底数据】我", "role": "owner"}],
             "syncDelay": 0.2,
             "status": "active",
         },
@@ -274,7 +274,7 @@ def listen_room_detail():
         "获取房间详情成功",
         {
             "roomId": room_id or "room_001",
-            "roomName": "雨后电台",
+            "roomName": "【兜底数据】雨后电台",
             "status": "active",
             "syncDelay": 0.2,
             "source": song["source"],
@@ -286,7 +286,7 @@ def listen_room_detail():
                 "isPlaying": True,
             },
             "currentUser": {"userId": current_user_id(), "role": "owner", "isHost": True},
-            "members": [{"userId": current_user_id(), "nickname": "我", "avatar": "", "role": "owner", "online": True}],
+            "members": [{"userId": current_user_id(), "nickname": "【兜底数据】我", "avatar": "", "role": "owner", "online": True}],
         },
     )
 

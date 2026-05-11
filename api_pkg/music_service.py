@@ -25,7 +25,7 @@ def music_bind():
             SET account_name=%s, access_token=%s, sync_status=%s, updated_at=NOW()
             WHERE user_id=%s AND service=%s
             """,
-            (body.get("accountName") or "用户昵称", body.get("authCode") or "", "syncing", user_id, service),
+            (body.get("accountName") or "【兜底数据】用户昵称", body.get("authCode") or "", "syncing", user_id, service),
         )
     else:
         mysql_exec(
@@ -35,10 +35,10 @@ def music_bind():
              sync_status, bound_at, updated_at)
             VALUES (%s,%s,%s,%s,%s,%s,NULL,%s,NOW(),NOW())
             """,
-            (next_id("music_service_binding", "binding_id"), user_id, service, body.get("accountName") or "用户昵称", body.get("authCode") or "", "", "syncing"),
+            (next_id("music_service_binding", "binding_id"), user_id, service, body.get("accountName") or "【兜底数据】用户昵称", body.get("authCode") or "", "", "syncing"),
         )
 
-    return ok("音乐服务绑定成功", {"service": service, "bound": True, "accountName": body.get("accountName") or "用户昵称"})
+    return ok("音乐服务绑定成功", {"service": service, "bound": True, "accountName": body.get("accountName") or "【兜底数据】用户昵称"})
 
 
 @api_bp.get("/music-service/list")
@@ -59,7 +59,7 @@ def music_list():
                 "service": row["service"],
                 "serviceName": SERVICE_NAMES.get(row["service"], row["service"]),
                 "bound": True,
-                "accountName": row.get("account_name") or "用户昵称",
+                "accountName": row.get("account_name") or "【兜底数据】用户昵称",
                 "syncStatus": row.get("sync_status") or "synced",
             }
             for row in rows
@@ -92,7 +92,7 @@ def music_sync():
             "service": service,
             "status": status,
             "progress": progress,
-            "currentTask": "正在同步收藏歌曲",
+            "currentTask": "【兜底数据】正在同步收藏歌曲",
             "totalSongs": 1200,
             "syncedSongs": 780,
         },

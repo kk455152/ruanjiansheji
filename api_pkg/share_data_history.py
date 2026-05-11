@@ -102,7 +102,7 @@ def listening_data_summary():
                 "data": {
                     "minutes": int((row.get("total_play_duration_seconds") or 0) / 60),
                     "songCount": int(row.get("unique_song_count") or 0),
-                    "favoriteStyle": "华语流行",
+                    "favoriteStyle": "【兜底数据】华语流行",
                     "activeTime": "21:00-23:00",
                     "topPercent": "Top 12%",
                 },
@@ -115,7 +115,7 @@ def listening_data_summary():
             "data": {
                 "minutes": 428,
                 "songCount": len(history_rows(user_id=user_id, limit=200)),
-                "favoriteStyle": "华语流行",
+                "favoriteStyle": "【兜底数据】华语流行",
                 "activeTime": "21:00-23:00",
                 "topPercent": "Top 12%",
             },
@@ -210,7 +210,7 @@ def weekly_report():
     )
 
     minutes = int((row.get("total_play_duration_seconds") or 0) / 60) if row else 428
-    top_artist = row.get("hottest_artist") if row else "Luna Echo"
+    top_artist = row.get("hottest_artist") if row else "【兜底数据】Luna Echo"
     top_count = int(row.get("hottest_play_count") or 12) if row else 12
 
     return ok(
@@ -220,10 +220,10 @@ def weekly_report():
             "week": week,
             "rank": "Top 12%",
             "minutes": minutes,
-            "compareLastWeek": "比上周多听 23%",
-            "summaryText": "夜间播放和轻音乐占比明显上升。",
+            "compareLastWeek": "【兜底数据】比上周多听 23%",
+            "summaryText": "【兜底数据】夜间播放和轻音乐占比明显上升。",
             "topArtist": {"artistName": top_artist, "songCount": top_count},
-            "topPlaylist": {"playlistName": "夜间专注", "playCount": 18},
+            "topPlaylist": {"playlistName": "【兜底数据】夜间专注", "playCount": 18},
         },
     )
 

@@ -79,8 +79,8 @@ def fallback_state():
         "device": {
             "deviceId": "dev_001",
             "deviceSn": "SHMINI-A1-0001",
-            "deviceName": "客厅音箱",
-            "modelName": "SH-Mini A1",
+            "deviceName": "【兜底数据】客厅音箱",
+            "modelName": "【兜底数据】SH-Mini A1",
             "firmware": "2.4.8",
             "online": True,
             "isConnecting": False,
@@ -103,12 +103,12 @@ def fallback_state():
         },
         "playing": {
             "songId": "song_001",
-            "songName": "城市夜航",
-            "name": "城市夜航",
-            "artist": "Luna Echo",
-            "artistText": "Luna Echo",
-            "artists": ["Luna Echo"],
-            "album": "雨后电台",
+            "songName": "【兜底数据】城市夜航",
+            "name": "【兜底数据】城市夜航",
+            "artist": "【兜底数据】Luna Echo",
+            "artistText": "【兜底数据】Luna Echo",
+            "artists": ["【兜底数据】Luna Echo"],
+            "album": "【兜底数据】雨后电台",
             "source": "netease",
             "isPlaying": True,
             "coverUrl": "https://cdn.musicplayer.cn/song_001.jpg",
@@ -120,8 +120,8 @@ def fallback_state():
             {
                 "historyId": 1,
                 "songId": "song_001",
-                "songName": "城市夜航",
-                "artist": "Luna Echo",
+                "songName": "【兜底数据】城市夜航",
+                "artist": "【兜底数据】Luna Echo",
                 "source": "netease",
                 "playedAt": "2026-05-08 22:14",
                 "coverUrl": "https://xxx.jpg",
@@ -129,8 +129,8 @@ def fallback_state():
             {
                 "historyId": 2,
                 "songId": "song_002",
-                "songName": "雨后电台",
-                "artist": "阿青",
+                "songName": "【兜底数据】雨后电台",
+                "artist": "【兜底数据】阿青",
                 "source": "qq",
                 "playedAt": "2026-05-08 21:37",
                 "coverUrl": "https://xxx.jpg",
@@ -142,14 +142,14 @@ def fallback_state():
                 "service": "qq",
                 "serviceName": "QQ 音乐",
                 "bound": True,
-                "accountName": "用户昵称",
+                "accountName": "【兜底数据】用户昵称",
                 "syncStatus": "synced",
             },
             "netease": {
                 "service": "netease",
                 "serviceName": "网易云音乐",
                 "bound": True,
-                "accountName": "网易云用户",
+                "accountName": "【兜底数据】网易云用户",
                 "syncStatus": "syncing",
             },
         },
@@ -408,14 +408,14 @@ def current_user_profile(user_id=None):
             "avatar": "",
             "phone": row.get("phone"),
         }
-    return {"userId": user_id, "nickname": "我", "avatar": "", "phone": None}
+    return {"userId": user_id, "nickname": "【兜底数据】我", "avatar": "", "phone": None}
 
 
 def create_or_get_wechat_user(code, nickname=None):
     username = "wx_" + str(code).strip()[:40]
     row = mysql_one("SELECT user_id, username FROM `user` WHERE username=%s LIMIT 1", (username,))
     if row:
-        return int(row["user_id"]), row.get("username") or nickname or "微信用户"
+        return int(row["user_id"]), row.get("username") or nickname or "【兜底数据】微信用户"
 
     password_hash = secrets.token_hex(16)
 
@@ -432,7 +432,7 @@ def create_or_get_wechat_user(code, nickname=None):
         return int(user_id), nickname or username
 
     # 数据库不可写时仍保证接口通
-    return 10001, nickname or "微信用户"
+    return 10001, nickname or "【兜底数据】微信用户"
 
 
 def create_token(user_id, platform_type="wechat_mini"):
@@ -548,8 +548,8 @@ def get_song(song_id=None, mapping_id=None):
         if latest:
             song = {
                 "songId": str(latest.get("external_id") or latest.get("mapping_id") or "song_001"),
-                "name": latest.get("song_title") or "城市夜航",
-                "songName": latest.get("song_title") or "城市夜航",
+                "name": latest.get("song_title") or "【兜底数据】城市夜航",
+                "songName": latest.get("song_title") or "【兜底数据】城市夜航",
                 "album": "",
                 "artist": latest.get("artist") or "",
                 "artistText": latest.get("artist") or "",

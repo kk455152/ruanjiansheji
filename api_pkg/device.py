@@ -226,7 +226,7 @@ def search_nearby():
 
     if not rows:
         rows = [
-            {"device_id": "dev_001", "device_number": "SHMINI-A1-0001", "model_name": "SH-Mini A1", "status": 1},
+            {"device_id": "dev_001", "device_number": "SHMINI-A1-0001", "model_name": "【兜底数据】SH-Mini A1", "status": 1},
         ]
 
     bound_ids = {str(x.get("device_id")) for x in device_list()}
@@ -234,8 +234,8 @@ def search_nearby():
     devices = [
         {
             "deviceId": str(row.get("device_id")),
-            "deviceName": row.get("device_number") or "声盒 Mini A1",
-            "modelName": row.get("model_name") or "SH-Mini A1",
+            "deviceName": row.get("device_number") or "【兜底数据】声盒 Mini A1",
+            "modelName": row.get("model_name") or "【兜底数据】SH-Mini A1",
             "signalStrength": -65,
             "online": bool(row.get("status")),
             "binded": str(row.get("device_id")) in bound_ids,
@@ -263,7 +263,7 @@ def device_bind():
     task_id = next_id("device_bind_task", "task_id")
     device = mysql_one("SELECT device_id, model_name FROM device WHERE device_number=%s LIMIT 1", (device_sn,))
     device_id = device.get("device_id") if device else None
-    device_name = device.get("model_name") if device else "声盒 Mini A1"
+    device_name = device.get("model_name") if device else "【兜底数据】声盒 Mini A1"
 
     mysql_exec(
         """
@@ -311,7 +311,7 @@ def bind_progress():
             {
                 "progress": int(row.get("progress") or 0),
                 "steps": [
-                    {"name": "发现声盒 Mini A1", "status": "done" if int(row.get("progress") or 0) >= 20 else "doing"},
+                    {"name": "发现【兜底数据】声盒 Mini A1", "status": "done" if int(row.get("progress") or 0) >= 20 else "doing"},
                     {"name": "写入 Wi-Fi 信息", "status": "done" if int(row.get("progress") or 0) >= 70 else "doing"},
                     {"name": "绑定到微信账号", "status": "done" if row.get("status") == "success" else "waiting"},
                 ],
@@ -322,7 +322,7 @@ def bind_progress():
         {
             "progress": 70,
             "steps": [
-                {"name": "发现声盒 Mini A1", "status": "done"},
+                {"name": "发现【兜底数据】声盒 Mini A1", "status": "done"},
                 {"name": "写入 Wi-Fi 信息", "status": "doing"},
                 {"name": "绑定到微信账号", "status": "waiting"},
             ],
