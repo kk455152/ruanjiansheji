@@ -403,6 +403,11 @@ def ensure_connection_close(response):
 @app.route('/api/status/connection', methods=['POST'])
 @app.route('/api/status/like', methods=['POST'])
 @app.route('/api/song-info', methods=['POST'])
+@app.route('/api/runtime', methods=['POST'])
+@app.route('/api/player/state', methods=['POST'])
+@app.route('/api/play-queue', methods=['POST'])
+@app.route('/api/bind-progress', methods=['POST'])
+@app.route('/api/music-sync/progress', methods=['POST'])
 def handle_simulator_data():
     request_json = request.get_json(silent=True)
 

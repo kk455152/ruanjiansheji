@@ -42,6 +42,13 @@ ENDPOINT_MAP = {
     "is_connecting": "/api/status/connection",
     "like_status": "/api/status/like",
     "song_info": "/api/song-info",
+    "battery": "/api/runtime",
+    "is_charging": "/api/runtime",
+    "current_network": "/api/runtime",
+    "player_state": "/api/player/state",
+    "play_queue": "/api/play-queue",
+    "bind_progress": "/api/bind-progress",
+    "music_sync_progress": "/api/music-sync/progress",
     "歌曲信息": "/api/song-info",
 }
 
@@ -353,6 +360,117 @@ def process_data(device_id, metric_type, value):
 # ==========================================
 # 4. 核心数学与统计工具
 # ==========================================
+def build_smoke_song_payload():
+    return {
+        "keyword": "测试歌曲",
+        "provider": "local-smoke-test",
+        "provider_url": "",
+        "fetched_at": datetime.now().isoformat(),
+        "song": {
+            "song_id": "1491830535",
+            "name": "测试歌曲",
+            "album": "测试专辑",
+            "artists": ["茶北Ciper"],
+            "cover_url": "https://p1.music.126.net/test.jpg",
+            "duration_ms": 262060,
+        },
+    }
+
+
+def build_mongo_schema_smoke_payloads(device_id):
+    now_text = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return [
+        {"device_id": device_id, "type": "volume", "value": 60},
+        {"device_id": device_id, "type": "signal_strength", "value": -73.59},
+        {"device_id": device_id, "type": "bass_gain", "value": 8},
+        {"device_id": device_id, "type": "is_connected", "value": True},
+        {"device_id": device_id, "type": "is_connecting", "value": False},
+        {"device_id": device_id, "type": "battery", "value": 82},
+        {"device_id": device_id, "type": "is_charging", "value": False},
+        {"device_id": device_id, "type": "current_network", "value": "Home-5G"},
+        {
+            "device_id": device_id,
+            "type": "player_state",
+            "value": {
+                "song_id": "1491830535",
+                "song_name": "测试歌曲",
+                "artist": "茶北Ciper",
+                "source": "netease",
+                "is_playing": True,
+                "progress_seconds": 35,
+                "updated_at": now_text,
+            },
+        },
+        {
+            "device_id": device_id,
+            "type": "song_info",
+            "value": "测试歌曲",
+            "song_payload": build_smoke_song_payload(),
+        },
+        {
+            "device_id": device_id,
+            "type": "play_queue",
+            "value": {
+                "queue": [
+                    {
+                        "song_id": "1491830535",
+                        "song_name": "测试歌曲",
+                        "artist": "茶北Ciper",
+                        "source": "netease",
+                        "position": 1,
+                        "added_by": 10001,
+                        "added_at": now_text,
+                    }
+                ]
+            },
+        },
+        {
+            "device_id": device_id,
+            "type": "bind_progress",
+            "value": {
+                "task_id": "bind_001",
+                "device_sn": "SHMINI-A1-0001",
+                "progress": 70,
+                "overall_status": "binding",
+                "steps": [
+                    {"name": "发现设备", "status": "done"},
+                    {"name": "写入 Wi-Fi 信息", "status": "done"},
+                    {"name": "设备连接网络", "status": "processing"},
+                    {"name": "绑定用户账号", "status": "waiting"},
+                ],
+                "updated_at": now_text,
+            },
+        },
+        {
+            "device_id": device_id,
+            "type": "music_sync_progress",
+            "value": {
+                "user_id": 10001,
+                "service": "qq",
+                "status": "syncing",
+                "progress": 65,
+                "current_task": "正在同步收藏歌曲",
+                "total_songs": 1200,
+                "synced_songs": 780,
+                "updated_at": now_text,
+            },
+        },
+    ]
+
+
+def run_mongo_schema_smoke_test(device_id):
+    init_env()
+    failures = 0
+    for payload in build_mongo_schema_smoke_payloads(device_id):
+        payload.update(build_user_profile(device_id))
+        if send_via_http(payload):
+            log_message(f"[SMOKE OK] {payload['type']} -> {get_target_url(payload['type'])}")
+        else:
+            failures += 1
+            log_message(f"[SMOKE FAIL] {payload['type']} -> {get_target_url(payload['type'])}")
+    return failures == 0
+
+
 def generate_normal_data(mu, sigma, min_val, max_val):
     val = random.gauss(mu, sigma)
     clamped_val = max(min(val, max_val), min_val)
@@ -406,6 +524,15 @@ if __name__ == "__main__":
     # 忽略 requests 库在不验证证书时报的烦人 Warning
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    parser = argparse.ArgumentParser(description="Smart speaker encrypted simulator")
+    parser.add_argument("--mongo-schema-smoke-test", action="store_true")
+    parser.add_argument("--smoke-device-id", default=os.environ.get("SMOKE_DEVICE_ID", "dev_01"))
+    args = parser.parse_args()
+
+    if args.mongo_schema_smoke_test:
+        ok = run_mongo_schema_smoke_test(args.smoke_device_id)
+        raise SystemExit(0 if ok else 1)
 
     log_message("=================================================")
     log_message("=== 智能音箱压测客户端 (安全架构联调版) ======")

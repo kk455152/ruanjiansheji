@@ -16,9 +16,16 @@ METRIC_TYPES = {
     "bass_gain",
     "is_connected",
     "is_connecting",
+    "battery",
+    "is_charging",
+    "current_network",
 }
 PREFERENCE_TYPES = {"like_status"}
 SONG_INFO_TYPES = {"song_info", "歌曲信息"}
+PLAYER_STATE_TYPES = {"player_state"}
+PLAY_QUEUE_TYPES = {"play_queue"}
+BIND_PROGRESS_TYPES = {"bind_progress"}
+MUSIC_SYNC_PROGRESS_TYPES = {"music_sync_progress"}
 
 DEFAULT_MONGO_URI = "mongodb://y:123@8.137.165.220:27017/musicplayer?authSource=musicplayer"
 DEFAULT_MONGO_HOST = "8.137.165.220"
@@ -209,6 +216,26 @@ def get_play_log_collection():
     return database[os.environ.get("MONGO_PLAY_LOG_COLLECTION", "play_logs")]
 
 
+def get_device_runtime_collection():
+    return get_named_mongo_collection("MONGO_DEVICE_RUNTIME_COLLECTION", "device_runtime")
+
+
+def get_player_state_collection():
+    return get_named_mongo_collection("MONGO_PLAYER_STATE_COLLECTION", "player_state")
+
+
+def get_play_queue_collection():
+    return get_named_mongo_collection("MONGO_PLAY_QUEUE_COLLECTION", "play_queue")
+
+
+def get_bind_progress_collection():
+    return get_named_mongo_collection("MONGO_BIND_PROGRESS_COLLECTION", "bind_progress")
+
+
+def get_music_sync_progress_collection():
+    return get_named_mongo_collection("MONGO_MUSIC_SYNC_PROGRESS_COLLECTION", "music_sync_progress")
+
+
 def create_index_safely(collection, keys, **kwargs):
     try:
         collection.create_index(keys, **kwargs)
@@ -236,6 +263,12 @@ def ensure_mongo_schema():
     create_index_safely(get_friendship_collection(), [("account", 1), ("friend_account", 1)], unique=True)
     create_index_safely(get_listen_room_collection(), "room_id", unique=True)
     create_index_safely(get_listening_summary_collection(), [("account", 1), ("period_type", 1), ("period_key", 1)], unique=True)
+    create_index_safely(get_device_runtime_collection(), "device_id", unique=True)
+    create_index_safely(get_player_state_collection(), "device_id", unique=True)
+    create_index_safely(get_play_queue_collection(), "device_id", unique=True)
+    create_index_safely(get_bind_progress_collection(), "task_id", unique=True)
+    create_index_safely(get_bind_progress_collection(), "device_sn")
+    create_index_safely(get_music_sync_progress_collection(), [("user_id", 1), ("service", 1)], unique=True)
     _mongo_schema_ready = True
 
 
@@ -522,7 +555,8 @@ def build_song_document(song_payload, account=None, password=None, device_id=Non
         "duration_ms": song.get("duration_ms"),
         "duration_seconds": normalize_duration_seconds(song.get("duration_ms")),
         "cover_url": str(song.get("cover_url") or "").strip(),
-        "source": {
+        "source": "netease",
+        "source_detail": {
             "platform": "netease",
             "provider": song_payload.get("provider") or "",
             "provider_url": song_payload.get("provider_url") or "",
@@ -558,6 +592,41 @@ def datetime_from_payload_timestamp(payload):
         return datetime.fromtimestamp(int(payload.get("timestamp")))
     except (TypeError, ValueError, OSError):
         return mysql_now()
+
+
+def value_document(payload):
+    value = payload.get("value")
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def first_present(*values, default=None):
+    for value in values:
+        if value is not None:
+            return value
+    return default
+
+
+def to_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def to_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    if value is None:
+        return default
+    return bool(value)
 
 
 def ensure_course_auth_token(cursor, user_id, account):
@@ -1183,6 +1252,7 @@ def upsert_media_metadata_document(song_document, account):
                 "duration_ms": song_document.get("duration_ms"),
                 "duration_seconds": song_document.get("duration_seconds"),
                 "source": song_document.get("source") or {},
+                "source_detail": song_document.get("source_detail") or {},
                 "last_user_account": account,
                 "last_device_id": song_document.get("last_device_id"),
                 "updated_at": now,
@@ -1292,6 +1362,172 @@ def insert_user_feedback_document(payload, account):
     )
 
 
+def upsert_device_runtime(payload, account, password):
+    ensure_mongo_schema()
+    collection = get_device_runtime_collection()
+    metric_type = normalize_metric_type(payload.get("type"))
+    device_id = str(payload.get("device_id") or "unknown_device")
+    value = payload.get("value")
+    fields = value_document(payload)
+    now = utcnow()
+
+    metric_values = {}
+    if fields:
+        for key in (
+            "volume",
+            "signal_strength",
+            "bass_gain",
+            "is_connected",
+            "is_connecting",
+            "battery",
+            "is_charging",
+            "current_network",
+        ):
+            if key in fields:
+                metric_values[key] = fields[key]
+    elif metric_type in METRIC_TYPES:
+        metric_values[metric_type] = value
+
+    update_fields = {
+        "device_id": device_id,
+        "updated_at": now,
+        "metrics.last_seen_at": first_present(fields.get("last_seen_at"), now),
+        "user.account": account,
+        "user.password_hash": build_password_hash(password),
+    }
+    for key, metric_value in metric_values.items():
+        update_fields[f"metrics.{key}"] = metric_value
+    if payload.get("api_path"):
+        update_fields["last_api_path"] = payload.get("api_path")
+
+    collection.update_one(
+        {"device_id": device_id},
+        {
+            "$set": update_fields,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def upsert_player_state(payload, account):
+    ensure_mongo_schema()
+    state = value_document(payload)
+    now = utcnow()
+    device_id = str(first_present(state.get("device_id"), payload.get("device_id"), default="unknown_device"))
+
+    document = {
+        "device_id": device_id,
+        "song_id": str(first_present(state.get("song_id"), payload.get("song_id"), default="")),
+        "song_name": str(first_present(state.get("song_name"), payload.get("song_name"), default="")),
+        "artist": str(first_present(state.get("artist"), payload.get("artist"), default="")),
+        "source": str(first_present(state.get("source"), payload.get("source"), default="netease")),
+        "is_playing": to_bool(first_present(state.get("is_playing"), payload.get("is_playing")), default=False),
+        "progress_seconds": to_int(first_present(state.get("progress_seconds"), payload.get("progress_seconds")), 0),
+        "updated_at": now,
+        "user_account": account,
+    }
+    get_player_state_collection().update_one(
+        {"device_id": device_id},
+        {
+            "$set": document,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def normalize_queue_items(raw_queue, account, now):
+    normalized = []
+    for index, item in enumerate(raw_queue or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        normalized.append({
+            "song_id": str(item.get("song_id") or ""),
+            "song_name": str(item.get("song_name") or item.get("name") or ""),
+            "artist": str(item.get("artist") or item.get("artist_text") or ""),
+            "source": str(item.get("source") or "netease"),
+            "position": to_int(item.get("position"), index),
+            "added_by": item.get("added_by") or account,
+            "added_at": item.get("added_at") or now,
+        })
+    return normalized
+
+
+def upsert_play_queue(payload, account):
+    ensure_mongo_schema()
+    value = payload.get("value")
+    queue_doc = value if isinstance(value, dict) else {}
+    raw_queue = queue_doc.get("queue") if queue_doc else value
+    now = utcnow()
+    device_id = str(first_present(queue_doc.get("device_id"), payload.get("device_id"), default="unknown_device"))
+
+    document = {
+        "device_id": device_id,
+        "queue": normalize_queue_items(raw_queue, account, now),
+        "updated_at": now,
+    }
+    get_play_queue_collection().update_one(
+        {"device_id": device_id},
+        {
+            "$set": document,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def upsert_bind_progress(payload):
+    ensure_mongo_schema()
+    progress_doc = value_document(payload)
+    now = utcnow()
+    task_id = str(first_present(progress_doc.get("task_id"), payload.get("task_id"), default=f"bind_{uuid.uuid4().hex[:8]}"))
+
+    document = {
+        "task_id": task_id,
+        "device_sn": str(first_present(progress_doc.get("device_sn"), payload.get("device_sn"), payload.get("device_id"), default="")),
+        "progress": to_int(first_present(progress_doc.get("progress"), payload.get("progress")), 0),
+        "overall_status": str(first_present(progress_doc.get("overall_status"), payload.get("overall_status"), default="binding")),
+        "steps": progress_doc.get("steps") if isinstance(progress_doc.get("steps"), list) else [],
+        "updated_at": now,
+    }
+    get_bind_progress_collection().update_one(
+        {"task_id": task_id},
+        {
+            "$set": document,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def upsert_music_sync_progress(payload):
+    ensure_mongo_schema()
+    progress_doc = value_document(payload)
+    now = utcnow()
+    user_id = to_int(first_present(progress_doc.get("user_id"), payload.get("user_id")), 0)
+    service = str(first_present(progress_doc.get("service"), payload.get("service"), default="netease"))
+
+    document = {
+        "user_id": user_id,
+        "service": service,
+        "status": str(first_present(progress_doc.get("status"), payload.get("status"), default="syncing")),
+        "progress": to_int(first_present(progress_doc.get("progress"), payload.get("progress")), 0),
+        "current_task": str(first_present(progress_doc.get("current_task"), payload.get("current_task"), default="")),
+        "total_songs": to_int(first_present(progress_doc.get("total_songs"), payload.get("total_songs")), 0),
+        "synced_songs": to_int(first_present(progress_doc.get("synced_songs"), payload.get("synced_songs")), 0),
+        "updated_at": now,
+    }
+    get_music_sync_progress_collection().update_one(
+        {"user_id": user_id, "service": service},
+        {
+            "$set": document,
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
 def upsert_device_metric(payload, account, password):
     ensure_mongo_schema()
     collection = get_mongo_collection()
@@ -1383,7 +1619,24 @@ def persist_payload(payload):
 
     if metric_type in METRIC_TYPES:
         upsert_device_metric(payload, account, password)
-        return "mongodb.device_metrics+mongodb.device_bindings+mysql.user_device_binding"
+        upsert_device_runtime(payload, account, password)
+        return "mongodb.device_metrics+mongodb.device_runtime+mongodb.device_bindings+mysql.user_device_binding"
+
+    if metric_type in PLAYER_STATE_TYPES:
+        upsert_player_state(payload, account)
+        return "mongodb.player_state+mongodb.user_profiles"
+
+    if metric_type in PLAY_QUEUE_TYPES:
+        upsert_play_queue(payload, account)
+        return "mongodb.play_queue+mongodb.user_profiles"
+
+    if metric_type in BIND_PROGRESS_TYPES:
+        upsert_bind_progress(payload)
+        return "mongodb.bind_progress+mongodb.user_profiles"
+
+    if metric_type in MUSIC_SYNC_PROGRESS_TYPES:
+        upsert_music_sync_progress(payload)
+        return "mongodb.music_sync_progress+mongodb.user_profiles"
 
     return "mongodb.user_profiles+mysql.users"
 
