@@ -7,10 +7,10 @@ from .common import body_json, get_device, get_song, load_state, mongo_update, o
 @api_bp.post("/player/control")
 def player_control():
     body = body_json()
-    action = str(body.get("action", "")).lower()
+    action = str(body.get("action", "")).strip().lower()
 
     if action not in ("play", "pause", "previous", "next"):
-        return ok("invalid player action", {"action": action}, 400)
+        return ok("无效的播放控制动作", {"action": action}, 400)
 
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
     song = get_song()
@@ -27,13 +27,21 @@ def player_control():
                 "artist": song["artist"],
                 "source": body.get("source") or song["source"],
                 "is_playing": is_playing,
+                "last_action": action,
                 "updated_at": datetime.now(),
             }
         },
     )
 
+    mongo_update(
+        "device_commands",
+        {"device_id": device_id, "command_type": "player_control", "created_at": datetime.now()},
+        {"$set": {"device_id": device_id, "action": action, "payload": body, "created_at": datetime.now()}},
+        upsert=False,
+    )
+
     return ok(
-        "player control success",
+        "播放控制成功",
         {
             "deviceId": device_id,
             "action": action,
@@ -50,17 +58,17 @@ def player_volume():
     try:
         volume = max(0, min(100, int(body.get("volume", 60))))
     except Exception:
-        return ok("invalid volume", {"field": "volume"}, 400)
+        return ok("音量必须是 0-100 的整数", {"field": "volume"}, 400)
 
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
 
     mongo_update(
         "device_runtime",
         {"device_id": device_id},
-        {"$set": {"device_id": device_id, "metrics.volume": volume, "updated_at": datetime.now()}},
+        {"$set": {"device_id": device_id, "volume": volume, "metrics.volume": volume, "updated_at": datetime.now()}},
     )
 
-    return ok("volume set success", {"deviceId": device_id, "volume": volume, "isMuted": volume == 0})
+    return ok("音量设置成功", {"deviceId": device_id, "volume": volume, "isMuted": volume == 0})
 
 
 @api_bp.post("/player/play-song")
@@ -80,6 +88,7 @@ def play_song():
                 "song_name": song["songName"],
                 "artist": song["artist"],
                 "source": song["source"],
+                "cover_url": song["coverUrl"],
                 "is_playing": True,
                 "updated_at": datetime.now(),
             }
@@ -87,7 +96,7 @@ def play_song():
     )
 
     return ok(
-        "song play success",
+        "歌曲播放成功",
         {
             "deviceId": device_id,
             "songId": song_id,
@@ -105,12 +114,13 @@ def add_next():
     body = body_json()
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
     song_id = str(body.get("songId") or get_song()["songId"])
+    song = get_song(song_id)
 
     state = load_state()
-    if song_id in [str(item.get("songId")) for item in state.get("queue", [])]:
-        return ok("song already queued next", {"deviceId": device_id, "songId": song_id, "queuePosition": 1}, 409)
+    queue = state.setdefault("queue", [])
+    if song_id in [str(item.get("songId")) for item in queue]:
+        return ok("该歌曲已在下一首播放队列中", {"deviceId": device_id, "songId": song_id, "queuePosition": 1}, 409)
 
-    song = get_song(song_id)
     item = {
         "deviceId": device_id,
         "songId": song_id,
@@ -118,8 +128,7 @@ def add_next():
         "artist": song["artist"],
         "queuePosition": 1,
     }
-
-    state.setdefault("queue", []).insert(0, item)
+    queue.insert(0, item)
     save_state(state)
 
     mongo_update(
@@ -128,12 +137,21 @@ def add_next():
         {
             "$push": {
                 "queue": {
-                    "$each": [{"song_id": song_id, "song_name": song["songName"], "artist": song["artist"], "position": 1}],
+                    "$each": [
+                        {
+                            "song_id": song_id,
+                            "song_name": song["songName"],
+                            "artist": song["artist"],
+                            "source": song["source"],
+                            "position": 1,
+                            "created_at": datetime.now(),
+                        }
+                    ],
                     "$position": 0,
                 }
             },
-            "$set": {"updated_at": datetime.now()},
+            "$set": {"device_id": device_id, "updated_at": datetime.now()},
         },
     )
 
-    return ok("song queued next", item)
+    return ok("已加入下一首播放", item)

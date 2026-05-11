@@ -1,87 +1,61 @@
-import secrets
-from datetime import datetime, timedelta
-
 from . import api_bp
 from .common import (
     body_json,
+    create_or_get_wechat_user,
+    create_token,
     current_user_id,
+    current_user_profile,
+    device_list,
     get_device,
     get_song,
     history_rows,
-    load_state,
-    mysql_conn,
-    mysql_one,
     ok,
     plain,
-    save_state,
     now_str,
 )
 
 
 @api_bp.get("/_health")
 def health():
-    return ok("api routes loaded", {"time": now_str(), "mode": "database-first-with-mock-fallback"})
+    return ok("api routes loaded", {"time": now_str(), "mode": "mysql-mongo-real-with-fallback"})
 
 
 @api_bp.post("/auth/wechat-login")
 def wechat_login():
     body = body_json()
+    code = str(body.get("code", "")).strip()
+    encrypted_data = body.get("encryptedData")
+    iv = body.get("iv")
 
-    if not str(body.get("code", "")).strip():
-        return ok("bad request", {"field": "code", "reason": "code is required"}, 400)
+    if not code:
+        return ok("请求参数错误", {"field": "code", "reason": "微信登录 code 不能为空"}, 400)
 
-    if not body.get("encryptedData") or not body.get("iv"):
-        return ok("bad request", {"field": "encryptedData/iv", "reason": "encryptedData and iv are required"}, 400)
+    if not encrypted_data or not iv:
+        return ok("请求参数错误", {"field": "encryptedData/iv", "reason": "encryptedData 和 iv 不能为空"}, 400)
 
-    token = secrets.token_hex(16)
-    user_id = 10001
-    username = "wechat_" + str(body.get("code"))[:32]
+    nickname = body.get("nickname") or body.get("nickName") or "微信用户"
+    avatar = body.get("avatar") or body.get("avatarUrl") or ""
 
-    row = mysql_one("SELECT user_id FROM `user` WHERE username=%s LIMIT 1", (username,))
-    if row:
-        user_id = int(row["user_id"])
-    else:
-        conn = mysql_conn()
-        if conn:
-            try:
-                with conn.cursor() as cursor:
-                    cursor.execute(
-                        "INSERT INTO `user` (username,password_hash,phone) VALUES (%s,%s,%s)",
-                        (username, secrets.token_hex(16), None),
-                    )
-                    user_id = cursor.lastrowid
-                    cursor.execute(
-                        """
-                        INSERT INTO auth_token
-                        (user_id,platform_type,access_token,refresh_token,expires_at)
-                        VALUES (%s,%s,%s,%s,%s)
-                        """,
-                        (user_id, "wechat_mini", token, secrets.token_hex(32), datetime.now() + timedelta(days=7)),
-                    )
-                conn.commit()
-            except Exception:
-                conn.rollback()
-            finally:
-                conn.close()
+    user_id, nickname = create_or_get_wechat_user(code, nickname=nickname)
+    token = create_token(user_id)
 
-    state = load_state()
-    state["tokens"][token] = user_id
-    save_state(state)
+    has_device = len(device_list(user_id)) > 0
 
     return plain(
         {
             "token": token,
-            "userId": user_id,
-            "nickname": body.get("nickname") or body.get("nickName") or "Miniapp User",
-            "avatar": body.get("avatar") or body.get("avatarUrl") or "",
-            "hasDevice": True,
+            "userId": int(user_id),
+            "nickname": nickname,
+            "avatar": avatar,
+            "hasDevice": bool(has_device),
         }
     )
 
 
 @api_bp.get("/home/overview")
 def home_overview():
-    device = get_device()
+    user_id = current_user_id()
+    device = get_device(user_id=user_id)
     song = get_song()
 
     return plain(
@@ -98,8 +72,8 @@ def home_overview():
                 "songName": song["songName"],
                 "artist": song["artist"],
                 "source": song["source"],
-                "isPlaying": song["isPlaying"],
+                "isPlaying": bool(song.get("isPlaying", True)),
             },
-            "historyCount": len(history_rows(limit=200)),
+            "historyCount": len(history_rows(user_id=user_id, limit=200)),
         }
     )
