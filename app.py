@@ -29,11 +29,13 @@ from auth_routes import auth_bp
 from device_routes import device_bp
 from stats_routes import stats_bp
 from mongo_routes import mongo_bp
+from api_routes import api_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(device_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(mongo_bp)
+app.register_blueprint(api_bp)
 
 
 # =========================
