@@ -12,6 +12,7 @@ import time
 import pika
 from flask import Flask, jsonify, request
 
+from api_routes import api_bp
 from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
 from storage_backends import persist_payload
@@ -34,6 +35,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(device_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(mongo_bp)
+app.register_blueprint(api_bp)
 
 
 # =========================
