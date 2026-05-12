@@ -99,7 +99,7 @@ def battery_notice():
     body = body_json()
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
     low_enabled = 1 if bool(body.get("lowBatteryEnabled", True)) else 0
-    threshold = int(body.get("threshold", 20))
+    threshold = int(body.get("threshold", body.get("lowBatteryThreshold", 20)))
     full_notice = 1 if bool(body.get("fullChargeNotice", True)) else 0
 
     row = mysql_one("SELECT notice_id FROM battery_notice_setting WHERE device_id=%s LIMIT 1", (device_id,))
@@ -164,8 +164,8 @@ def advanced_settings():
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
     volume_limit = int(body.get("volumeLimit", 80))
     night_mode = 1 if bool(body.get("nightModeEnabled", True)) else 0
-    night_start = body.get("nightStart", "23:00")
-    night_end = body.get("nightEnd", "07:00")
+    night_start = body.get("nightStart") or body.get("nightModeStart") or "23:00"
+    night_end = body.get("nightEnd") or body.get("nightModeEnd") or "07:00"
     auto_update = 1 if bool(body.get("autoFirmwareUpdate", True)) else 0
 
     row = mysql_one("SELECT setting_id FROM device_settings WHERE device_id=%s LIMIT 1", (device_id,))

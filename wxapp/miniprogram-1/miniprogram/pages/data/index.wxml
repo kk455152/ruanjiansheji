@@ -1,63 +1,56 @@
 <navigation-bar title="数据" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
-<scroll-view class="page-shell data-page" scroll-y type="list">
+<scroll-view class="page-shell data-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
   <view class="hero">
     <text class="section-kicker">Listening Report</text>
     <view class="page-title">听歌数据</view>
-    <text class="page-subtitle">结合你当前数据库中的播放记录、周报和同步进度，生成贴合设计稿的数据首页。</text>
+    <text class="page-subtitle">汇总你的播放记录、周报洞察和可分享卡片，把最近的收听状态整理成一页。</text>
   </view>
 
   <view class="dark-card summary-card">
     <view class="summary-top">
-      <text class="pill rank-pill">{{topPercent}}</text>
-      <text class="summary-week">{{weeklyTitle}}</text>
+      <text class="card-kicker">本周个人总结</text>
+      <text class="summary-pill">{{topPercent}}</text>
     </view>
 
     <view class="metric-grid">
       <view class="metric-cell">
         <text class="metric-number">{{minutes}}</text>
-        <text class="metric-label">本周播放分钟</text>
+        <text class="metric-label">分钟</text>
       </view>
       <view class="metric-cell">
         <text class="metric-number">{{songCount}}</text>
-        <text class="metric-label">累计歌曲数</text>
+        <text class="metric-label">歌曲数</text>
       </view>
+    </view>
+
+    <view class="dot-row">
+      <view class="dot dot-orange"></view>
+      <view class="dot dot-amber"></view>
+      <view class="dot dot-peach"></view>
+      <view class="dot dot-green"></view>
+      <view class="dot dot-blue"></view>
+      <view class="dot dot-orange"></view>
     </view>
 
     <text class="summary-text">{{summaryText}}</text>
     <text class="summary-copy">{{compareLastWeek}}</text>
-
-    <button class="primary-button" loading="{{isGenerating}}" bindtap="generateCard">生成听歌总结卡片</button>
+    <text class="summary-week">{{weeklyTitle}}</text>
   </view>
 
   <view class="insight-grid">
-    <view class="surface-card insight-card">
+    <view class="soft-card soft-peach insight-card">
       <text class="insight-title">偏好风格</text>
       <text class="insight-value">{{favoriteStyle}}</text>
     </view>
-    <view class="surface-card insight-card">
+    <view class="soft-card soft-blue insight-card">
       <text class="insight-title">常听时段</text>
       <text class="insight-value">{{activeTime}}</text>
     </view>
-    <view class="surface-card insight-card">
-      <text class="insight-title">本周最常听歌手</text>
-      <text class="insight-value">{{topArtistName}}</text>
-      <text class="muted-text">播放 {{topArtistSongCount}} 次</text>
-    </view>
-    <view class="surface-card insight-card">
-      <text class="insight-title">最常进入的歌单</text>
-      <text class="insight-value">{{topPlaylistName}}</text>
-      <text class="muted-text">进入 {{topPlaylistPlayCount}} 次</text>
-    </view>
-  </view>
-
-  <view class="surface-card card-preview" wx:if="{{cardImageUrl}}">
-    <text class="preview-title">已生成的总结卡片</text>
-    <text class="preview-url">{{cardImageUrl}}</text>
   </view>
 
   <view class="section-heading">
-    <text>最近播放</text>
-    <text class="right-link" bindtap="openHistory">查看全部</text>
+    <text>播放历史</text>
+    <text class="right-link" bindtap="openHistory">全部</text>
   </view>
 
   <view
@@ -70,10 +63,18 @@
     data-source="{{item.source}}"
     bindtap="replay"
   >
-    <view>
+    <view class="history-mark"></view>
+    <view class="history-copy">
       <text class="history-song">{{item.songName}}</text>
       <text class="muted-text">{{item.sourceText}}</text>
     </view>
-    <text class="replay-pill">在音箱播放</text>
+    <text class="history-action">重播</text>
+  </view>
+
+  <button class="ink-button" loading="{{isGenerating}}" bindtap="generateCard">生成个人听歌总结卡片</button>
+
+  <view class="surface-card card-preview" wx:if="{{cardImageUrl}}">
+    <text class="preview-title">已生成的分享图片</text>
+    <text class="preview-url">{{cardImageUrl}}</text>
   </view>
 </scroll-view>

@@ -6,9 +6,12 @@ type AuthPageData = {
   accountName: string
   binding: boolean
   currentTask: string
+  heroIcon: string
   permissions: string[]
   progress: number
+  sectionTitle: string
   service: MusicServiceKey
+  serviceButtonText: string
   serviceName: string
   slogan: string
   syncStatus: string
@@ -19,9 +22,12 @@ const initialData: AuthPageData = {
   accountName: '未绑定账号',
   binding: false,
   currentTask: '等待开始同步',
+  heroIcon: '♥',
   permissions: [...MUSIC_SERVICE_META.netease.permissions],
   progress: 0,
+  sectionTitle: '稍后用',
   service: 'netease',
+  serviceButtonText: '同意并授权网易云',
   serviceName: MUSIC_SERVICE_META.netease.serviceName,
   slogan: MUSIC_SERVICE_META.netease.slogan,
   syncStatus: 'idle',
@@ -33,10 +39,16 @@ Page({
   onLoad(query) {
     const service = query.service === 'qq' ? 'qq' : 'netease'
     const meta = MUSIC_SERVICE_META[service]
+    const heroIcon = service === 'qq' ? '♫' : '♥'
+    const sectionTitle = service === 'qq' ? '授权内容' : '稍后用'
+    const serviceButtonText = service === 'qq' ? '同意并绑定 QQ 音乐' : '同意并授权网易云'
 
     this.setData({
+      heroIcon,
       permissions: [...meta.permissions],
+      sectionTitle,
       service,
+      serviceButtonText,
       serviceName: meta.serviceName,
       slogan: meta.slogan,
     })

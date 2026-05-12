@@ -1,7 +1,13 @@
 <navigation-bar title="播放历史" color="#171411" background="transparent"></navigation-bar>
-<scroll-view class="page-shell history-page" scroll-y type="list">
-  <view class="search surface-card">
-    <input placeholder="搜索歌曲、歌手或来源" value="{{keyword}}" bindinput="inputKeyword" />
+<scroll-view class="page-shell history-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
+  <view class="hero">
+    <text class="section-kicker">Playback Archive</text>
+    <view class="page-title">播放历史</view>
+    <text class="page-subtitle">筛选最近播过的歌曲，快速回放，或清理较早的历史记录。</text>
+  </view>
+
+  <view class="surface-card search-card">
+    <input class="search-input" placeholder="搜索歌曲、歌手或来源" value="{{keyword}}" bindinput="inputKeyword" />
   </view>
 
   <view class="filter-row">
@@ -26,6 +32,7 @@
     data-source="{{item.source}}"
     bindtap="replay"
   >
+    <view class="history-dot"></view>
     <view class="history-copy">
       <text class="history-song">{{item.songName}}</text>
       <text class="muted-text">{{item.sourceText}}</text>

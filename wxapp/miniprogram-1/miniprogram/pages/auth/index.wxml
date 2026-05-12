@@ -1,33 +1,38 @@
 <navigation-bar title="音乐授权" color="#171411" background="transparent"></navigation-bar>
 <view class="page-shell auth-page">
-  <view class="dark-card auth-hero">
-    <text class="hero-kicker">Connect Service</text>
-    <view class="hero-title">连接 {{serviceName}}</view>
-    <text class="hero-copy">{{slogan}}</text>
+  <view class="auth-head">
+    <text class="auth-title">连接{{serviceName}}</text>
+  </view>
 
-    <view class="sync-panel">
-      <view class="sync-line">
-        <text>当前账号</text>
-        <text>{{accountName}}</text>
-      </view>
-      <view class="sync-line">
-        <text>同步状态</text>
-        <text>{{syncStatusText}}</text>
-      </view>
-      <view class="sync-progress-track">
-        <view class="sync-progress-value" style="width: {{progress}}%;"></view>
-      </view>
-      <text class="task-copy">{{currentTask}}</text>
-    </view>
+  <view class="surface-card auth-hero {{service === 'qq' ? 'hero-blue' : 'hero-pink'}}">
+    <view class="hero-icon">{{heroIcon}}</view>
+    <view class="hero-title">授权{{serviceName}}账号</view>
+    <text class="hero-copy">{{slogan}}</text>
   </view>
 
   <view class="surface-card permission-card">
-    <text class="section-title">本次授权将允许：</text>
+    <text class="section-title">{{sectionTitle}}</text>
     <view class="permission-row" wx:for="{{permissions}}" wx:key="*this">
       <text class="permission-dot"></text>
-      <text>{{item}}</text>
+      <text class="permission-text">{{item}}</text>
     </view>
-    <button class="primary-button" loading="{{binding}}" bindtap="bindService">同意并连接 {{serviceName}}</button>
-    <button class="ghost-button" bindtap="goBack">稍后再说</button>
   </view>
+
+  <view class="surface-card status-card">
+    <view class="sync-line">
+      <text>当前账号</text>
+      <text>{{accountName}}</text>
+    </view>
+    <view class="sync-line">
+      <text>同步状态</text>
+      <text>{{syncStatusText}}</text>
+    </view>
+    <view class="sync-progress-track">
+      <view class="sync-progress-value" style="width: {{progress}}%;"></view>
+    </view>
+    <text class="task-copy">{{currentTask}}</text>
+  </view>
+
+  <button class="primary-button" loading="{{binding}}" bindtap="bindService">{{serviceButtonText}}</button>
+  <button class="ghost-button" bindtap="goBack">稍后再说</button>
 </view>

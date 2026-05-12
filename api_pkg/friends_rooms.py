@@ -115,6 +115,8 @@ def listen_room_create():
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
     song_id = str(body.get("songId") or get_song()["songId"])
     song = get_song(song_id)
+    requested_room_name = str(body.get("roomName") or "").strip()
+    room_name = requested_room_name or (song["songName"] + "一起听")
     room_id = next_id("listen_room", "room_id")
     room_code = f"room_{room_id}"
 
@@ -125,7 +127,7 @@ def listen_room_create():
          source_platform, status, created_at, ended_at)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NULL)
         """,
-        (room_id, room_code, user_id, device_id if str(device_id).isdigit() else None, song_id, song["songName"] + "一起听", song["source"], "active"),
+        (room_id, room_code, user_id, device_id if str(device_id).isdigit() else None, song_id, room_name, song["source"], "active"),
     )
 
     mysql_exec(
@@ -141,7 +143,7 @@ def listen_room_create():
         "一起听房间创建成功",
         {
             "roomId": str(room_id),
-            "roomName": song["songName"] + "一起听",
+            "roomName": room_name,
             "songId": song_id,
             "songName": song["songName"],
             "deviceId": device_id,

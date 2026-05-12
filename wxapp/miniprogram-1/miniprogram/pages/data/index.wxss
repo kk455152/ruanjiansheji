@@ -3,8 +3,8 @@
 }
 
 .summary-card {
-  margin-top: 28rpx;
-  padding: 34rpx;
+  margin-top: 24rpx;
+  padding: 28rpx;
 }
 
 .summary-top,
@@ -14,62 +14,110 @@
   justify-content: space-between;
 }
 
-.rank-pill {
-  height: 52rpx;
+.card-kicker,
+.summary-copy,
+.summary-week {
+  color: rgba(255, 250, 243, 0.74);
   font-size: 22rpx;
-  padding: 0 20rpx;
 }
 
-.summary-week,
-.summary-copy {
-  color: rgba(255, 250, 243, 0.7);
-  font-size: 24rpx;
+.summary-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90rpx;
+  height: 42rpx;
+  padding: 0 16rpx;
+  border-radius: 999rpx;
+  background: #ff6a00;
+  color: #171411;
+  font-size: 20rpx;
+  font-weight: 700;
+  box-sizing: border-box;
 }
 
 .metric-grid,
 .insight-grid {
   display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 18rpx;
 }
 
 .metric-grid {
-  grid-template-columns: repeat(2, 1fr);
-  margin: 28rpx 0 24rpx;
+  margin: 22rpx 0 18rpx;
+}
+
+.metric-cell {
+  padding: 22rpx 20rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .metric-number {
   display: block;
-  font-size: 68rpx;
+  font-size: 60rpx;
   font-weight: 900;
 }
 
-.metric-label,
-.summary-text {
-  color: rgba(255, 250, 243, 0.82);
+.metric-label {
+  color: rgba(255, 250, 243, 0.72);
+  font-size: 22rpx;
+}
+
+.dot-row {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 18rpx;
+}
+
+.dot {
+  width: 42rpx;
+  height: 42rpx;
+  border-radius: 50%;
+}
+
+.dot-orange {
+  background: #ff6a00;
+}
+
+.dot-amber {
+  background: #ff8e2b;
+}
+
+.dot-peach {
+  background: #ffd39c;
+}
+
+.dot-green {
+  background: #b9f6bc;
+}
+
+.dot-blue {
+  background: #7fd8ff;
 }
 
 .summary-text {
   display: block;
+  color: rgba(255, 250, 243, 0.9);
   line-height: 1.7;
-  margin-bottom: 12rpx;
+  margin-bottom: 10rpx;
 }
 
 .insight-grid {
-  grid-template-columns: repeat(2, 1fr);
   margin-top: 18rpx;
 }
 
 .insight-card,
-.card-preview,
-.history-row {
+.history-row,
+.card-preview {
   padding: 24rpx;
 }
 
 .insight-card {
-  min-height: 156rpx;
+  min-height: 150rpx;
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .insight-title {
@@ -84,6 +132,40 @@
   font-weight: 800;
 }
 
+.history-row {
+  margin-bottom: 16rpx;
+  gap: 18rpx;
+}
+
+.history-mark {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(180deg, #ffedd8 0%, #ffe0c3 100%);
+}
+
+.history-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.history-action {
+  color: #ca6e18;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.ink-button {
+  height: 88rpx;
+  margin-top: 10rpx;
+  border: 0;
+  border-radius: 999rpx;
+  background: #171411;
+  color: #fffaf3;
+}
+
 .card-preview {
   margin-top: 18rpx;
 }
@@ -94,17 +176,4 @@
   font-size: 22rpx;
   line-height: 1.6;
   word-break: break-all;
-}
-
-.history-row {
-  margin-bottom: 16rpx;
-}
-
-.replay-pill {
-  padding: 14rpx 20rpx;
-  border-radius: 999rpx;
-  background: rgba(242, 139, 52, 0.14);
-  color: #ca6e18;
-  font-size: 22rpx;
-  font-weight: 700;
 }

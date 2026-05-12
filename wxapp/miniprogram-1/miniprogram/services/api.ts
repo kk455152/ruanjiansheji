@@ -212,6 +212,23 @@ export interface BoundMusicServiceResult {
   service: string
 }
 
+function mapSongInfoToSearchSong(song: SongInfoResult, keyword = ''): NeteaseSearchSong {
+  return {
+    album: song.album,
+    audioUrl: song.audioUrl,
+    artistText: song.artistText,
+    artists: song.artists,
+    coverUrl: song.coverUrl,
+    durationMs: song.durationMs,
+    durationSeconds: song.durationSeconds,
+    keyword,
+    name: song.name,
+    previewAvailable: Boolean(song.audioUrl),
+    songId: song.songId,
+    source: song.source,
+  }
+}
+
 function buildQuery(query?: Record<string, QueryValue>) {
   if (!query) {
     return ''
@@ -448,30 +465,35 @@ export async function searchNeteaseSongs(keyword: string, limit = 6) {
     }
   }
 
-  const payload = await requestAbsolute<SearchResponse>(searchUrl, 'GET')
-  const songs = payload.result?.songs || []
+  try {
+    const payload = await requestAbsolute<SearchResponse>(searchUrl, 'GET')
+    const songs = payload.result?.songs || []
 
-  return songs.map((song) => {
-    const artists = (song.artists || song.ar || [])
-      .map((artist) => artist.name)
-      .filter(Boolean)
-    const durationMs = Number(song.dt || song.duration || 0)
-    const album = song.album || song.al || {}
+    return songs.map((song) => {
+      const artists = (song.artists || song.ar || [])
+        .map((artist) => artist.name)
+        .filter(Boolean)
+      const durationMs = Number(song.dt || song.duration || 0)
+      const album = song.album || song.al || {}
 
-    return {
-      album: album.name || '',
-      artistText: artists.join(' / '),
-      artists,
-      coverUrl: album.picUrl || '',
-      durationMs,
-      durationSeconds: durationMs > 0 ? Math.floor(durationMs / 1000) : 0,
-      keyword,
-      name: song.name,
-      previewAvailable: false,
-      songId: String(song.id),
-      source: 'netease',
-    } as NeteaseSearchSong
-  })
+      return {
+        album: album.name || '',
+        artistText: artists.join(' / '),
+        artists,
+        coverUrl: album.picUrl || '',
+        durationMs,
+        durationSeconds: durationMs > 0 ? Math.floor(durationMs / 1000) : 0,
+        keyword,
+        name: song.name,
+        previewAvailable: false,
+        songId: String(song.id),
+        source: 'netease',
+      } as NeteaseSearchSong
+    })
+  } catch (error) {
+    const fallbackSong = await getSongInfo({ keyword })
+    return [mapSongInfoToSearchSong(fallbackSong, keyword)]
+  }
 }
 
 export async function getNeteaseSongPreviewUrl(songId: string) {
@@ -484,10 +506,13 @@ export async function getNeteaseSongPreviewUrl(songId: string) {
 
   const previewUrl =
     `https://netease-cloud-music-api-one-rouge.vercel.app/song/url/v1?id=${encodeURIComponent(songId)}&level=standard`
-  const payload = await requestAbsolute<PreviewResponse>(previewUrl, 'GET')
-  const item = payload.data?.[0]
-
-  return normalizeAudioUrl(item?.url)
+  try {
+    const payload = await requestAbsolute<PreviewResponse>(previewUrl, 'GET')
+    const item = payload.data?.[0]
+    return normalizeAudioUrl(item?.url)
+  } catch (error) {
+    return ''
+  }
 }
 
 export function clearOldHistory(days = 30) {
@@ -515,7 +540,13 @@ export function saveAdvancedSettings(payload: {
     nightModeEnabled: boolean
     nightStart: string
     volumeLimit: number
-  }>('/api/device/advanced-settings', 'POST', payload)
+  }>('/api/device/advanced-settings', 'POST', {
+    bassGain: payload.bassGain,
+    nightEnd: payload.nightModeEnd,
+    nightModeEnabled: true,
+    nightStart: payload.nightModeStart,
+    volumeLimit: payload.volumeLimit,
+  })
 }
 
 export function saveBatteryNotice(payload: { fullChargeNotice: boolean; lowBatteryThreshold: number }) {
@@ -524,7 +555,11 @@ export function saveBatteryNotice(payload: { fullChargeNotice: boolean; lowBatte
     fullChargeNotice: boolean
     lowBatteryEnabled: boolean
     threshold: number
-  }>('/api/device/battery-notice', 'POST', payload)
+  }>('/api/device/battery-notice', 'POST', {
+    fullChargeNotice: payload.fullChargeNotice,
+    lowBatteryEnabled: true,
+    threshold: payload.lowBatteryThreshold,
+  })
 }
 
 export function searchNearbyDevices() {
@@ -579,7 +614,7 @@ export function setPlayerVolume(volume: number) {
   })
 }
 
-export function controlPlayer(action: 'next' | 'pause' | 'play') {
+export function controlPlayer(action: 'next' | 'pause' | 'play' | 'previous') {
   return request<PlayerStateResult>('/api/player/control', 'POST', {
     action,
     deviceId: DEFAULT_DEVICE_ID,

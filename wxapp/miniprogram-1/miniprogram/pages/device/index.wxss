@@ -4,7 +4,8 @@
 .switch-line,
 .section-line,
 .nearby-card,
-.step-row {
+.step-row,
+.manage-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -15,53 +16,115 @@
 }
 
 .device-card,
+.management-card,
 .settings-card,
+.services-card,
 .nearby-card,
 .progress-card {
-  margin-top: 26rpx;
-  padding: 30rpx;
+  margin-top: 24rpx;
+  padding: 26rpx;
+}
+
+.device-head {
+  align-items: center;
+  gap: 18rpx;
+}
+
+.device-icon {
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 28rpx;
+  background: #fffaf3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.device-dot {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  background: #ff6a00;
+}
+
+.device-bar {
+  width: 42rpx;
+  height: 14rpx;
+  border-radius: 999rpx;
+  background: #171411;
+}
+
+.device-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
 }
 
 .device-name {
-  font-size: 42rpx;
+  font-size: 38rpx;
   font-weight: 800;
 }
 
-.device-copy,
-.meta-label {
-  color: rgba(255, 250, 243, 0.7);
-  font-size: 24rpx;
-}
-
-.device-status {
-  height: 50rpx;
+.device-subtitle,
+.device-status-line,
+.device-caption {
+  color: rgba(255, 250, 243, 0.74);
   font-size: 22rpx;
 }
 
-.battery-panel {
-  margin: 28rpx 0 24rpx;
-  padding: 24rpx 26rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.08);
+.battery-track {
+  width: 100%;
+  height: 12rpx;
+  margin: 24rpx 0 12rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
 }
 
 .battery-value {
-  font-size: 62rpx;
-  font-weight: 900;
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #7ad56c, #c8f4a8);
 }
 
-.device-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20rpx;
+.management-card {
+  padding-top: 10rpx;
+  padding-bottom: 10rpx;
 }
 
-.meta-value {
+.manage-row {
+  padding: 18rpx 0;
+}
+
+.manage-row + .manage-row {
+  border-top: 2rpx solid rgba(21, 17, 13, 0.05);
+}
+
+.manage-title,
+.switch-title,
+.progress-title,
+.nearby-name {
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.manage-copy {
   display: block;
   margin-top: 8rpx;
-  font-size: 28rpx;
+  color: #8f8277;
+  font-size: 22rpx;
+}
+
+.manage-arrow,
+.manage-link,
+.nearby-signal,
+.progress-percent {
+  color: #ca6e18;
+  font-size: 24rpx;
   font-weight: 700;
-  color: #fffaf3;
 }
 
 .settings-line,
@@ -70,17 +133,11 @@
   margin-bottom: 18rpx;
 }
 
-.switch-title,
-.progress-title,
-.nearby-name {
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
 .service-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 14rpx;
+  margin-top: 18rpx;
 }
 
 .service-pill {
@@ -88,16 +145,13 @@
   font-size: 22rpx;
 }
 
+.add-button {
+  margin-top: 18rpx;
+}
+
 .nearby-card {
   margin-top: 0;
   margin-bottom: 16rpx;
-}
-
-.nearby-signal,
-.progress-percent {
-  color: #ca6e18;
-  font-size: 24rpx;
-  font-weight: 700;
 }
 
 .progress-track {
@@ -112,5 +166,5 @@
 .progress-value {
   height: 100%;
   border-radius: 999rpx;
-  background: linear-gradient(90deg, #f28b34, #f4b36e);
+  background: linear-gradient(90deg, #ff6a00, #f4b36e);
 }

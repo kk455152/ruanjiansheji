@@ -1,44 +1,98 @@
-.auth-hero,
-.permission-card {
-  margin-top: 24rpx;
-  padding: 34rpx;
+.auth-page {
+  padding-top: 12rpx;
 }
 
-.hero-kicker,
-.hero-copy,
-.task-copy {
-  color: rgba(255, 250, 243, 0.72);
-  font-size: 24rpx;
+.auth-head {
+  margin-bottom: 18rpx;
+}
+
+.auth-title {
+  font-size: 46rpx;
+  font-weight: 800;
+}
+
+.auth-hero,
+.permission-card,
+.status-card {
+  margin-top: 18rpx;
+  padding: 30rpx;
+}
+
+.hero-blue {
+  background: linear-gradient(180deg, #e6f2fd 0%, #dbeafa 100%);
+}
+
+.hero-pink {
+  background: linear-gradient(180deg, #f9ecee 0%, #f7e4e7 100%);
+}
+
+.hero-icon {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 28rpx;
+  margin: 0 auto 20rpx;
+  background: #1da1f2;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42rpx;
+  font-weight: 800;
+}
+
+.hero-pink .hero-icon {
+  background: #f0143c;
 }
 
 .hero-title {
-  margin-top: 16rpx;
-  font-size: 50rpx;
-  line-height: 1.12;
-  font-weight: 900;
+  font-size: 36rpx;
+  font-weight: 800;
+  text-align: center;
 }
 
-.hero-copy {
+.hero-copy,
+.task-copy {
   display: block;
   margin-top: 16rpx;
+  color: #7f7368;
+  font-size: 24rpx;
   line-height: 1.7;
+  text-align: center;
 }
 
-.sync-panel {
-  margin-top: 30rpx;
-  padding: 24rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.08);
+.section-title {
+  font-size: 30rpx;
+  font-weight: 800;
 }
 
-.sync-line,
-.permission-row {
+.permission-row,
+.sync-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+}
+
+.permission-row {
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.permission-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #ff6a00;
+}
+
+.permission-text {
+  flex: 1;
+}
+
+.status-card {
+  margin-bottom: 22rpx;
 }
 
 .sync-line {
+  justify-content: space-between;
   margin-bottom: 14rpx;
 }
 
@@ -47,34 +101,16 @@
   height: 14rpx;
   margin: 10rpx 0 14rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.12);
+  background: #eadfd3;
   overflow: hidden;
 }
 
 .sync-progress-value {
   height: 100%;
   border-radius: 999rpx;
-  background: linear-gradient(90deg, #f28b34, #f6c089);
-}
-
-.section-title {
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
-.permission-row {
-  justify-content: flex-start;
-  gap: 16rpx;
-  margin: 22rpx 0;
-}
-
-.permission-dot {
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  background: #f28b34;
+  background: linear-gradient(90deg, #ff6a00, #f6c089);
 }
 
 button {
-  margin-top: 22rpx;
+  margin-top: 18rpx;
 }

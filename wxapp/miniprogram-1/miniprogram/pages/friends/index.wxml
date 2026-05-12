@@ -1,26 +1,39 @@
 <navigation-bar title="好友" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
-<scroll-view class="page-shell friends-page" scroll-y type="list">
-  <view class="hero">
+<scroll-view class="page-shell friends-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
+  <view class="hero hero-split">
     <view>
       <text class="section-kicker">Shared Listening</text>
-      <view class="page-title">一起听好友</view>
-      <text class="page-subtitle">把当前歌曲分享到房间，或直接创建新的实时听歌房。</text>
+      <view class="page-title">听歌好友</view>
+      <text class="page-subtitle">和朋友共享当前播放，用房间和歌曲卡片把一首歌传到同一个时刻。</text>
     </view>
-    <view class="icon-chip">♪</view>
+    <view class="hero-circle hero-search">⌕</view>
   </view>
 
   <view class="dark-card room-card">
-    <text class="room-kicker">当前房间</text>
-    <view class="room-title">{{roomName}}</view>
-    <text class="room-copy">正在分享《{{roomSongName}}》 · {{roomMemberCount}} 人在线</text>
+    <view class="card-top">
+      <text class="card-kicker">一起听进行中</text>
+      <text class="mini-badge">{{roomMemberCount}} 人</text>
+    </view>
+
+    <view class="room-main">
+      <view class="room-cover">
+        <text class="room-glyph">♫</text>
+      </view>
+      <view class="room-copy">
+        <view class="room-title">{{roomName}}</view>
+        <text class="room-song">{{roomSongName}}</text>
+        <text class="room-meta">房间已创建，当前成员可以同步加入播放节奏</text>
+      </view>
+    </view>
 
     <view class="avatar-row">
       <view class="member-badge" wx:for="{{members}}" wx:key="name">{{item.shortName}}</view>
+      <view class="member-badge member-badge-ghost" wx:if="{{!members.length}}">M</view>
     </view>
 
     <view class="button-row">
-      <button class="primary-button half-button" loading="{{isCreating}}" bindtap="createRoom">创建新房间</button>
-      <button class="ghost-button half-button" loading="{{isSharing}}" bindtap="shareCurrentSong">分享歌曲卡片</button>
+      <button class="primary-button half-button" loading="{{isCreating}}" bindtap="createRoom">一起听</button>
+      <button class="dark-button half-button" loading="{{isSharing}}" bindtap="shareCurrentSong">分享歌曲</button>
     </view>
   </view>
 
@@ -38,12 +51,15 @@
       </view>
       <text class="muted-text">{{item.status}}</text>
     </view>
-    <text class="outline-pill join-pill" data-name="{{item.name}}" bindtap="createRoomWithFriend">发起一起听</text>
+    <text class="join-pill" data-name="{{item.name}}" bindtap="createRoomWithFriend">{{item.isOnline ? '加入' : '邀请'}}</text>
   </view>
 
-  <view class="surface-card share-preview" wx:if="{{sharePreviewUrl}}">
-    <text class="preview-title">最新生成的分享卡片</text>
-    <text class="muted-text">服务器已经返回分享图预览地址，可直接用于后续分享。</text>
-    <text class="preview-url">{{sharePreviewUrl}}</text>
+  <view class="soft-card soft-peach invite-card">
+    <view>
+      <text class="section-card-title">把这首歌发给你想一起听的好友</text>
+      <text class="section-card-copy" wx:if="{{sharePreviewUrl}}">{{sharePreviewUrl}}</text>
+      <text class="section-card-copy" wx:else>生成分享卡片后，预览地址会显示在这里，方便你继续转发。</text>
+    </view>
+    <text class="invite-icon">↗</text>
   </view>
 </scroll-view>

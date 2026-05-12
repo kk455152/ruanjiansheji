@@ -1,10 +1,18 @@
-.search,
+.hero {
+  padding-top: 12rpx;
+}
+
+.search-card,
 .history-row {
   padding: 24rpx;
 }
 
-.search input {
-  height: 64rpx;
+.search-card {
+  margin-top: 24rpx;
+}
+
+.search-input {
+  height: 72rpx;
 }
 
 .filter-row,
@@ -26,8 +34,15 @@
 
 .history-row {
   justify-content: space-between;
-  margin-bottom: 16rpx;
   gap: 18rpx;
+  margin-bottom: 16rpx;
+}
+
+.history-dot {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(180deg, #ffedd8 0%, #ffe0c3 100%);
 }
 
 .history-copy {

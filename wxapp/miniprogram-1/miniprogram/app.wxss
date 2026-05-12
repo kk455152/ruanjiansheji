@@ -18,6 +18,13 @@ button::after {
   box-sizing: border-box;
 }
 
+.hero-split {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
 .surface-card,
 .dark-card {
   border-radius: 36rpx;
@@ -34,6 +41,27 @@ button::after {
   background: linear-gradient(180deg, #1e1a17 0%, #12100e 100%);
   color: #fffaf3;
   box-shadow: 0 28rpx 64rpx rgba(0, 0, 0, 0.2);
+}
+
+.soft-card {
+  border-radius: 32rpx;
+  box-sizing: border-box;
+}
+
+.soft-peach {
+  background: linear-gradient(180deg, #f7eadf 0%, #f5e4d4 100%);
+}
+
+.soft-blue {
+  background: linear-gradient(180deg, #e9f1fb 0%, #e2edf9 100%);
+}
+
+.soft-green {
+  background: linear-gradient(180deg, #ebf5e8 0%, #e4f1e1 100%);
+}
+
+.soft-purple {
+  background: linear-gradient(180deg, #ece8f8 0%, #e5e0f5 100%);
 }
 
 .pill,
@@ -110,6 +138,45 @@ button::after {
   color: #ca6e18;
   font-size: 24rpx;
   font-weight: 700;
+}
+
+.hero-circle {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: rgba(17, 17, 17, 0.92);
+  color: #fffaf3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  line-height: 1;
+}
+
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74rpx;
+  height: 40rpx;
+  padding: 0 16rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fffaf3;
+  font-size: 20rpx;
+  box-sizing: border-box;
+}
+
+.section-card-title {
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.section-card-copy {
+  margin-top: 10rpx;
+  color: #7f7368;
+  font-size: 22rpx;
+  line-height: 1.5;
 }
 
 .status-dot {
