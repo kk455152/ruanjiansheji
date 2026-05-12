@@ -1,5 +1,6 @@
 import {
   BACKEND_BASE_URL,
+  BACKEND_FALLBACK_BASE_URLS,
   DEFAULT_BIND_TASK_ID,
   DEFAULT_DEVICE_ID,
   MusicServiceKey,
@@ -90,6 +91,24 @@ export interface PlayHistoryItem {
   songId: string
   songName: string
   source: string
+}
+
+export interface SongInfoResult {
+  album: string
+  audioUrl?: string
+  artistText: string
+  artists: string[]
+  coverUrl: string
+  durationMs: number
+  durationSeconds: number
+  name: string
+  songId: string
+  source: string
+}
+
+export interface NeteaseSearchSong extends SongInfoResult {
+  keyword?: string
+  previewAvailable?: boolean
 }
 
 export interface DeviceDetail {
@@ -224,7 +243,7 @@ function unwrapPayload<T>(payload: unknown): T {
   return payload as T
 }
 
-function request<T>(
+function requestLegacy<T>(
   path: string,
   method: HttpMethod,
   data?: Record<string, unknown>,
@@ -258,6 +277,126 @@ function request<T>(
   })
 }
 
+function getPlatform() {
+  try {
+    const deviceInfo = (wx as any).getDeviceInfo?.()
+    if (deviceInfo?.platform) {
+      return deviceInfo.platform
+    }
+  } catch (error) {
+    // Ignore and fall back to the legacy runtime path.
+  }
+
+  try {
+    return wx.getSystemInfoSync().platform
+  } catch (error) {
+    return ''
+  }
+}
+
+function shouldRetryOnFallback(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return /timeout|fail|network|certificate|ssl/i.test(message)
+}
+
+function getCandidateBaseUrls() {
+  if (getPlatform() === 'devtools') {
+    return [BACKEND_BASE_URL, ...BACKEND_FALLBACK_BASE_URLS]
+  }
+
+  return [BACKEND_BASE_URL]
+}
+
+function requestWithUrl<T>(url: string, method: HttpMethod, data?: Record<string, unknown>) {
+  return new Promise<T>((resolve, reject) => {
+    wx.request({
+      url,
+      method,
+      data,
+      timeout: 15000,
+      header: {
+        'content-type': 'application/json',
+      },
+      success: (response) => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`request failed (${response.statusCode})`))
+          return
+        }
+
+        try {
+          resolve(unwrapPayload<T>(response.data))
+        } catch (error) {
+          reject(error)
+        }
+      },
+      fail: (error) => reject(new Error(error.errMsg || 'network request failed')),
+    })
+  })
+}
+
+async function request<T>(
+  path: string,
+  method: HttpMethod,
+  data?: Record<string, unknown>,
+  query?: Record<string, QueryValue>,
+) {
+  if (getCandidateBaseUrls().length === 1) {
+    return requestLegacy<T>(path, method, data, query)
+  }
+
+  const suffix = `${path}${buildQuery(query)}`
+  const baseUrls = getCandidateBaseUrls()
+  let lastError: unknown = null
+
+  for (let index = 0; index < baseUrls.length; index += 1) {
+    const baseUrl = baseUrls[index]
+
+    try {
+      return await requestWithUrl<T>(`${baseUrl}${suffix}`, method, data)
+    } catch (error) {
+      lastError = error
+
+      if (index === baseUrls.length - 1 || !shouldRetryOnFallback(error)) {
+        throw error
+      }
+
+      console.warn(`[api] request failed via ${baseUrl}, retrying fallback`, error)
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('network request failed')
+}
+
+function requestAbsolute<T>(url: string, method: HttpMethod) {
+  return new Promise<T>((resolve, reject) => {
+    wx.request({
+      url,
+      method,
+      timeout: 15000,
+      header: {
+        'content-type': 'application/json',
+      },
+      success: (response) => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`request failed (${response.statusCode})`))
+          return
+        }
+
+        resolve(response.data as T)
+      },
+      fail: () => reject(new Error('network request failed')),
+    })
+  })
+}
+
+function normalizeAudioUrl(url?: string | null) {
+  if (!url) {
+    return ''
+  }
+
+  return url.replace(/^http:\/\//, 'https://')
+}
+
 export function getHomeOverview() {
   return request<HomeOverview>('/api/home/overview', 'GET')
 }
@@ -283,6 +422,72 @@ export function generateListeningCard(style = 'modern') {
 
 export function getPlayHistory(query?: { keyword?: string; page?: number; pageSize?: number; source?: string }) {
   return request<{ list: PlayHistoryItem[] }>('/api/play-history/list', 'GET', undefined, query)
+}
+
+export function getSongInfo(query?: { keyword?: string; songId?: string }) {
+  return request<SongInfoResult>('/api/song-info', 'GET', undefined, query)
+}
+
+export async function searchNeteaseSongs(keyword: string, limit = 6) {
+  const searchUrl =
+    `https://music.163.com/api/search/get/web?csrf_token=&hlpretag=&hlposttag=&s=${encodeURIComponent(keyword)}` +
+    `&type=1&offset=0&total=true&limit=${limit}`
+
+  type SearchResponse = {
+    result?: {
+      songs?: Array<{
+        id: number
+        name: string
+        dt?: number
+        duration?: number
+        artists?: Array<{ name: string }>
+        ar?: Array<{ name: string }>
+        album?: { name?: string; picUrl?: string }
+        al?: { name?: string; picUrl?: string }
+      }>
+    }
+  }
+
+  const payload = await requestAbsolute<SearchResponse>(searchUrl, 'GET')
+  const songs = payload.result?.songs || []
+
+  return songs.map((song) => {
+    const artists = (song.artists || song.ar || [])
+      .map((artist) => artist.name)
+      .filter(Boolean)
+    const durationMs = Number(song.dt || song.duration || 0)
+    const album = song.album || song.al || {}
+
+    return {
+      album: album.name || '',
+      artistText: artists.join(' / '),
+      artists,
+      coverUrl: album.picUrl || '',
+      durationMs,
+      durationSeconds: durationMs > 0 ? Math.floor(durationMs / 1000) : 0,
+      keyword,
+      name: song.name,
+      previewAvailable: false,
+      songId: String(song.id),
+      source: 'netease',
+    } as NeteaseSearchSong
+  })
+}
+
+export async function getNeteaseSongPreviewUrl(songId: string) {
+  type PreviewResponse = {
+    data?: Array<{
+      code?: number
+      url?: string | null
+    }>
+  }
+
+  const previewUrl =
+    `https://netease-cloud-music-api-one-rouge.vercel.app/song/url/v1?id=${encodeURIComponent(songId)}&level=standard`
+  const payload = await requestAbsolute<PreviewResponse>(previewUrl, 'GET')
+  const item = payload.data?.[0]
+
+  return normalizeAudioUrl(item?.url)
 }
 
 export function clearOldHistory(days = 30) {
