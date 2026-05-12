@@ -51,9 +51,10 @@ Page({
         getMusicSyncProgress(this.data.service),
       ])
       const serviceInfo = servicesResult.services.find((item) => item.service === this.data.service)
+      const accountName = serviceInfo ? serviceInfo.accountName : '未绑定账号'
 
       this.setData({
-        accountName: serviceInfo?.accountName || '未绑定账号',
+        accountName,
         currentTask: progressResult.currentTask,
         progress: progressResult.progress,
         syncStatus: progressResult.status,
