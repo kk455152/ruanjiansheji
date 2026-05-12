@@ -296,8 +296,9 @@ function requestLegacy<T>(
 
 function getPlatform() {
   try {
-    const deviceInfo = (wx as any).getDeviceInfo?.()
-    if (deviceInfo?.platform) {
+    const wxAny = wx as any
+    const deviceInfo = wxAny.getDeviceInfo ? wxAny.getDeviceInfo() : null
+    if (deviceInfo && deviceInfo.platform) {
       return deviceInfo.platform
     }
   } catch (error) {
@@ -467,7 +468,7 @@ export async function searchNeteaseSongs(keyword: string, limit = 6) {
 
   try {
     const payload = await requestAbsolute<SearchResponse>(searchUrl, 'GET')
-    const songs = payload.result?.songs || []
+    const songs = (payload.result && payload.result.songs) || []
 
     return songs.map((song) => {
       const artists = (song.artists || song.ar || [])
@@ -508,8 +509,8 @@ export async function getNeteaseSongPreviewUrl(songId: string) {
     `https://netease-cloud-music-api-one-rouge.vercel.app/song/url/v1?id=${encodeURIComponent(songId)}&level=standard`
   try {
     const payload = await requestAbsolute<PreviewResponse>(previewUrl, 'GET')
-    const item = payload.data?.[0]
-    return normalizeAudioUrl(item?.url)
+    const item = payload.data && payload.data[0]
+    return normalizeAudioUrl(item ? item.url : '')
   } catch (error) {
     return ''
   }

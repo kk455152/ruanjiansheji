@@ -66,8 +66,14 @@ Component({
     syncTabBar() {
       const tabBar = (this as WechatMiniprogram.Component.TrivialInstance & {
         getTabBar?: () => { setData: (payload: Record<string, unknown>) => void } | null
-      }).getTabBar?.()
-      tabBar?.setData({ selected: 'pages/device/index' })
+      }).getTabBar
+        ? (this as WechatMiniprogram.Component.TrivialInstance & {
+            getTabBar?: () => { setData: (payload: Record<string, unknown>) => void } | null
+          }).getTabBar!()
+        : null
+      if (tabBar) {
+        tabBar.setData({ selected: 'pages/device/index' })
+      }
     },
     async loadPage() {
       this.setData({ isLoading: true })

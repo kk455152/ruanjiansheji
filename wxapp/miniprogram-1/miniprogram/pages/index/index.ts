@@ -99,8 +99,14 @@ Component({
     syncTabBar() {
       const tabBar = (this as WechatMiniprogram.Component.TrivialInstance & {
         getTabBar?: () => { setData: (payload: Record<string, unknown>) => void } | null
-      }).getTabBar?.()
-      tabBar?.setData({ selected: 'pages/index/index' })
+      }).getTabBar
+        ? (this as WechatMiniprogram.Component.TrivialInstance & {
+            getTabBar?: () => { setData: (payload: Record<string, unknown>) => void } | null
+          }).getTabBar!()
+        : null
+      if (tabBar) {
+        tabBar.setData({ selected: 'pages/index/index' })
+      }
     },
     async triggerPlayerAction(action: 'next' | 'previous', successTitle: string) {
       this.setData({ isActionLoading: true })
@@ -124,7 +130,7 @@ Component({
     },
     updateSearchedSongs(nextSongs: NeteaseSearchSong[], activeSongId?: string) {
       this.setData({
-        activeSongId: activeSongId || (nextSongs[0]?.songId || ''),
+        activeSongId: activeSongId || ((nextSongs[0] && nextSongs[0].songId) || ''),
         searchedSongs: nextSongs,
       })
     },
@@ -304,7 +310,7 @@ Component({
           return acc
         }, [] as NeteaseSearchSong[])
 
-        this.updateSearchedSongs(merged, songs[0]?.songId)
+        this.updateSearchedSongs(merged, (songs[0] && songs[0].songId) || '')
         this.setData({
           currentArtist: songs[0].artistText,
           currentSong: songs[0].name,

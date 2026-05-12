@@ -29,7 +29,7 @@ Component({
       const pages = getCurrentPages()
       const current = pages[pages.length - 1]
 
-      if (current?.route) {
+      if (current && current.route) {
         this.setData({ selected: current.route })
       }
     },
