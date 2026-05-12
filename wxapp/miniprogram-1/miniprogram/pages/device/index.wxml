@@ -1,45 +1,96 @@
-<navigation-bar title="设备管理" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
+<navigation-bar title="设备" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
 <scroll-view class="page-shell device-page" scroll-y type="list">
-  <text class="eyebrow">绑定、查看电量、修改设备名</text>
-  <view class="title">设备管理</view>
+  <view class="hero">
+    <view>
+      <text class="section-kicker">Device Center</text>
+      <view class="page-title">设备管理</view>
+      <text class="page-subtitle">对接当前设备详情、电量、配网进度和音乐服务绑定状态。</text>
+    </view>
+  </view>
 
-  <view class="glass-card device-card">
+  <view class="dark-card device-card">
     <view class="device-head">
       <view>
         <view class="device-name">{{deviceName}}</view>
-        <text class="muted">SH-Mini A1 · 固件 2.4.8</text>
+        <text class="device-copy">{{modelName}}</text>
       </view>
-      <text class="pill status">{{isOnline ? '在线' : '离线'}}</text>
+      <text class="pill device-status">{{online ? '在线' : '离线'}}</text>
     </view>
-    <view class="battery-ring">{{battery}}%</view>
-    <text class="muted center">预计还可播放 11 小时 20 分钟</text>
-    <button class="ghost-button" bindtap="toggleConnection">{{isOnline ? '断开设备' : '连接设备'}}</button>
+
+    <view class="battery-panel">
+      <view class="battery-value">{{batteryLevel}}%</view>
+      <text class="device-copy">{{isCharging ? '充电中' : '预计可播放 ' + estimatedPlayTime}}</text>
+    </view>
+
+    <view class="device-meta-grid">
+      <view>
+        <text class="meta-label">当前网络</text>
+        <text class="meta-value">{{currentNetwork}}</text>
+      </view>
+      <view>
+        <text class="meta-label">信号强度</text>
+        <text class="meta-value">{{signalStrength}} dBm</text>
+      </view>
+    </view>
   </view>
 
-  <view class="glass-card setting-card">
-    <text class="section-title">自定义设备名</text>
-    <input class="name-input" value="{{deviceName}}" bindinput="inputName" maxlength="20" />
-    <view class="recommend-row">
-      <text class="pill small">卧室音箱</text>
-      <text class="pill small">书房音箱</text>
-      <text class="pill small">儿童房</text>
-    </view>
-    <button class="primary-button" bindtap="saveName">保存设备名</button>
-  </view>
-
-  <view class="glass-card setting-card">
-    <view class="setting-line">
+  <view class="surface-card settings-card">
+    <view class="settings-line">
       <text>音量上限</text>
       <text>{{volumeLimit}}%</text>
     </view>
-    <slider value="{{volumeLimit}}" min="20" max="100" activeColor="#ff77b7" backgroundColor="#d8efff" bindchange="changeLimit" />
-    <view class="setting-line">
-      <text>低电量提醒</text>
-      <text>20%</text>
+    <slider value="{{volumeLimit}}" min="20" max="100" activeColor="#f28b34" backgroundColor="#eadfd3" bindchange="changeVolumeLimit" />
+
+    <view class="settings-line">
+      <text>低音增强</text>
+      <text>{{bassGain}}</text>
     </view>
-    <view class="setting-line">
-      <text>夜间勿扰</text>
-      <text>23:00 - 07:00</text>
+    <slider value="{{bassGain}}" min="0" max="12" activeColor="#f28b34" backgroundColor="#eadfd3" bindchange="changeBassGain" />
+
+    <view class="switch-line">
+      <view>
+        <text class="switch-title">满电提醒</text>
+        <text class="muted-text">当前低电量提醒阈值 {{lowBatteryThreshold}}%</text>
+      </view>
+      <switch checked="{{fullChargeNotice}}" color="#f28b34" bindchange="toggleFullChargeNotice" />
+    </view>
+
+    <button class="primary-button" loading="{{saving}}" bindtap="saveDeviceSettings">保存设备设置</button>
+  </view>
+
+  <view class="section-heading">
+    <text>已连接音乐服务</text>
+    <text class="right-link" wx:if="{{isLoading}}">刷新中</text>
+  </view>
+  <view class="service-pills">
+    <view class="outline-pill service-pill" wx:for="{{services}}" wx:key="serviceName">
+      <text>{{item.serviceName}} · {{item.syncText}}</text>
+    </view>
+  </view>
+
+  <view class="section-heading">
+    <text>附近设备</text>
+    <text class="right-link" bindtap="refreshNearbyDevices">重新扫描</text>
+  </view>
+  <view class="surface-card nearby-card" wx:for="{{nearbyDevices}}" wx:key="deviceId">
+    <view>
+      <text class="nearby-name">{{item.deviceName}}</text>
+      <text class="muted-text">{{item.modelName}}</text>
+    </view>
+    <text class="nearby-signal">{{item.signalStrength}} dBm</text>
+  </view>
+
+  <view class="surface-card progress-card">
+    <view class="section-line">
+      <text class="progress-title">配网进度</text>
+      <text class="progress-percent">{{bindProgress}}%</text>
+    </view>
+    <view class="progress-track">
+      <view class="progress-value" style="width: {{bindProgress}}%;"></view>
+    </view>
+    <view class="step-row" wx:for="{{bindSteps}}" wx:key="name">
+      <text>{{item.name}}</text>
+      <text class="muted-text">{{item.label}}</text>
     </view>
   </view>
 </scroll-view>

@@ -1,4 +1,5 @@
-.search {
+.search,
+.history-row {
   padding: 24rpx;
 }
 
@@ -6,41 +7,52 @@
   height: 64rpx;
 }
 
-.filter-row {
+.filter-row,
+.history-row {
   display: flex;
+  align-items: center;
+}
+
+.filter-row {
   gap: 14rpx;
   margin: 24rpx 0;
 }
 
-.filter-row .pill {
-  padding: 12rpx 24rpx;
-}
-
-.active {
-  background: linear-gradient(135deg, #ff77b7, #68bfff);
-  color: #ffffff;
+.filter-pill,
+.active-pill {
+  height: 52rpx;
+  font-size: 22rpx;
 }
 
 .history-row {
-  margin-bottom: 18rpx;
-  padding: 26rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  gap: 18rpx;
 }
 
-.song-name {
-  font-size: 34rpx;
+.history-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.history-song {
+  font-size: 30rpx;
   font-weight: 800;
 }
 
-.muted {
-  color: #6f8aa8;
-  font-size: 24rpx;
+.played-at {
+  color: #b39f8d;
+  font-size: 22rpx;
 }
 
-.action {
-  margin-top: 8rpx;
-  color: #38678f;
+.replay-action {
+  color: #ca6e18;
+  font-size: 24rpx;
   font-weight: 700;
+}
+
+.clear-button {
+  margin-top: 12rpx;
 }

@@ -1,117 +1,153 @@
-.home {
-  padding-top: 18rpx;
-}
-
 .hero,
-.status-row,
-.volume-row {
+.player-top,
+.service-line,
+.line-between {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.eyebrow,
-.section-label,
-.subtitle,
-.status,
-.feature-card text:last-child {
-  color: #6f8aa8;
-  font-size: 24rpx;
+.hero {
+  padding-top: 12rpx;
 }
 
-.title {
-  margin-top: 10rpx;
-  font-size: 58rpx;
-  font-weight: 800;
-  letter-spacing: 1rpx;
-}
-
-.battery {
-  width: 112rpx;
-  height: 56rpx;
+.battery-chip {
+  min-width: 112rpx;
+  height: 58rpx;
   font-weight: 700;
 }
 
-.now-card {
-  margin-top: 34rpx;
-  padding: 34rpx;
+.player-card {
+  margin-top: 28rpx;
+  padding: 32rpx;
 }
 
-.disc {
-  width: 320rpx;
-  height: 320rpx;
-  margin: 38rpx auto 24rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: conic-gradient(from 20deg, #23476b, #68bfff, #ff99ca, #23476b);
-  box-shadow: inset 0 0 0 24rpx rgba(255, 255, 255, 0.2), 0 34rpx 80rpx rgba(94, 162, 226, 0.24);
+.player-kicker,
+.muted-light {
+  color: rgba(255, 250, 243, 0.66);
+  font-size: 24rpx;
 }
 
-.disc-inner {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff2fa;
-  font-size: 54rpx;
-}
-
-.song {
-  margin: 10rpx 0;
-  font-size: 48rpx;
+.song-title {
+  margin-top: 12rpx;
+  font-size: 52rpx;
+  line-height: 1.12;
   font-weight: 800;
 }
 
+.artist-line {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: rgba(255, 250, 243, 0.82);
+}
+
+.playing-badge {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 22rpx;
+}
+
+.player-center {
+  margin: 30rpx 0 26rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.record {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.1) 0, rgba(255, 255, 255, 0.1) 36rpx, transparent 36rpx),
+    conic-gradient(from 200deg, #f28b34, #efb37a, #f28b34, #c86716);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.record-core {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: #fffaf3;
+}
+
+.player-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.player-actions {
+  display: flex;
+  gap: 18rpx;
+}
+
+.queue-button,
 .play-button {
-  margin: 32rpx 0 22rpx;
-}
-
-.volume-row {
-  gap: 26rpx;
-}
-
-.volume-row slider {
   flex: 1;
 }
 
-.section-title {
-  margin: 38rpx 0 18rpx;
-  font-size: 30rpx;
-  font-weight: 800;
+.queue-button {
+  height: 92rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fffaf3;
+}
+
+.volume-block {
+  margin-top: 28rpx;
+}
+
+.volume-block slider {
+  margin-top: 10rpx;
 }
 
 .service-grid,
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20rpx;
+  gap: 18rpx;
 }
 
 .service-card,
 .feature-card {
-  padding: 28rpx;
+  padding: 24rpx;
 }
 
 .service-card {
-  min-height: 96rpx;
+  min-height: 154rpx;
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+}
+
+.service-name,
+.feature-title {
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.service-badge {
+  height: 48rpx;
+  padding: 0 18rpx;
+  font-size: 22rpx;
+}
+
+.service-link {
+  margin-top: auto;
+  color: #ca6e18;
+  font-size: 22rpx;
   font-weight: 700;
 }
 
 .feature-card {
-  min-height: 140rpx;
+  min-height: 166rpx;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-}
-
-.feature-title {
-  font-size: 30rpx;
-  font-weight: 800;
 }

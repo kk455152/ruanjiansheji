@@ -1,83 +1,116 @@
-.eyebrow,
-.muted {
-  color: #6f8aa8;
-  font-size: 24rpx;
-}
-
-.title {
-  margin: 10rpx 0 28rpx;
-  font-size: 52rpx;
-  font-weight: 800;
-}
-
-.device-card,
-.setting-card {
-  margin-bottom: 22rpx;
-  padding: 32rpx;
-}
-
+.hero,
 .device-head,
-.setting-line,
-.recommend-row {
+.settings-line,
+.switch-line,
+.section-line,
+.nearby-card,
+.step-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
+.hero {
+  padding-top: 12rpx;
+}
+
+.device-card,
+.settings-card,
+.nearby-card,
+.progress-card {
+  margin-top: 26rpx;
+  padding: 30rpx;
+}
+
 .device-name {
-  font-size: 40rpx;
+  font-size: 42rpx;
   font-weight: 800;
 }
 
-.status {
-  width: 96rpx;
-  height: 50rpx;
+.device-copy,
+.meta-label {
+  color: rgba(255, 250, 243, 0.7);
+  font-size: 24rpx;
 }
 
-.battery-ring {
-  width: 240rpx;
-  height: 240rpx;
-  margin: 34rpx auto 12rpx;
-  border: 20rpx solid #d8efff;
-  border-top-color: #ff77b7;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 54rpx;
+.device-status {
+  height: 50rpx;
+  font-size: 22rpx;
+}
+
+.battery-panel {
+  margin: 28rpx 0 24rpx;
+  padding: 24rpx 26rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.battery-value {
+  font-size: 62rpx;
   font-weight: 900;
 }
 
-.center {
-  display: block;
-  text-align: center;
-  margin-bottom: 24rpx;
+.device-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
 }
 
-.section-title {
+.meta-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #fffaf3;
+}
+
+.settings-line,
+.switch-line,
+.step-row {
+  margin-bottom: 18rpx;
+}
+
+.switch-title,
+.progress-title,
+.nearby-name {
   font-size: 30rpx;
   font-weight: 800;
 }
 
-.name-input {
-  margin: 24rpx 0;
-  padding: 22rpx;
-  border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.recommend-row {
-  justify-content: flex-start;
+.service-pills {
+  display: flex;
+  flex-wrap: wrap;
   gap: 14rpx;
-  margin-bottom: 26rpx;
 }
 
-.small {
-  padding: 10rpx 18rpx;
+.service-pill {
+  height: 54rpx;
+  font-size: 22rpx;
+}
+
+.nearby-card {
+  margin-top: 0;
+  margin-bottom: 16rpx;
+}
+
+.nearby-signal,
+.progress-percent {
+  color: #ca6e18;
   font-size: 24rpx;
+  font-weight: 700;
 }
 
-.setting-line {
-  margin: 22rpx 0;
-  font-weight: 700;
+.progress-track {
+  width: 100%;
+  height: 14rpx;
+  margin: 20rpx 0;
+  border-radius: 999rpx;
+  background: #eadfd3;
+  overflow: hidden;
+}
+
+.progress-value {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #f28b34, #f4b36e);
 }

@@ -1,30 +1,49 @@
-<navigation-bar title="听歌好友" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
-<scroll-view class="page-shell friends" scroll-y type="list">
-  <view class="headline">
-    <text class="eyebrow">和好友同步播放、互相分享歌曲</text>
-    <view class="title">听歌好友</view>
+<navigation-bar title="好友" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
+<scroll-view class="page-shell friends-page" scroll-y type="list">
+  <view class="hero">
+    <view>
+      <text class="section-kicker">Shared Listening</text>
+      <view class="page-title">一起听好友</view>
+      <text class="page-subtitle">把当前歌曲分享到房间，或直接创建新的实时听歌房。</text>
+    </view>
+    <view class="icon-chip">♪</view>
   </view>
 
-  <view class="glass-card room-card">
-    <text class="room-status">一起听进行中 {{members.length}} 人</text>
-    <view class="room-name">{{roomName}}</view>
-    <text class="muted">你、阿青、小北正在听</text>
-    <view class="avatars">
-      <view class="avatar" wx:for="{{members}}" wx:key="name">{{item.short}}</view>
+  <view class="dark-card room-card">
+    <text class="room-kicker">当前房间</text>
+    <view class="room-title">{{roomName}}</view>
+    <text class="room-copy">正在分享《{{roomSongName}}》 · {{roomMemberCount}} 人在线</text>
+
+    <view class="avatar-row">
+      <view class="member-badge" wx:for="{{members}}" wx:key="name">{{item.shortName}}</view>
     </view>
-    <view class="action-row">
-      <button class="primary-button half" bindtap="joinListen">一起听歌</button>
-      <button class="ghost-button half" loading="{{sharing}}" bindtap="shareSong">分享歌曲</button>
+
+    <view class="button-row">
+      <button class="primary-button half-button" loading="{{isCreating}}" bindtap="createRoom">创建新房间</button>
+      <button class="ghost-button half-button" loading="{{isSharing}}" bindtap="shareCurrentSong">分享歌曲卡片</button>
     </view>
   </view>
 
-  <view class="section-title">最近听歌好友</view>
-  <view class="glass-card friend-row" wx:for="{{friends}}" wx:key="name">
-    <view class="friend-avatar">{{item.short}}</view>
+  <view class="section-heading">
+    <text>最近一起听的好友</text>
+    <text class="right-link" wx:if="{{isLoading}}">刷新中</text>
+  </view>
+
+  <view class="surface-card friend-row" wx:for="{{recentFriends}}" wx:key="friendId">
+    <view class="friend-avatar">{{item.shortName}}</view>
     <view class="friend-copy">
-      <text class="friend-name">{{item.name}}</text>
-      <text class="muted">{{item.desc}}</text>
+      <view class="friend-name-line">
+        <text class="friend-name">{{item.name}}</text>
+        <view class="status-dot {{item.isOnline ? 'status-online' : 'status-offline'}}"></view>
+      </view>
+      <text class="muted-text">{{item.status}}</text>
     </view>
-    <text class="pill join-pill">加入</text>
+    <text class="outline-pill join-pill" data-name="{{item.name}}" bindtap="createRoomWithFriend">发起一起听</text>
+  </view>
+
+  <view class="surface-card share-preview" wx:if="{{sharePreviewUrl}}">
+    <text class="preview-title">最新生成的分享卡片</text>
+    <text class="muted-text">服务器已经返回分享图预览地址，可直接用于后续分享。</text>
+    <text class="preview-url">{{sharePreviewUrl}}</text>
   </view>
 </scroll-view>

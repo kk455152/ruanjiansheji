@@ -1,56 +1,93 @@
-<navigation-bar title="声盒 Mini" back="{{false}}" color="#1f3555" background="transparent"></navigation-bar>
-<scroll-view class="page-shell home" scroll-y type="list">
+<navigation-bar title="首页" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
+<scroll-view class="page-shell home-page" scroll-y type="list">
   <view class="hero">
     <view>
-      <text class="eyebrow">智能音箱小程序</text>
-      <view class="title">声盒 Mini</view>
-      <text class="subtitle">用微信连接你的智能音箱</text>
+      <text class="section-kicker">Smart Speaker Mini</text>
+      <view class="page-title">首页</view>
+      <text class="page-subtitle">{{deviceName}} · {{online ? '在线可用' : '设备离线'}}</text>
     </view>
-    <view class="battery pill">{{battery}}%</view>
+    <view class="battery-chip pill">{{battery}}%</view>
   </view>
 
-  <view class="glass-card now-card">
-    <view class="status-row">
-      <text>{{connected ? '客厅音箱 · 已连接' : '客厅音箱 · 待连接'}}</text>
-      <text class="status">{{syncStatus}}</text>
+  <view class="dark-card player-card">
+    <view class="player-top">
+      <view>
+        <text class="player-kicker">正在播放</text>
+        <view class="song-title">{{currentSong}}</view>
+        <text class="artist-line">{{currentArtist}} · {{currentSource}}</text>
+      </view>
+      <text class="playing-badge">{{isPlaying ? '播放中' : '已暂停'}}</text>
     </view>
-    <view class="disc">
-      <view class="disc-inner">♪</view>
+
+    <view class="player-center">
+      <view class="record">
+        <view class="record-core"></view>
+      </view>
+      <view class="player-copy">
+        <text>{{deviceModel}}</text>
+        <text class="muted-light">最近已记录 {{historyCount}} 次播放</text>
+        <text class="muted-light">{{syncHint}}</text>
+      </view>
     </view>
-    <text class="section-label">正在播放</text>
-    <view class="song">{{currentSong}}</view>
-    <text class="subtitle">来自{{source}}</text>
-    <button class="primary-button play-button" loading="{{sending}}" bindtap="playRecommend">播放推荐歌曲</button>
-    <view class="volume-row">
-      <text>音量 {{volume}}%</text>
-      <slider value="{{volume}}" min="0" max="100" activeColor="#ff77b7" backgroundColor="#d8efff" bindchange="changeVolume" />
+
+    <view class="player-actions">
+      <button class="queue-button" bindtap="addSongToQueue">加入下一首</button>
+      <button class="primary-button play-button" loading="{{isActionLoading}}" bindtap="playFeaturedSong">
+        {{isPlaying ? '暂停播放' : '继续播放'}}
+      </button>
+    </view>
+
+    <view class="volume-block">
+      <view class="line-between">
+        <text>音量</text>
+        <text>{{volume}}%</text>
+      </view>
+      <slider
+        value="{{volume}}"
+        min="0"
+        max="100"
+        activeColor="#f28b34"
+        backgroundColor="rgba(255,255,255,0.18)"
+        bindchange="changeVolume"
+      />
     </view>
   </view>
 
-  <view class="section-title">请求连接的软件</view>
+  <view class="section-heading">
+    <text>音乐服务</text>
+    <text class="right-link" wx:if="{{isLoading}}">刷新中</text>
+  </view>
   <view class="service-grid">
-    <view class="glass-card service-card" wx:for="{{serviceList}}" wx:key="name" data-path="{{item.path}}" bindtap="openAuth">
-      <text>{{item.name}}</text>
-      <text class="status">{{item.status}}</text>
+    <view class="surface-card service-card" wx:for="{{services}}" wx:key="service" data-path="{{item.path}}" bindtap="openAuth">
+      <view class="service-line">
+        <text class="service-name">{{item.serviceName}}</text>
+        <text class="pill service-badge">{{item.syncText}}</text>
+      </view>
+      <text class="muted-text">{{item.accountName}}</text>
+      <text class="service-link">查看授权与同步进度</text>
     </view>
   </view>
 
+  <view class="section-heading">
+    <text>功能入口</text>
+    <text class="muted-text">按设计稿布局联动真实数据</text>
+  </view>
   <view class="feature-grid">
-    <view class="glass-card feature-card" bindtap="goFriends">
-      <text class="feature-title">听歌好友</text>
-      <text>一起听 / 分享</text>
+    <view class="surface-card feature-card" bindtap="openFriends">
+      <text class="feature-title">一起听</text>
+      <text class="muted-text">创建房间、分享歌曲卡片</text>
     </view>
-    <view class="glass-card feature-card" bindtap="goData">
-      <text class="feature-title">听歌数据</text>
-      <text>个人总结</text>
+    <view class="surface-card feature-card" bindtap="openData">
+      <text class="feature-title">听歌总结</text>
+      <text class="muted-text">周报、时段偏好、历史重播</text>
     </view>
-    <view class="glass-card feature-card" bindtap="goDevice">
-      <text class="feature-title">设备管理</text>
-      <text>绑定 / 电量 / 名称</text>
+    <view class="surface-card feature-card" bindtap="openDevice">
+      <text class="feature-title">设备状态</text>
+      <text class="muted-text">电量、网络、音效和配网进度</text>
     </view>
-    <view class="glass-card feature-card" bindtap="goHistory">
+    <view class="surface-card feature-card" bindtap="openHistory">
       <text class="feature-title">播放历史</text>
-      <text>最近 48 首</text>
+      <text class="muted-text">搜索记录并在音箱继续播放</text>
     </view>
   </view>
 </scroll-view>

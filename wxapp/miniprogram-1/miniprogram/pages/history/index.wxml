@@ -1,17 +1,38 @@
-<navigation-bar title="播放历史" color="#1f3555" background="transparent"></navigation-bar>
+<navigation-bar title="播放历史" color="#171411" background="transparent"></navigation-bar>
 <scroll-view class="page-shell history-page" scroll-y type="list">
-  <view class="search glass-card">
+  <view class="search surface-card">
     <input placeholder="搜索歌曲、歌手或来源" value="{{keyword}}" bindinput="inputKeyword" />
   </view>
+
   <view class="filter-row">
-    <text class="pill active">全部</text>
-    <text class="pill">QQ</text>
-    <text class="pill">网易云</text>
+    <text
+      class="{{selectedSource === item.key ? 'pill active-pill' : 'outline-pill filter-pill'}}"
+      wx:for="{{sourceOptions}}"
+      wx:key="key"
+      data-key="{{item.key}}"
+      bindtap="selectSource"
+    >
+      {{item.label}}
+    </text>
   </view>
-  <view class="glass-card history-row" wx:for="{{histories}}" wx:key="name" data-name="{{item.name}}" bindtap="replay">
-    <text class="song-name">{{item.name}}</text>
-    <text class="muted">{{item.source}}</text>
-    <text class="action">在音箱上重新播放</text>
+
+  <view
+    class="surface-card history-row"
+    wx:for="{{filteredList}}"
+    wx:key="historyId"
+    data-song-id="{{item.songId}}"
+    data-song-name="{{item.songName}}"
+    data-artist="{{item.artist}}"
+    data-source="{{item.source}}"
+    bindtap="replay"
+  >
+    <view class="history-copy">
+      <text class="history-song">{{item.songName}}</text>
+      <text class="muted-text">{{item.sourceText}}</text>
+      <text class="played-at">{{item.playedAtText}}</text>
+    </view>
+    <text class="replay-action">重播</text>
   </view>
-  <button class="ghost-button">清理 30 天前历史</button>
+
+  <button class="ghost-button clear-button" loading="{{isClearing}}" bindtap="clearOldRecords">清理 30 天前历史</button>
 </scroll-view>

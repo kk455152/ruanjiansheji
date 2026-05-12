@@ -1,59 +1,110 @@
-.eyebrow,
-.muted,
-.metric-label {
-  color: #6f8aa8;
-  font-size: 24rpx;
-}
-
-.title {
-  margin: 10rpx 0 28rpx;
-  font-size: 52rpx;
-  font-weight: 800;
+.hero {
+  padding-top: 12rpx;
 }
 
 .summary-card {
+  margin-top: 28rpx;
   padding: 34rpx;
 }
 
-.rank {
-  width: 140rpx;
+.summary-top,
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rank-pill {
   height: 52rpx;
-  font-weight: 800;
+  font-size: 22rpx;
+  padding: 0 20rpx;
+}
+
+.summary-week,
+.summary-copy {
+  color: rgba(255, 250, 243, 0.7);
+  font-size: 24rpx;
+}
+
+.metric-grid,
+.insight-grid {
+  display: grid;
+  gap: 18rpx;
 }
 
 .metric-grid {
-  display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20rpx;
-  margin: 32rpx 0;
+  margin: 28rpx 0 24rpx;
 }
 
 .metric-number {
   display: block;
-  font-size: 64rpx;
+  font-size: 68rpx;
   font-weight: 900;
 }
 
-.insight,
-.section-line {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20rpx;
+.metric-label,
+.summary-text {
+  color: rgba(255, 250, 243, 0.82);
 }
 
-.section-line {
-  margin: 38rpx 0 18rpx;
+.summary-text {
+  display: block;
+  line-height: 1.7;
+  margin-bottom: 12rpx;
+}
+
+.insight-grid {
+  grid-template-columns: repeat(2, 1fr);
+  margin-top: 18rpx;
+}
+
+.insight-card,
+.card-preview,
+.history-row {
+  padding: 24rpx;
+}
+
+.insight-card {
+  min-height: 156rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.insight-title {
+  color: #8f8277;
+  font-size: 24rpx;
+}
+
+.insight-value,
+.history-song,
+.preview-title {
+  font-size: 30rpx;
   font-weight: 800;
+}
+
+.card-preview {
+  margin-top: 18rpx;
+}
+
+.preview-url {
+  margin-top: 12rpx;
+  color: #ca6e18;
+  font-size: 22rpx;
+  line-height: 1.6;
+  word-break: break-all;
 }
 
 .history-row {
   margin-bottom: 16rpx;
-  padding: 24rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
 }
 
-.song-name {
-  font-weight: 800;
+.replay-pill {
+  padding: 14rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(242, 139, 52, 0.14);
+  color: #ca6e18;
+  font-size: 22rpx;
+  font-weight: 700;
 }
