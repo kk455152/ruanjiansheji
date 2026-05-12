@@ -1,4 +1,4 @@
-# HTTPS 证书和私钥，不能上传 GitHub
+# TLS certificates and keys
 *.key
 *.pem
 *.crt
@@ -6,20 +6,25 @@ cert/
 ssl/
 nginx/cert/
 
-# Python 缓存
+# Python cache
 __pycache__/
 *.pyc
 
-# 日志和进程文件
+# Logs and pid files
 *.log
 *.pid
 log.txt
 gunicorn.pid
 
-# 环境变量和本地配置
+# Local environment config
 .env
 config.local.py
 
-# 系统文件
+# Node / miniprogram local dependencies
+node_modules/
+.npm-cache/
+miniprogram_npm/
+
+# OS files
 .DS_Store
 Thumbs.db

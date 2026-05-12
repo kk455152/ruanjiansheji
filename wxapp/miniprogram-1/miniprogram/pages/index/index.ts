@@ -114,16 +114,20 @@ Component({
         this.setData({ isPlaying: nextAction === 'play' })
         wx.showToast({ title: nextAction === 'play' ? '继续播放' : '已暂停', icon: 'none' })
       } catch (error) {
-        try {
-          await playSong(FEATURED_TRACK)
-          this.setData({
-            currentArtist: FEATURED_TRACK.artist,
-            currentSong: FEATURED_TRACK.songName,
-            currentSource: sourceLabel(FEATURED_TRACK.source),
-            isPlaying: true,
-          })
-          wx.showToast({ title: '已切换到推荐歌曲', icon: 'success' })
-        } catch (fallbackError) {
+        if (nextAction === 'play') {
+          try {
+            await playSong(FEATURED_TRACK)
+            this.setData({
+              currentArtist: FEATURED_TRACK.artist,
+              currentSong: FEATURED_TRACK.songName,
+              currentSource: sourceLabel(FEATURED_TRACK.source),
+              isPlaying: true,
+            })
+            wx.showToast({ title: '已切换到推荐歌曲', icon: 'success' })
+          } catch (fallbackError) {
+            wx.showToast({ title: '播放控制失败', icon: 'none' })
+          }
+        } else {
           wx.showToast({ title: '播放控制失败', icon: 'none' })
         }
       } finally {
