@@ -2,20 +2,189 @@
   padding-top: 12rpx;
 }
 
-.auth-head {
-  margin-bottom: 18rpx;
+.connect-top {
+  display: flex;
+  align-items: center;
 }
 
+.connect-brand {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.brand-icon {
+  width: 34rpx;
+  height: 34rpx;
+  border-radius: 12rpx;
+  background: #171411;
+  color: #ff6a00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18rpx;
+}
+
+.brand-text {
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.connect-hero,
+.auth-hero,
+.permission-card,
+.status-card,
+.connect-service {
+  margin-top: 18rpx;
+}
+
+.connect-hero,
+.auth-hero,
+.permission-card,
+.status-card {
+  padding: 30rpx;
+}
+
+.connect-device {
+  height: 240rpx;
+  border-radius: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.connect-speaker {
+  width: 148rpx;
+  height: 148rpx;
+  border-radius: 40rpx;
+  background: #fffaf3;
+  box-shadow: 0 0 56rpx rgba(255, 129, 28, 0.22);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+}
+
+.connect-speaker-dot {
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  background: #ff6a00;
+}
+
+.connect-speaker-bars {
+  width: 46rpx;
+  height: 18rpx;
+  border-top: 6rpx solid #171411;
+  border-bottom: 6rpx solid #171411;
+  border-radius: 12rpx;
+}
+
+.connect-wave {
+  position: absolute;
+  top: 38rpx;
+  right: 24rpx;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fffaf3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+}
+
+.connect-copy {
+  margin-top: 22rpx;
+}
+
+.connect-title,
 .auth-title {
   font-size: 46rpx;
   font-weight: 800;
 }
 
-.auth-hero,
-.permission-card,
-.status-card {
-  margin-top: 18rpx;
-  padding: 30rpx;
+.connect-desc,
+.hero-copy,
+.task-copy,
+.connect-service-desc,
+.connect-foot {
+  display: block;
+  color: #7f7368;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.connect-desc,
+.hero-copy,
+.task-copy,
+.connect-foot {
+  margin-top: 14rpx;
+}
+
+.connect-section-title,
+.section-title {
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  font-weight: 800;
+}
+
+.connect-service {
+  padding: 18rpx 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.connect-service-active {
+  box-shadow: inset 0 0 0 2rpx rgba(255, 106, 0, 0.24);
+}
+
+.connect-service-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+}
+
+.service-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+}
+
+.service-dot-blue {
+  background: #3aa7ff;
+}
+
+.service-dot-red {
+  background: #f0143c;
+}
+
+.connect-service-name {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.connect-service-action {
+  color: #ff6a00;
+  font-size: 22rpx;
+}
+
+.connect-button {
+  margin-top: 24rpx;
+}
+
+.connect-foot {
+  text-align: center;
+}
+
+.auth-head {
+  margin-bottom: 18rpx;
 }
 
 .hero-blue {
@@ -52,17 +221,7 @@
 
 .hero-copy,
 .task-copy {
-  display: block;
-  margin-top: 16rpx;
-  color: #7f7368;
-  font-size: 24rpx;
-  line-height: 1.7;
   text-align: center;
-}
-
-.section-title {
-  font-size: 30rpx;
-  font-weight: 800;
 }
 
 .permission-row,

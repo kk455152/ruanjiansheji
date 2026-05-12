@@ -67,6 +67,7 @@ Component({
   },
   lifetimes: {
     attached() {
+      this.syncTabBar()
       previewAudio = wx.createInnerAudioContext()
       previewAudio.autoplay = false
       previewAudio.obeyMuteSwitch = false
@@ -90,10 +91,17 @@ Component({
   },
   pageLifetimes: {
     show() {
+      this.syncTabBar()
       void this.loadPage()
     },
   },
   methods: {
+    syncTabBar() {
+      const tabBar = (this as WechatMiniprogram.Component.TrivialInstance & {
+        getTabBar?: () => { setData: (payload: Record<string, unknown>) => void } | null
+      }).getTabBar?.()
+      tabBar?.setData({ selected: 'pages/index/index' })
+    },
     async triggerPlayerAction(action: 'next' | 'previous', successTitle: string) {
       this.setData({ isActionLoading: true })
 

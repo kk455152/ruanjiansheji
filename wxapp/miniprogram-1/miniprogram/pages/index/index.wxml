@@ -2,9 +2,8 @@
 <scroll-view class="page-shell home-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
   <view class="hero hero-split">
     <view>
-      <text class="section-kicker">声音 Mini</text>
+      <text class="section-kicker section-kicker-home">声音 Mini</text>
       <view class="page-title">智能音箱小程序</view>
-      <text class="page-subtitle">围绕你的音箱统一管理播放、授权同步、一起听和数据回顾。</text>
     </view>
     <view class="hero-circle" bindtap="openDevice">+</view>
   </view>
@@ -23,11 +22,7 @@
         <text class="player-kicker">正在播放</text>
         <view class="song-title">{{currentSong}}</view>
         <text class="artist-line">{{currentArtist}}</text>
-        <text class="muted-light">{{currentSource}} · {{deviceModel}}</text>
-        <text class="muted-light">{{syncHint}}</text>
-        <text class="muted-light" wx:if="{{previewState === 'playing'}}">手机试听已同步出声</text>
-        <text class="muted-light" wx:elif="{{activeSongId}}">当前搜索歌曲将同步发送到音箱播放</text>
-        <text class="muted-light" wx:else>最近已记录 {{historyCount}} 次播放</text>
+        <text class="muted-light">{{currentSource}}</text>
       </view>
     </view>
   </view>
@@ -39,109 +34,45 @@
         {{previewState === 'playing' || isPlaying ? '暂停' : '播放'}}
       </button>
       <button class="icon-button" bindtap="playNextSong">▷</button>
-      <button class="queue-core" bindtap="addSongToQueue">加入下一首</button>
-    </view>
-
-    <view class="switch-actions" wx:if="{{searchedSongs.length > 1}}">
-      <text class="switch-link" data-direction="prev" bindtap="switchSearchedSong">上一首</text>
-      <text class="switch-hint">在已搜索歌曲中切换</text>
-      <text class="switch-link" data-direction="next" bindtap="switchSearchedSong">下一首</text>
-    </view>
-
-    <view class="volume-strip">
-      <view class="line-between">
-        <text>音量</text>
-        <text>{{volume}}%</text>
+      <view class="volume-compact">
+        <text class="volume-icon">))</text>
+        <view class="volume-meter">
+          <view class="volume-meter-fill" style="width: {{volume}}%;"></view>
+        </view>
       </view>
-      <slider
-        value="{{volume}}"
-        min="0"
-        max="100"
-        activeColor="#ff6a00"
-        backgroundColor="#e8ddd1"
-        bindchange="changeVolume"
-      />
     </view>
+
+    <slider
+      class="hidden-slider"
+      value="{{volume}}"
+      min="0"
+      max="100"
+      activeColor="#ff6a00"
+      backgroundColor="#e8ddd1"
+      bindchange="changeVolume"
+    />
   </view>
 
   <view class="feature-grid">
     <view class="soft-card soft-peach feature-card" bindtap="openFriends">
       <text class="feature-icon">♫</text>
       <text class="section-card-title">听歌好友</text>
-      <text class="section-card-copy">发起一起听 / 分享歌曲</text>
+      <text class="section-card-copy">一起听 / 分享</text>
     </view>
     <view class="soft-card soft-blue feature-card" bindtap="openData">
       <text class="feature-icon">▥</text>
       <text class="section-card-title">听歌数据</text>
-      <text class="section-card-copy">最近 {{historyCount}} 条播放记录</text>
+      <text class="section-card-copy">个人总结</text>
     </view>
     <view class="soft-card soft-green feature-card" bindtap="openDevice">
       <text class="feature-icon">▣</text>
       <text class="section-card-title">设备管理</text>
-      <text class="section-card-copy">电量 {{battery}}% / {{online ? '在线' : '离线'}}</text>
+      <text class="section-card-copy">电量 / 连接 / 听感</text>
     </view>
     <view class="soft-card soft-purple feature-card" bindtap="openHistory">
       <text class="feature-icon">↺</text>
       <text class="section-card-title">播放历史</text>
-      <text class="section-card-copy">回看最近播放并继续投播</text>
-    </view>
-  </view>
-
-  <view class="surface-card search-card">
-    <view class="search-header">
-      <view>
-        <text class="search-kicker">Netease Cloud Music</text>
-        <view class="search-title">搜歌并直达音箱</view>
-      </view>
-      <text class="muted-text">外部搜索不可用时会自动退回你的后端数据</text>
-    </view>
-    <view class="search-bar">
-      <input
-        class="search-input"
-        placeholder="输入歌曲名、歌手，例如 稻香 / 晴天"
-        value="{{searchKeyword}}"
-        bindinput="inputSongKeyword"
-        confirm-type="search"
-      />
-      <button class="primary-button search-button" loading="{{isSongSearching}}" bindtap="searchNeteaseSong">搜索</button>
-    </view>
-
-    <view class="search-results" wx:if="{{searchedSongs.length}}">
-      <view
-        class="result-card {{activeSongId === item.songId ? 'result-card-active' : ''}}"
-        wx:for="{{searchedSongs}}"
-        wx:key="songId"
-        data-song-id="{{item.songId}}"
-        bindtap="selectSearchSong"
-      >
-        <image class="result-cover" src="{{item.coverUrl}}" mode="aspectFill"></image>
-        <view class="result-copy">
-          <text class="result-name">{{item.name}}</text>
-          <text class="muted-text">{{item.artistText}}</text>
-          <text class="muted-text">{{item.album}} · {{item.durationSeconds}} 秒</text>
-        </view>
-        <text class="result-tag">{{activeSongId === item.songId ? '当前' : '切换'}}</text>
-      </view>
-    </view>
-
-    <view class="result-actions" wx:if="{{activeSongId}}">
-      <button class="primary-button result-button" bindtap="playSelectedSong">播放并出声</button>
-      <button class="ghost-button result-button" bindtap="queueSelectedSong">加入下一首</button>
-    </view>
-  </view>
-
-  <view class="section-heading">
-    <text>已连接的音乐服务</text>
-    <text class="right-link" wx:if="{{isLoading}}">刷新中</text>
-  </view>
-  <view class="service-grid">
-    <view class="surface-card service-card" wx:for="{{services}}" wx:key="service" data-path="{{item.path}}" bindtap="openAuth">
-      <view class="service-line">
-        <text class="service-name">{{item.serviceName}}</text>
-        <text class="pill service-badge">{{item.syncText}}</text>
-      </view>
-      <text class="muted-text">{{item.accountName}}</text>
-      <text class="service-link">查看授权与同步进度</text>
+      <text class="section-card-copy">最近 {{historyCount}} 首</text>
     </view>
   </view>
 </scroll-view>

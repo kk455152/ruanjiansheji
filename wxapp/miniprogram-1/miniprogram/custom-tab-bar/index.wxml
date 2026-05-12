@@ -1,0 +1,14 @@
+<view class="tabbar-shell">
+  <view class="tabbar-panel">
+    <view
+      class="tabbar-item {{selected === item.pagePath ? 'tabbar-item-active' : ''}}"
+      wx:for="{{list}}"
+      wx:key="pagePath"
+      data-path="{{item.pagePath}}"
+      bindtap="switchTab"
+    >
+      <text class="tabbar-icon">{{item.icon}}</text>
+      <text class="tabbar-text">{{item.text}}</text>
+    </view>
+  </view>
+</view>

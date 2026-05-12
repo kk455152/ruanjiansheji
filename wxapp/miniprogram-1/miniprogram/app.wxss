@@ -14,7 +14,7 @@ button::after {
 
 .page-shell {
   min-height: 100vh;
-  padding: 0 28rpx 140rpx;
+  padding: 0 28rpx 176rpx;
   box-sizing: border-box;
 }
 

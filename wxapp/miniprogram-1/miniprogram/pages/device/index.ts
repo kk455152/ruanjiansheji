@@ -52,15 +52,23 @@ Component({
   },
   lifetimes: {
     attached() {
+      this.syncTabBar()
       void this.loadPage()
     },
   },
   pageLifetimes: {
     show() {
+      this.syncTabBar()
       void this.loadPage()
     },
   },
   methods: {
+    syncTabBar() {
+      const tabBar = (this as WechatMiniprogram.Component.TrivialInstance & {
+        getTabBar?: () => { setData: (payload: Record<string, unknown>) => void } | null
+      }).getTabBar?.()
+      tabBar?.setData({ selected: 'pages/device/index' })
+    },
     async loadPage() {
       this.setData({ isLoading: true })
 

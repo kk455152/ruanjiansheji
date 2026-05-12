@@ -1,9 +1,5 @@
 .hero,
-.card-top,
-.service-line,
-.line-between,
-.search-header,
-.switch-actions {
+.card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -13,14 +9,17 @@
   padding-top: 12rpx;
 }
 
+.section-kicker-home {
+  color: #ff6a00;
+}
+
 .now-card,
-.control-card,
-.search-card {
+.control-card {
   margin-top: 24rpx;
 }
 
 .now-card {
-  padding: 28rpx;
+  padding: 26rpx;
 }
 
 .card-kicker,
@@ -72,19 +71,18 @@
 }
 
 .control-card {
-  padding: 22rpx 24rpx 26rpx;
+  padding: 16rpx 18rpx 10rpx;
 }
 
 .control-strip {
   display: grid;
-  grid-template-columns: 88rpx 1fr 88rpx 180rpx;
+  grid-template-columns: 64rpx 88rpx 64rpx 1fr;
   gap: 16rpx;
   align-items: center;
 }
 
 .icon-button,
-.play-core,
-.queue-core {
+.play-core {
   margin: 0;
   border: 0;
   border-radius: 999rpx;
@@ -92,73 +90,71 @@
 }
 
 .icon-button {
-  height: 88rpx;
-  background: #f1ebe4;
+  height: 64rpx;
+  background: transparent;
   color: #2f2720;
   font-size: 28rpx;
   font-weight: 700;
 }
 
 .play-core {
-  height: 88rpx;
+  width: 88rpx;
+  height: 64rpx;
+  padding: 0;
   background: #ff6a00;
-  color: #ffffff;
-  font-size: 28rpx;
-  font-weight: 700;
-  box-shadow: 0 18rpx 34rpx rgba(255, 106, 0, 0.24);
-}
-
-.queue-core {
-  height: 88rpx;
-  background: #171411;
-  color: #fffaf3;
+  color: #171411;
   font-size: 24rpx;
+  font-weight: 700;
+  box-shadow: none;
 }
 
-.switch-actions {
-  margin-top: 18rpx;
+.volume-compact {
+  height: 64rpx;
+  border-radius: 24rpx;
+  background: #f1ebe4;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 0 18rpx;
+  box-sizing: border-box;
 }
 
-.switch-link,
-.switch-hint {
-  font-size: 22rpx;
-}
-
-.switch-link {
-  color: #ca6e18;
+.volume-icon {
+  color: #2f2720;
+  font-size: 20rpx;
   font-weight: 700;
 }
 
-.switch-hint {
-  color: #8f8277;
+.volume-meter {
+  flex: 1;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: rgba(23, 20, 17, 0.16);
+  overflow: hidden;
 }
 
-.volume-strip {
-  margin-top: 22rpx;
+.volume-meter-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: #171411;
 }
 
-.volume-strip slider {
-  margin-top: 10rpx;
-}
-
-.feature-grid,
-.service-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 18rpx;
+.hidden-slider {
+  height: 0;
+  opacity: 0;
+  margin: 0;
 }
 
 .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18rpx;
   margin-top: 24rpx;
-}
-
-.feature-card,
-.service-card {
-  padding: 22rpx 24rpx;
 }
 
 .feature-card {
   min-height: 170rpx;
+  padding: 22rpx 24rpx;
   display: flex;
   flex-direction: column;
 }
@@ -174,122 +170,4 @@
   margin-bottom: 18rpx;
   font-size: 28rpx;
   color: #ca6e18;
-}
-
-.search-card {
-  padding: 26rpx;
-}
-
-.search-kicker {
-  color: #9f9182;
-  font-size: 22rpx;
-}
-
-.search-title {
-  margin-top: 8rpx;
-  font-size: 34rpx;
-  font-weight: 800;
-}
-
-.search-bar {
-  margin-top: 20rpx;
-  display: flex;
-  gap: 14rpx;
-}
-
-.search-input {
-  flex: 1;
-  height: 88rpx;
-  padding: 0 24rpx;
-  border-radius: 24rpx;
-  background: #f7f0e7;
-  box-sizing: border-box;
-}
-
-.search-button {
-  width: 176rpx;
-}
-
-.search-results {
-  margin-top: 8rpx;
-}
-
-.result-card {
-  margin-top: 18rpx;
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 18rpx;
-  border-radius: 28rpx;
-  background: #fff8f0;
-}
-
-.result-card-active {
-  box-shadow: inset 0 0 0 2rpx rgba(242, 139, 52, 0.3);
-}
-
-.result-cover {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 24rpx;
-  background: #ece2d6;
-}
-
-.result-copy {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-}
-
-.result-name,
-.service-name {
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
-.result-tag,
-.service-badge {
-  height: 46rpx;
-  padding: 0 18rpx;
-  border-radius: 999rpx;
-  box-sizing: border-box;
-  font-size: 22rpx;
-}
-
-.result-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(242, 139, 52, 0.12);
-  color: #ca6e18;
-  font-weight: 700;
-}
-
-.result-actions {
-  margin-top: 20rpx;
-  display: flex;
-  gap: 16rpx;
-}
-
-.result-button {
-  flex: 1;
-}
-
-.service-grid {
-  margin-bottom: 12rpx;
-}
-
-.service-card {
-  min-height: 150rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.service-link {
-  margin-top: auto;
-  color: #ca6e18;
-  font-size: 22rpx;
-  font-weight: 700;
 }
