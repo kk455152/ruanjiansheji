@@ -1,4 +1,4 @@
-export const BACKEND_BASE_URL = 'https://8.137.165.220'
+export const BACKEND_BASE_URL = 'https://api.musicplayer.cn'
 
 export const DEFAULT_DEVICE_ID = 'dev_001'
 export const DEFAULT_USER_ID = 10001
