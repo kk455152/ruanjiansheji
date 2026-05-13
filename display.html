@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>声盒 Mini · 接口字段对照表</title>
+<style>
+  :root {
+    --bg-card: rgba(255, 255, 255, 0.78);
+    --text-primary: #2c3e35;
+    --text-secondary: #7b8f84;
+    --accent-green: #84a98c;
+    --accent-deep: #6b9080;
+    --accent-orange: #f4a261;
+    --shadow-soft: 0 18px 44px rgba(132, 169, 140, 0.16);
+    --border-light: rgba(255, 255, 255, 0.85);
+    --row-divider: rgba(132, 169, 140, 0.18);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 64px 32px 96px;
+    color: var(--text-primary);
+    font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(circle at 8% 0%, rgba(255,255,255,0.95), transparent 36%),
+      radial-gradient(circle at 92% 12%, rgba(244,162,97,0.12), transparent 42%),
+      radial-gradient(circle at 50% 100%, rgba(132,169,140,0.18), transparent 46%),
+      linear-gradient(135deg, #eaefea 0%, #d4e1da 100%);
+    min-height: 100vh;
+  }
+  .page { max-width: 1280px; margin: 0 auto; }
+  .header { text-align: center; margin-bottom: 48px; }
+  .header h1 { font-size: 38px; font-weight: 500; letter-spacing: 4px; margin: 0 0 14px; }
+  .header p {
+    margin: 0 auto; max-width: 760px;
+    color: var(--text-secondary);
+    font-weight: 300; line-height: 1.7; font-size: 15px;
+  }
+  .meta-cards {
+    display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 18px; margin-bottom: 36px;
+  }
+  .meta-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 22px; padding: 22px 24px;
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(10px);
+  }
+  .meta-card .label { font-size: 13px; color: var(--text-secondary); letter-spacing: 1px; text-transform: uppercase; }
+  .meta-card .value { margin-top: 10px; font-size: 30px; font-weight: 500; color: var(--accent-deep); }
+  .meta-card .value.orange { color: var(--accent-orange); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-bottom: 28px; }
+  .pill {
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 13px; font-weight: 500;
+    background: rgba(132,169,140,0.16); color: var(--accent-deep);
+    border: 1px solid rgba(132,169,140,0.22);
+  }
+  .pill.method-get    { background: rgba(132,169,140,0.18); color: #4f7564; }
+  .pill.method-post   { background: rgba(244,162,97,0.22);  color: #b5651d; }
+  .pill.method-delete { background: rgba(231,111,81,0.22);  color: #c45a3f; }
+  .group-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 28px;
+    padding: 26px 28px 30px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(12px);
+  }
+  .group-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  }
+  .group-head h2 {
+    font-size: 22px; font-weight: 500; letter-spacing: 2px; margin: 0;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .group-head h2::before {
+    content: ''; display: inline-block; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--accent-green);
+    box-shadow: 0 0 0 4px rgba(132,169,140,0.18);
+  }
+  .group-head .desc { color: var(--text-secondary); font-size: 13px; font-weight: 300; flex: 1; min-width: 240px; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; }
+  thead th {
+    text-align: left; padding: 14px 16px;
+    background: rgba(132,169,140,0.14);
+    color: var(--accent-deep); font-weight: 500; letter-spacing: 1px;
+    border-bottom: 1px solid rgba(132,169,140,0.2); white-space: nowrap;
+  }
+  thead th:first-child { border-top-left-radius: 16px; }
+  thead th:last-child  { border-top-right-radius: 16px; }
+  tbody td {
+    padding: 14px 16px; border-bottom: 1px solid var(--row-divider);
+    vertical-align: top; line-height: 1.55;
+  }
+  tbody tr:hover td { background: rgba(255,255,255,0.55); }
+  tbody tr:last-child td { border-bottom: none; }
+  td .method {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    margin-right: 8px; vertical-align: middle;
+  }
+  td .method.get    { background: rgba(132,169,140,0.22); color: #4f7564; }
+  td .method.post   { background: rgba(244,162,97,0.26);  color: #b5651d; }
+  td .method.delete { background: rgba(231,111,81,0.22);  color: #c45a3f; }
+  td .path {
+    font-family: "JetBrains Mono","Menlo","Consolas",monospace;
+    font-size: 12.5px; color: var(--text-primary);
+    background: rgba(255,255,255,0.6); padding: 2px 8px;
+    border-radius: 8px; border: 1px solid rgba(132,169,140,0.18);
+    word-break: break-all;
+  }
+  td.field-cell code, td.frontend-cell code {
+    display: inline-block;
+    font-family: "JetBrains Mono","Menlo","Consolas",monospace;
+    font-size: 12.5px; background: rgba(132,169,140,0.14);
+    color: #4f7564; border-radius: 6px;
+    padding: 1px 7px; margin: 2px 4px 2px 0;
+  }
+  td.frontend-cell .file {
+    display: block; font-size: 12px; color: var(--text-secondary);
+    margin-top: 4px; font-style: italic;
+  }
+  .footer-note {
+    margin-top: 40px; text-align: center;
+    color: var(--text-secondary); font-size: 13px; line-height: 1.7;
+  }
+  @media (max-width: 960px) {
+    .meta-cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    body { padding: 40px 16px 80px; }
+    .group-card { padding: 20px; }
+    table { font-size: 12.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>声盒 Mini · 前端字段对照表</h1>
+    <p>
+      本表用于证明小程序前端的接口契约与字段命名，全部来源于 Apifox 文档「所有模块.md」。
+      每一行列出 <strong>Apifox 接口</strong>、<strong>请求/返回字段</strong>、对应的
+      <strong>前端调用位置</strong>，方便对接、联调与回归。
+    </p>
+  </div>
+
+  <section class="meta-cards">
+    <div class="meta-card"><div class="label">总接口数</div><div class="value">36</div></div>
+    <div class="meta-card"><div class="label">业务模块</div><div class="value">6</div></div>
+    <div class="meta-card"><div class="label">前端调用入口</div><div class="value">services/api.ts</div></div>
+    <div class="meta-card"><div class="label">字段命名风格</div><div class="value orange">camelCase</div></div>
+  </section>
+
+  <div class="legend">
+    <span class="pill method-get">GET 查询</span>
+    <span class="pill method-post">POST 提交</span>
+    <span class="pill method-delete">DELETE 删除</span>
+    <span class="pill">字段同名 = 直接对照 Apifox</span>
+  </div>
+
+  <section class="group-card">
+    <div class="group-head">
+      <h2>鉴权与首页</h2>
+      <span class="desc">登录、获取首页设备状态、播放控制与音量调节。</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:24%">Apifox 接口</th>
+        <th style="width:22%">关键字段</th>
+        <th style="width:24%">前端字段映射</th>
+        <th style="width:30%">前端调用位置</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/auth/wechat-login</span><br /><small>微信授权登录</small></td>
+          <td class="field-cell"><code>code</code><code>encryptedData</code><code>iv</code> → <code>token</code><code>userId</code><code>nickname</code><code>avatar</code><code>hasDevice</code></td>
+          <td class="frontend-cell"><code>nickname</code><code>avatarUrl</code><code>code</code> 入本地 session<span class="file">utils/auth.ts · setLoginSession()</span></td>
+          <td class="frontend-cell">登录页点"微信一键登录"<span class="file">pages/login/index.ts → finalizeLogin()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/home/overview</span><br /><small>获取首页信息</small></td>
+          <td class="field-cell"><code>device.{deviceId,name,model,online,battery}</code><code>playing.{songName,artist,source,isPlaying}</code><code>historyCount</code></td>
+          <td class="frontend-cell"><code>battery</code><code>deviceName</code><code>deviceModel</code><code>online</code><code>currentSong</code><code>currentArtist</code><span class="file">同名直拷</span></td>
+          <td class="frontend-cell">首页设备卡 + 播放卡<span class="file">pages/index/index.ts → loadPage()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/player/control</span><br /><small>播放控制</small></td>
+          <td class="field-cell"><code>action: play|pause|next|previous</code></td>
+          <td class="frontend-cell"><code>controlPlayer(action)</code></td>
+          <td class="frontend-cell">播放卡片上一首/下一首/播放暂停<span class="file">pages/index/index.ts → triggerPlayerAction()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/player/volume</span><br /><small>调节音量</small></td>
+          <td class="field-cell"><code>volume</code> 0–100</td>
+          <td class="frontend-cell"><code>setPlayerVolume(volume)</code></td>
+          <td class="frontend-cell">首页音量滑块<span class="file">pages/index/index.ts → changeVolume()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/player/play-song</span><br /><small>在音箱上播放歌曲</small></td>
+          <td class="field-cell"><code>songId</code><code>songName</code><code>artist</code><code>source</code></td>
+          <td class="frontend-cell"><code>playSong(payload)</code> 字段一一对应</td>
+          <td class="frontend-cell">点搜歌结果"播放选中"<span class="file">pages/index/index.ts → playSelectedSong()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/player/add-next</span><br /><small>加入下一首播放</small></td>
+          <td class="field-cell"><code>songId</code><code>source</code> → <code>queuePosition</code></td>
+          <td class="frontend-cell"><code>addNextSong(payload)</code></td>
+          <td class="frontend-cell">"加入下一首"按钮<span class="file">pages/index/index.ts → addSongToQueue()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/song-info</span><br /><small>获取歌曲信息</small></td>
+          <td class="field-cell"><code>keyword</code> 或 <code>songId</code> → <code>name</code><code>album</code><code>artists[]</code><code>coverUrl</code><code>durationMs</code><code>audioUrl</code></td>
+          <td class="frontend-cell"><code>SongInfoResult</code> / <code>NeteaseSearchSong</code></td>
+          <td class="frontend-cell">搜索兜底 / 详情接口<span class="file">services/api.ts → getSongInfo()</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="group-card">
+    <div class="group-head">
+      <h2>好友与一起听</h2>
+      <span class="desc">好友动态、共享房间生命周期、分享卡片。</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:24%">Apifox 接口</th>
+        <th style="width:22%">关键字段</th>
+        <th style="width:24%">前端字段映射</th>
+        <th style="width:30%">前端调用位置</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/friends/listening</span><br /><small>听歌好友首页</small></td>
+          <td class="field-cell"><code>recentFriends[].{name,nickname,avatar,isOnline,status}</code><code>room.{memberCount,members[],roomName,songName}</code></td>
+          <td class="frontend-cell"><code>FriendRow</code><code>MemberBadge</code> 同名直拷</td>
+          <td class="frontend-cell">好友页成员/动态列表<span class="file">pages/friends/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/friends/search</span><br /><small>搜索好友</small></td>
+          <td class="field-cell"><code>keyword</code> → <code>list[].{userId,nickname}</code></td>
+          <td class="frontend-cell">好友页搜索（预留）</td>
+          <td class="frontend-cell">好友搜索框<span class="file">pages/friends/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/listen-room/create</span><br /><small>创建一起听房间</small></td>
+          <td class="field-cell"><code>roomName</code> → <code>roomId</code><code>memberCount</code><code>songName</code></td>
+          <td class="frontend-cell"><code>createListenRoom(roomName)</code></td>
+          <td class="frontend-cell">"新建一起听"按钮<span class="file">pages/friends/index.ts → createRoom()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/listen-room/join</span><br /><small>加入一起听房间</small></td>
+          <td class="field-cell"><code>roomId</code></td>
+          <td class="frontend-cell">"加入"按钮（点击好友行）</td>
+          <td class="frontend-cell">pages/friends/index.ts → createRoomWithFriend()</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/listen-room/detail</span><br /><small>房间详情</small></td>
+          <td class="field-cell"><code>roomId</code> → <code>members[]</code><code>currentSong</code></td>
+          <td class="frontend-cell"><code>roomMemberCount</code><code>roomSongName</code></td>
+          <td class="frontend-cell">好友页 hero 区域显示</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/listen-room/comment</span><br /><small>发送评论</small></td>
+          <td class="field-cell"><code>roomId</code><code>content</code></td>
+          <td class="frontend-cell">评论输入（预留）</td>
+          <td class="frontend-cell">pages/friends/index.ts</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/listen-room/leave</span><br /><small>退出一起听</small></td>
+          <td class="field-cell"><code>roomId</code></td>
+          <td class="frontend-cell">退出按钮（预留）</td>
+          <td class="frontend-cell">pages/friends/index.ts</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/share/song-link</span><br /><small>生成分享链接</small></td>
+          <td class="field-cell"><code>songId</code><code>source</code> → <code>shareUrl</code></td>
+          <td class="frontend-cell">"复制链接"按钮</td>
+          <td class="frontend-cell">pages/friends/index.ts → copyShareLink()</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/share/song-card</span><br /><small>生成分享卡片</small></td>
+          <td class="field-cell"><code>songId</code><code>songName</code><code>artist</code><code>source</code> → <code>previewUrl</code></td>
+          <td class="frontend-cell"><code>shareSongCard(payload)</code></td>
+          <td class="frontend-cell">分享卡片本地 canvas + 链接<span class="file">pages/friends/index.ts → shareCurrentSong()</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="group-card">
+    <div class="group-head">
+      <h2>听歌数据与历史</h2>
+      <span class="desc">本周陪伴时长、常听艺人、历史播放、长图卡片。</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:24%">Apifox 接口</th>
+        <th style="width:22%">关键字段</th>
+        <th style="width:24%">前端字段映射</th>
+        <th style="width:30%">前端调用位置</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/listening-data/summary</span><br /><small>听歌总结</small></td>
+          <td class="field-cell"><code>minutes</code><code>songCount</code><code>activeTime</code><code>topPercent</code><code>favoriteStyle</code></td>
+          <td class="frontend-cell"><code>minutes</code><code>activeTime</code><code>favoriteStyle</code><code>topPercent</code> 同名直拷</td>
+          <td class="frontend-cell">数据页 hero 区<span class="file">pages/data/index.ts → loadPage()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/listening-data/weekly-report</span><br /><small>个人总结</small></td>
+          <td class="field-cell"><code>year</code><code>week</code><code>minutes</code><code>compareLastWeek</code><code>topArtist.{artistName,songCount}</code><code>topPlaylist.{playlistName,playCount}</code></td>
+          <td class="frontend-cell"><code>weeklyTitle</code><code>topArtistName</code><code>topPlaylistName</code></td>
+          <td class="frontend-cell">数据页"榜"行 + 周报<span class="file">pages/data/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/listening-data/generate-card</span><br /><small>生成总结长图</small></td>
+          <td class="field-cell"><code>style</code> → <code>imageUrl</code><code>cardType</code><code>year</code><code>week</code></td>
+          <td class="frontend-cell"><code>generateListeningCard(style)</code></td>
+          <td class="frontend-cell">数据页"生成总结卡片"<span class="file">pages/data/index.ts → generateCard()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/play-history/list</span><br /><small>播放历史</small></td>
+          <td class="field-cell"><code>keyword</code><code>page</code><code>pageSize</code><code>source</code> → <code>list[].{historyId,songId,songName,artist,playedAt,coverUrl,source}</code></td>
+          <td class="frontend-cell"><code>HistoryPreview</code><code>PlayHistoryItem</code> 同名映射</td>
+          <td class="frontend-cell">数据页"最近播放" + 历史页<span class="file">pages/data/index.ts · pages/history/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method delete">DELETE</span><span class="path">/api/play-history/clear-old</span><br /><small>清理 30 天前历史</small></td>
+          <td class="field-cell"><code>days</code> → <code>cleared</code></td>
+          <td class="frontend-cell"><code>clearOldHistory(days)</code></td>
+          <td class="frontend-cell">历史页"清理"按钮<span class="file">pages/history/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method delete">DELETE</span><span class="path">/api/play-history/delete</span><br /><small>删除单条历史</small></td>
+          <td class="field-cell"><code>historyId</code></td>
+          <td class="frontend-cell">右滑删除（预留）</td>
+          <td class="frontend-cell">历史页交互</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="group-card">
+    <div class="group-head">
+      <h2>设备与高级设置</h2>
+      <span class="desc">设备详情、电量、命名、配网、高级声学设置。</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:24%">Apifox 接口</th>
+        <th style="width:22%">关键字段</th>
+        <th style="width:24%">前端字段映射</th>
+        <th style="width:30%">前端调用位置</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/device/detail</span><br /><small>设备详情</small></td>
+          <td class="field-cell"><code>deviceId</code><code>deviceName</code><code>modelName</code><code>online</code><code>currentNetwork</code><code>volume</code><code>volumeLimit</code><code>bassGain</code><code>signalStrength</code></td>
+          <td class="frontend-cell"><code>DeviceDetail</code> 接口同名</td>
+          <td class="frontend-cell">设备页基础信息<span class="file">pages/device/index.ts → loadPage()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/device/list</span><br /><small>设备列表</small></td>
+          <td class="field-cell"><code>list[].{deviceId,deviceName,modelName}</code></td>
+          <td class="frontend-cell">多设备切换（预留）</td>
+          <td class="frontend-cell">pages/device/index.ts</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/device/battery</span><br /><small>电量信息</small></td>
+          <td class="field-cell"><code>battery</code><code>estimatedPlayTime</code><code>isCharging</code><code>fullChargeNotice</code><code>lowBatteryThreshold</code></td>
+          <td class="frontend-cell"><code>DeviceBattery</code> 同名直拷</td>
+          <td class="frontend-cell">设备页电量卡 + 提醒开关<span class="file">pages/device/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/device/power-save</span><br /><small>省电模式</small></td>
+          <td class="field-cell"><code>powerSaveEnabled</code></td>
+          <td class="frontend-cell">设备开关（预留）</td>
+          <td class="frontend-cell">pages/device/index.ts</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/device/battery-notice</span><br /><small>电量通知设置</small></td>
+          <td class="field-cell"><code>fullChargeNotice</code><code>lowBatteryEnabled</code><code>threshold</code></td>
+          <td class="frontend-cell"><code>saveBatteryNotice(payload)</code></td>
+          <td class="frontend-cell">"保存设备设置"<span class="file">pages/device/index.ts → saveDeviceSettings()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/device/rename</span><br /><small>自定义设备名</small></td>
+          <td class="field-cell"><code>deviceId</code><code>deviceName</code></td>
+          <td class="frontend-cell">设备命名（预留）</td>
+          <td class="frontend-cell">pages/device/index.ts</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/device/advanced-settings</span><br /><small>高级设置</small></td>
+          <td class="field-cell"><code>volumeLimit</code><code>bassGain</code><code>nightStart</code><code>nightEnd</code><code>nightModeEnabled</code></td>
+          <td class="frontend-cell"><code>saveAdvancedSettings(payload)</code></td>
+          <td class="frontend-cell">音量上限/低音/夜间勿扰滑块<span class="file">pages/device/index.ts → saveDeviceSettings()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/device/search-nearby</span><br /><small>搜索附近设备</small></td>
+          <td class="field-cell"><code>list[].{deviceId,deviceName,modelName,signalStrength}</code></td>
+          <td class="frontend-cell"><code>NearbyDevice</code> 同名直拷</td>
+          <td class="frontend-cell">"附近设备"列表<span class="file">pages/device/index.ts → refreshNearbyDevices()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/device/bind</span><br /><small>开始绑定</small></td>
+          <td class="field-cell"><code>deviceId</code> → <code>taskId</code></td>
+          <td class="frontend-cell">配网入口（预留）</td>
+          <td class="frontend-cell">pages/device/index.ts</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/device/bind-progress</span><br /><small>查询配网进度</small></td>
+          <td class="field-cell"><code>taskId</code> → <code>progress</code><code>steps[].{name,status}</code></td>
+          <td class="frontend-cell"><code>BindProgress</code> · <code>BindStepView</code></td>
+          <td class="frontend-cell">"配网进度卡"<span class="file">pages/device/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/device/unbind</span><br /><small>解绑设备</small></td>
+          <td class="field-cell"><code>deviceId</code></td>
+          <td class="frontend-cell">解绑（预留）</td>
+          <td class="frontend-cell">pages/device/index.ts</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="group-card">
+    <div class="group-head">
+      <h2>音乐服务账号同步</h2>
+      <span class="desc">QQ 音乐 / 网易云账号绑定、权限和同步进度。</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:24%">Apifox 接口</th>
+        <th style="width:22%">关键字段</th>
+        <th style="width:24%">前端字段映射</th>
+        <th style="width:30%">前端调用位置</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/music-service/bind</span><br /><small>绑定音乐服务</small></td>
+          <td class="field-cell"><code>service</code> ∈ qq/netease → <code>accountName</code><code>syncStatus</code></td>
+          <td class="frontend-cell"><code>bindMusicService(service)</code></td>
+          <td class="frontend-cell">授权页"微信授权并继续"<span class="file">pages/auth/index.ts → bindService()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/music-service/list</span><br /><small>已绑定服务</small></td>
+          <td class="field-cell"><code>services[].{service,serviceName,bound,accountName,syncStatus}</code></td>
+          <td class="frontend-cell"><code>MusicServiceBinding</code></td>
+          <td class="frontend-cell">首页/设备页同步卡<span class="file">pages/index/index.ts · pages/device/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">/api/music-service/sync-progress</span><br /><small>同步进度</small></td>
+          <td class="field-cell"><code>service</code> → <code>progress</code><code>currentTask</code></td>
+          <td class="frontend-cell"><code>MusicSyncProgress</code></td>
+          <td class="frontend-cell">"同步进度"行<span class="file">pages/auth/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/music-service/permissions</span><br /><small>修改权限</small></td>
+          <td class="field-cell"><code>service</code><code>readFavorites</code><code>syncHistory</code></td>
+          <td class="frontend-cell">授权权限开关</td>
+          <td class="frontend-cell">QQ/网易开关<span class="file">pages/auth/index.ts</span></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span><span class="path">/api/music-service/unbind</span><br /><small>解除账号绑定</small></td>
+          <td class="field-cell"><code>service</code></td>
+          <td class="frontend-cell">解除绑定（预留）</td>
+          <td class="frontend-cell">pages/auth/index.ts</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="group-card">
+    <div class="group-head">
+      <h2>外部网易云音源（直连，未走业务后端）</h2>
+      <span class="desc">前端直接调用网易云开放接口与多镜像，用于实时获取试听音源，与上方业务接口字段独立。</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:30%">外部接口</th>
+        <th style="width:24%">关键字段</th>
+        <th style="width:46%">前端调用位置</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">https://music.163.com/api/search/get/web</span></td>
+          <td class="field-cell"><code>s</code><code>limit</code> → <code>result.songs[].{id,name,artists[],album,dt}</code></td>
+          <td class="frontend-cell">搜歌结果列表<span class="file">services/api.ts → searchNeteaseSongs()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">https://netease-cloud-music-api-*.vercel.app/song/url/v1</span></td>
+          <td class="field-cell"><code>id</code><code>level</code> → <code>data[0].url</code></td>
+          <td class="frontend-cell">实时拉取音源（多镜像 + 多音质回退）<span class="file">services/api.ts → getNeteaseSongPreviewUrl()</span></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span><span class="path">https://music.163.com/song/media/outer/url</span></td>
+          <td class="field-cell"><code>id.mp3</code></td>
+          <td class="frontend-cell">最终兜底音源<span class="file">services/api.ts</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <p class="footer-note">
+    所有业务接口字段均与 Apifox「所有模块.md」逐项对齐；前端类型在
+    <strong>services/api.ts</strong> 中以 TypeScript interface 显式声明，调用位置已在「前端调用位置」列给出。
+    <br />更新接口字段时，建议先在 Apifox 调整 → 同步更新本表 → 修改 services/api.ts。
+  </p>
+</div>
+</body>
+</html>
