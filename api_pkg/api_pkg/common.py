@@ -253,19 +253,19 @@ def mysql_all(sql, params=()):
 def mysql_exec(sql, params=(), fetch_last_id=False):
     conn = mysql_conn()
     if conn is None:
-        return None if fetch_last_id else 0
+        raise RuntimeError("MySQL 连接失败，写库已停止")
     try:
         with conn.cursor() as cursor:
             cursor.execute(sql, params)
             result = cursor.lastrowid if fetch_last_id else cursor.rowcount
         conn.commit()
         return result
-    except Exception:
+    except Exception as exc:
         try:
             conn.rollback()
         except Exception:
             pass
-        return None if fetch_last_id else 0
+        raise RuntimeError(f"MySQL 执行失败：{exc}") from exc
     finally:
         try:
             conn.close()
@@ -276,17 +276,17 @@ def mysql_exec(sql, params=(), fetch_last_id=False):
 def mysql_transaction(callback):
     conn = mysql_conn()
     if conn is None:
-        return None
+        raise RuntimeError("MySQL 连接失败，事务写库已停止")
     try:
         result = callback(conn)
         conn.commit()
         return result
-    except Exception:
+    except Exception as exc:
         try:
             conn.rollback()
         except Exception:
             pass
-        return None
+        raise RuntimeError(f"MySQL 事务执行失败：{exc}") from exc
     finally:
         try:
             conn.close()

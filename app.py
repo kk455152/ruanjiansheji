@@ -30,14 +30,11 @@ from device_routes import device_bp
 from stats_routes import stats_bp
 from mongo_routes import mongo_bp
 from api_routes import api_bp
-
 app.register_blueprint(auth_bp)
 app.register_blueprint(device_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(mongo_bp)
 app.register_blueprint(api_bp)
-
-
 # =========================
 # 原来的网关配置，不要乱改
 # =========================
@@ -512,3 +509,12 @@ if __name__ == '__main__':
         threaded=True,
         ssl_context=(cert_path, key_path),
     )
+
+
+# C 同学浅粉色联调数据库看板
+try:
+    from c_observe_routes import register_c_observe_routes
+    register_c_observe_routes(app)
+except Exception as exc:
+    print("c_observe_routes register failed:", exc)
+
