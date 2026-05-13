@@ -42,10 +42,21 @@ const DEFAULT_DEVICE_NAME = '声盒 Mini'
 const DEFAULT_MODEL_NAME = 'SH-Mini A1'
 const DEFAULT_NETWORK = 'Home-5G'
 
+function stripFallbackTag(value: string) {
+  if (!value) return value
+  return String(value)
+    .replace(/[【\[]\s*兜底数据\s*[】\]]/g, '')
+    .replace(/兜底数据/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function clean(value: string, fallback: string) {
   if (!value) return fallback
-  if (value.includes('兜底') || value.includes('Smart Speaker')) return fallback
-  return value
+  const stripped = stripFallbackTag(value)
+  if (!stripped) return fallback
+  if (stripped.includes('Smart Speaker')) return fallback
+  return stripped
 }
 
 function readStoredSettings(): Partial<StoredSettings> {
@@ -153,7 +164,7 @@ Component({
           bindProgress: bindProgress.progress || 0,
           bindSteps: (bindProgress.steps || []).map((step: any) => ({
             label: stepStatusLabel(step.status),
-            name: step.name,
+            name: stripFallbackTag(String(step.name || '')) || '配置步骤',
             status: step.status,
           })),
           nearbyDevices: (nearbyResult.list || []).map((device: any) => ({
@@ -165,7 +176,7 @@ Component({
           services: (servicesResult.services || [])
             .filter((service: any) => service.bound)
             .map((service: any) => ({
-              serviceName: service.serviceName,
+              serviceName: stripFallbackTag(String(service.serviceName || '')) || '音乐服务',
               syncText: syncStatusLabel(service.syncStatus),
             })),
         }

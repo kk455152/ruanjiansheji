@@ -84,7 +84,7 @@
 
   <view class="glass-card progress-card">
     <view class="progress-head">
-      <text class="section-title">配网进度</text>
+      <text class="section-title">配置进度</text>
       <text class="right-link">{{bindProgress}}%</text>
     </view>
     <view class="progress-track"><view class="progress-fill" style="width: {{bindProgress}}%;"></view></view>

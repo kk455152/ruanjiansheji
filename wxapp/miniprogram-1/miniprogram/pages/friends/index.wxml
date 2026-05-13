@@ -9,11 +9,16 @@
   </view>
 
   <view class="room-hero">
+    <view class="leave-button" wx:if="{{members.length}}" bindtap="leaveRoom">
+      <text class="leave-glyph">×</text>
+      <text class="leave-label">{{isMyRoom ? '解散' : '退出'}}</text>
+    </view>
     <view class="music-orb">
       <view class="music-orb-inner">♪</view>
     </view>
     <text class="room-title">{{roomName}}</text>
     <text class="section-copy">{{roomSongName}} · {{roomMemberCount}} 位成员</text>
+    <text class="host-tagline" wx:if="{{hostTagline}}">{{hostTagline}}</text>
   </view>
 
   <view class="glass-card member-card">
@@ -21,16 +26,18 @@
       <text class="section-copy">房间成员</text>
       <text class="right-link" bindtap="copyRoomName">复制房间名</text>
     </view>
-    <view class="avatar-stack">
+    <view class="avatar-stack" wx:if="{{members.length}}">
       <view
-        class="avatar {{item.avatarTone}}"
+        class="avatar {{item.avatarTone}} {{item.isHost ? 'avatar-host' : ''}}"
         wx:for="{{members}}"
         wx:key="name"
       >
         <text class="avatar-char">{{item.shortName}}</text>
-        <text class="avatar-badge">{{item.badgeIcon}}</text>
+        <text class="avatar-badge">{{item.isHost ? '主' : (item.isSelf ? '我' : item.badgeIcon)}}</text>
       </view>
-      <view class="avatar avatar-add" wx:if="{{!members.length}}">＋</view>
+    </view>
+    <view class="member-empty" wx:else>
+      <text class="section-copy">房间暂时空着，点下面「新建一起听」就能开场</text>
     </view>
   </view>
 
@@ -60,8 +67,17 @@
       </view>
     </view>
     <text
+      wx:if="{{isMyRoom}}"
+      class="outline-pill"
+      data-name="{{item.name}}"
+      data-action="invite"
+      bindtap="createRoomWithFriend"
+    >邀请</text>
+    <text
+      wx:else
       class="{{item.isOnline ? 'pill' : 'outline-pill'}}"
       data-name="{{item.name}}"
+      data-action="join"
       bindtap="createRoomWithFriend"
     >{{item.isOnline ? '加入' : '邀请'}}</text>
   </view>

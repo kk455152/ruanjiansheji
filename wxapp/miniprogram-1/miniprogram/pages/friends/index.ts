@@ -2,7 +2,7 @@ import { createListenRoom, shareSongCard } from '../../services/api'
 import { FEATURED_TRACK } from '../../services/config'
 import { firstChar } from '../../utils/display'
 import { getWeekAggregates } from '../../utils/listening-stats'
-import { ensureAuthenticated } from '../../utils/auth'
+import { ensureAuthenticated, getLoginSession } from '../../utils/auth'
 
 type FriendRow = {
   friendId: string
@@ -21,6 +21,8 @@ type MemberBadge = {
   shortName: string
   avatarTone: string
   badgeIcon: string
+  isHost: boolean
+  isSelf: boolean
 }
 
 type CanvasContext2D = CanvasRenderingContext2D & {
@@ -113,6 +115,8 @@ function buildMockData() {
     shortName: firstChar(name),
     avatarTone: toneFor(name, index),
     badgeIcon: pick(MEMBER_ICONS, name.charCodeAt(0) + index),
+    isHost: false,
+    isSelf: false,
   }))
 
   const friendCount = 6 + Math.floor(Math.random() * 3)
@@ -141,6 +145,41 @@ function buildMockData() {
       songName: `${song.songName} · ${song.artist}`,
     },
   }
+}
+
+function buildMember(name: string, options: { isHost?: boolean; isSelf?: boolean; offset?: number } = {}): MemberBadge {
+  const offset = options.offset !== undefined ? options.offset : 0
+  return {
+    name,
+    shortName: firstChar(name),
+    avatarTone: toneFor(name, offset),
+    badgeIcon: pick(MEMBER_ICONS, name.charCodeAt(0) + offset),
+    isHost: Boolean(options.isHost),
+    isSelf: Boolean(options.isSelf),
+  }
+}
+
+function getSelfDisplayName() {
+  const session = getLoginSession()
+  const nick = session && session.nickname ? session.nickname.trim() : ''
+  return nick || '我'
+}
+
+function composeRoomMembers(hostName: string, extraCount: number, selfName: string, excludeNames: string[] = []): MemberBadge[] {
+  const hostIsSelf = hostName === selfName
+  const members: MemberBadge[] = []
+  members.push(buildMember(hostName, { isHost: true, isSelf: hostIsSelf, offset: 0 }))
+
+  if (!hostIsSelf) {
+    members.push(buildMember(selfName, { isSelf: true, offset: 1 }))
+  }
+
+  const excluded = new Set<string>([hostName, selfName, ...excludeNames])
+  const pool = shuffle(FRIEND_NAMES).filter((name) => !excluded.has(name))
+  for (let i = 0; i < extraCount && i < pool.length; i += 1) {
+    members.push(buildMember(pool[i], { offset: i + 2 }))
+  }
+  return members
 }
 
 function drawRoundedRect(ctx: CanvasContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -181,6 +220,9 @@ Component({
     roomMemberCount: 0,
     roomName: '雨后电台',
     roomSongName: FEATURED_TRACK.songName as string,
+    hostName: '',
+    hostTagline: '',
+    isMyRoom: false,
     sharePreviewUrl: '',
     shareCardPath: '',
     cardGreeting: '',
@@ -217,39 +259,137 @@ Component({
     loadPage() {
       this.setData({ isLoading: true })
       const mock = buildMockData()
-      this.setData({
-        members: mock.members,
+      const hasActiveRoom = this.data.members && this.data.members.length > 0
+
+      const patch: Record<string, unknown> = {
         recentFriends: mock.recentFriends,
-        roomMemberCount: mock.room.memberCount,
-        roomName: mock.room.roomName,
-        roomSongName: mock.room.songName,
         isLoading: false,
-      })
+      }
+
+      if (!hasActiveRoom) {
+        patch.members = []
+        patch.roomMemberCount = 0
+        patch.roomName = mock.room.roomName
+        patch.roomSongName = mock.room.songName
+        patch.hostName = ''
+        patch.hostTagline = '还没有房间，点「新建一起听」开场'
+        patch.isMyRoom = false
+      }
+
+      this.setData(patch)
     },
     async createRoom() {
       this.setData({ isCreating: true })
 
+      const selfName = getSelfDisplayName()
+      const roomName = `${selfName}的一起听`
+      const songPick = pickRandom(ROOM_SONGS)
+
       try {
-        const room = await createListenRoom(this.data.roomName)
-        this.setData({
-          roomMemberCount: room.memberCount,
-          roomName: room.roomName,
-          roomSongName: room.songName,
-        })
-        wx.showToast({ title: '一起听房间已创建', icon: 'success' })
+        await createListenRoom(roomName)
       } catch (error) {
-        const mock = buildMockData()
-        this.setData({
-          members: mock.members,
-          recentFriends: mock.recentFriends,
-          roomMemberCount: mock.room.memberCount,
-          roomName: mock.room.roomName,
-          roomSongName: mock.room.songName,
-        })
-        wx.showToast({ title: '房间已本地重建', icon: 'success' })
-      } finally {
-        this.setData({ isCreating: false })
+        // 后端失败不影响本地房间
       }
+
+      const members = composeRoomMembers(selfName, 0, selfName)
+      this.setData({
+        members,
+        roomMemberCount: members.length,
+        roomName,
+        roomSongName: `${songPick.songName} · ${songPick.artist}`,
+        hostName: selfName,
+        hostTagline: `房主：${selfName}（你）`,
+        isMyRoom: true,
+        isCreating: false,
+      })
+      wx.showToast({ title: '你已创建一起听房间', icon: 'success' })
+    },
+    async createRoomWithFriend(event: WechatMiniprogram.TouchEvent) {
+      const friendName = String(event.currentTarget.dataset.name || '好友')
+      const action = String(event.currentTarget.dataset.action || 'join')
+
+      if (action === 'invite') {
+        await this.inviteFriendToRoom(friendName)
+        return
+      }
+
+      await this.joinFriendRoom(friendName)
+    },
+    async joinFriendRoom(friendName: string) {
+      const selfName = getSelfDisplayName()
+      const extraCount = 1 + Math.floor(Math.random() * 3)
+      const members = composeRoomMembers(friendName, extraCount, selfName)
+      const songPick = pickRandom(ROOM_SONGS)
+      const roomName = `${friendName}的一起听`
+
+      this.setData({
+        members,
+        roomMemberCount: members.length,
+        roomName,
+        roomSongName: `${songPick.songName} · ${songPick.artist}`,
+        hostName: friendName,
+        hostTagline: `房主：${friendName} · 你已加入`,
+        isMyRoom: false,
+      })
+      wx.showToast({ title: `已加入 ${friendName} 的房间`, icon: 'success' })
+    },
+    async inviteFriendToRoom(friendName: string) {
+      const selfName = getSelfDisplayName()
+
+      if (!this.data.isMyRoom || !this.data.members.length) {
+        const members = composeRoomMembers(selfName, 0, selfName)
+        members.push(buildMember(friendName, { offset: members.length + 3 }))
+        this.setData({
+          members,
+          roomMemberCount: members.length,
+          roomName: `${selfName}的一起听`,
+          hostName: selfName,
+          hostTagline: `房主：${selfName}（你）`,
+          isMyRoom: true,
+        })
+      } else if (this.data.members.some((m) => m.name === friendName)) {
+        wx.showToast({ title: `${friendName} 已在房间中`, icon: 'none' })
+        return
+      } else {
+        const nextMembers = this.data.members.concat([
+          buildMember(friendName, { offset: this.data.members.length + 3 }),
+        ])
+        this.setData({
+          members: nextMembers,
+          roomMemberCount: nextMembers.length,
+        })
+      }
+
+      wx.showToast({ title: `已邀请 ${friendName} 加入`, icon: 'success' })
+    },
+    leaveRoom() {
+      if (!this.data.members.length) {
+        wx.showToast({ title: '当前没有在任何房间', icon: 'none' })
+        return
+      }
+      const isMyRoom = this.data.isMyRoom
+      wx.showModal({
+        title: isMyRoom ? '解散房间' : '退出一起听',
+        content: isMyRoom
+          ? '解散后当前房间的所有成员都会离开，确定继续吗？'
+          : '确定要离开当前的一起听房间吗？',
+        confirmText: isMyRoom ? '解散' : '退出',
+        confirmColor: '#6b9080',
+        success: (res) => {
+          if (!res.confirm) return
+          this.setData({
+            members: [],
+            roomMemberCount: 0,
+            hostName: '',
+            hostTagline: '已离开房间，点「新建一起听」再开一场',
+            isMyRoom: false,
+          })
+          wx.showToast({
+            title: isMyRoom ? '房间已解散' : '已退出房间',
+            icon: 'success',
+          })
+        },
+      })
     },
     async shareCurrentSong() {
       this.setData({ isSharing: true })
@@ -274,11 +414,6 @@ Component({
       } finally {
         this.setData({ isSharing: false })
       }
-    },
-    async createRoomWithFriend(event: WechatMiniprogram.TouchEvent) {
-      const name = String(event.currentTarget.dataset.name || '好友')
-      this.setData({ roomName: `${name}的一起听` })
-      await this.createRoom()
     },
     async loadListeningSummary() {
       const aggregate = getWeekAggregates()
