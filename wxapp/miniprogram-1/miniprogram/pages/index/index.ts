@@ -15,8 +15,25 @@ import {
 } from '../../services/api'
 import { FEATURED_TRACK } from '../../services/config'
 import { sourceLabel, syncStatusLabel } from '../../utils/display'
+import { recordListeningSession } from '../../utils/listening-stats'
 
 let previewAudio: WechatMiniprogram.InnerAudioContext | null = null
+let currentSessionStart = 0
+let currentSessionInfo: { artist: string; songName: string; source: string } | null = null
+
+function commitSession() {
+  if (!currentSessionStart || !currentSessionInfo) {
+    currentSessionStart = 0
+    currentSessionInfo = null
+    return
+  }
+  const durationMs = Date.now() - currentSessionStart
+  if (durationMs > 3000) {
+    recordListeningSession({ ...currentSessionInfo, durationMs })
+  }
+  currentSessionStart = 0
+  currentSessionInfo = null
+}
 
 type HomeServiceCard = {
   accountName: string
@@ -25,6 +42,10 @@ type HomeServiceCard = {
   serviceName: string
   syncText: string
 }
+
+const DEFAULT_PLAYLIST_KEYWORDS = ['雨后电台', '柳爽 城市夜航', '陈粒', '毛不易 入海', '理想三旬']
+const DEFAULT_DEVICE_NAME = '声盒 Mini'
+const DEFAULT_DEVICE_MODEL = 'SH-Mini A1'
 
 function mapSongInfoToSearchSong(song: SongInfoResult, keyword: string): NeteaseSearchSong {
   return {
@@ -43,27 +64,53 @@ function mapSongInfoToSearchSong(song: SongInfoResult, keyword: string): Netease
   }
 }
 
+function formatDuration(seconds: number) {
+  if (!seconds || seconds <= 0) {
+    return '—'
+  }
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`
+}
+
+function sanitizeDeviceName(name: string) {
+  if (!name) return DEFAULT_DEVICE_NAME
+  if (name.includes('兜底') || name.includes('Smart Speaker')) return DEFAULT_DEVICE_NAME
+  return name
+}
+
+function sanitizeDeviceModel(model: string) {
+  if (!model) return DEFAULT_DEVICE_MODEL
+  if (model.includes('兜底')) return DEFAULT_DEVICE_MODEL
+  return model
+}
+
 Component({
   data: {
     activeSongId: '',
-    battery: 0,
-    currentArtist: '暂无播放内容',
-    currentSong: '搜索一首网易云歌曲开始播放',
-    currentSource: '本地音源',
-    deviceModel: '',
-    deviceName: 'Smart Speaker Mini',
+    battery: 82,
+    currentAlbum: '',
+    currentArtist: '加载中',
+    currentCover: '',
+    currentDuration: '—',
+    currentSong: '正在准备今日推荐',
+    currentSource: '网易云音乐',
+    deviceModel: DEFAULT_DEVICE_MODEL,
+    deviceName: DEFAULT_DEVICE_NAME,
     historyCount: 0,
     isActionLoading: false,
     isLoading: false,
     isPlaying: false,
     isSongSearching: false,
-    online: false,
+    online: true,
+    playlist: [] as NeteaseSearchSong[],
+    playlistIndex: 0,
     previewState: 'idle',
     searchKeyword: '',
     searchedSongs: [] as NeteaseSearchSong[],
     services: [] as HomeServiceCard[],
     syncHint: '连接音乐服务后即可同步你的歌单',
-    volume: 50,
+    volume: 60,
   },
   lifetimes: {
     attached() {
@@ -71,15 +118,43 @@ Component({
       previewAudio = wx.createInnerAudioContext()
       previewAudio.autoplay = false
       previewAudio.obeyMuteSwitch = false
-      previewAudio.onPlay(() => this.setData({ previewState: 'playing' }))
-      previewAudio.onPause(() => this.setData({ previewState: 'paused' }))
-      previewAudio.onStop(() => this.setData({ previewState: 'paused' }))
-      previewAudio.onEnded(() => this.setData({ previewState: 'paused' }))
+      previewAudio.onPlay(() => {
+        this.setData({ previewState: 'playing', isPlaying: true })
+        const song = this.data.playlist[this.data.playlistIndex]
+        if (song) {
+          currentSessionStart = Date.now()
+          currentSessionInfo = {
+            artist: song.artistText || '未知艺人',
+            songName: song.name || '',
+            source: song.source || 'netease',
+          }
+        }
+      })
+      previewAudio.onPause(() => {
+        this.setData({ previewState: 'paused', isPlaying: false })
+        commitSession()
+      })
+      previewAudio.onStop(() => {
+        this.setData({ previewState: 'paused', isPlaying: false })
+        commitSession()
+      })
+      previewAudio.onEnded(() => {
+        this.setData({ previewState: 'paused', isPlaying: false })
+        commitSession()
+        void this.playNextSong()
+      })
       previewAudio.onError(() => {
-        this.setData({ previewState: 'error' })
-        wx.showToast({ title: '当前歌曲暂无可试听音源', icon: 'none' })
+        this.setData({ previewState: 'error', isPlaying: false })
+        commitSession()
+        const index = this.data.playlistIndex
+        const invalidated = this.data.playlist.map((item, idx) =>
+          idx === index ? { ...item, audioUrl: '', previewAvailable: false } : item,
+        )
+        this.setData({ playlist: invalidated })
+        void this.playNextSong()
       })
       void this.loadPage()
+      void this.loadDefaultPlaylist()
     },
     detached() {
       if (previewAudio) {
@@ -93,6 +168,9 @@ Component({
     show() {
       this.syncTabBar()
       void this.loadPage()
+      if (!this.data.playlist.length) {
+        void this.loadDefaultPlaylist()
+      }
     },
   },
   methods: {
@@ -108,25 +186,147 @@ Component({
         tabBar.setData({ selected: 'pages/index/index' })
       }
     },
+    async loadDefaultPlaylist() {
+      try {
+        const keyword = DEFAULT_PLAYLIST_KEYWORDS[
+          Math.floor(Math.random() * DEFAULT_PLAYLIST_KEYWORDS.length)
+        ]
+        const songs = await searchNeteaseSongs(keyword, 10)
+        const usable = songs.filter((song) => song.songId && song.name)
+
+        if (!usable.length) {
+          return
+        }
+
+        this.setData({
+          playlist: usable,
+          playlistIndex: 0,
+        })
+        this.applyCurrentSong(0)
+      } catch (error) {
+        // 静默失败，保持占位
+      }
+    },
+    applyCurrentSong(index: number) {
+      const songs = this.data.playlist
+      if (!songs.length) return
+      const safeIndex = ((index % songs.length) + songs.length) % songs.length
+      const song = songs[safeIndex]
+
+      this.setData({
+        activeSongId: song.songId,
+        currentAlbum: song.album || '',
+        currentArtist: song.artistText || '未知艺人',
+        currentCover: song.coverUrl || '',
+        currentDuration: formatDuration(song.durationSeconds || 0),
+        currentSong: song.name,
+        currentSource: sourceLabel(song.source || 'netease'),
+        playlistIndex: safeIndex,
+      })
+    },
+    async ensurePreviewForIndex(index: number): Promise<string> {
+      const songs = this.data.playlist
+      if (!songs.length) return ''
+      const safeIndex = ((index % songs.length) + songs.length) % songs.length
+      const song = songs[safeIndex]
+      if (!song) return ''
+
+      if (song.audioUrl) {
+        return song.audioUrl
+      }
+
+      try {
+        const audioUrl = await getNeteaseSongPreviewUrl(song.songId)
+        if (audioUrl) {
+          const updated = this.data.playlist.map((item, idx) =>
+            idx === safeIndex ? { ...item, audioUrl, previewAvailable: true } : item,
+          )
+          this.setData({ playlist: updated })
+        }
+        return audioUrl
+      } catch (error) {
+        return ''
+      }
+    },
+    async resolvePlayableFromIndex(startIndex: number) {
+      const songs = this.data.playlist
+      if (!songs.length) {
+        return { audioUrl: '', resolvedIndex: -1 }
+      }
+
+      const total = songs.length
+      for (let offset = 0; offset < total; offset += 1) {
+        const tryIndex = ((startIndex + offset) % total + total) % total
+        const audioUrl = await this.ensurePreviewForIndex(tryIndex)
+        if (audioUrl) {
+          return { audioUrl, resolvedIndex: tryIndex }
+        }
+      }
+      return { audioUrl: '', resolvedIndex: -1 }
+    },
+    async ensurePreviewForCurrent() {
+      const { audioUrl, resolvedIndex } = await this.resolvePlayableFromIndex(this.data.playlistIndex)
+
+      if (audioUrl && resolvedIndex >= 0 && resolvedIndex !== this.data.playlistIndex) {
+        this.applyCurrentSong(resolvedIndex)
+      }
+
+      return audioUrl
+    },
+    async playCurrentFromPlaylist() {
+      const audioUrl = await this.ensurePreviewForCurrent()
+
+      if (!audioUrl || !previewAudio) {
+        wx.showToast({ title: '暂未找到可试听音源', icon: 'none' })
+        this.setData({ previewState: 'error', isPlaying: false })
+        return
+      }
+
+      previewAudio.stop()
+      previewAudio.src = audioUrl
+      previewAudio.play()
+      this.setData({ previewState: 'playing', isPlaying: true })
+    },
     async triggerPlayerAction(action: 'next' | 'previous', successTitle: string) {
       this.setData({ isActionLoading: true })
 
       try {
         await controlPlayer(action)
+      } catch (error) {
+        // 音箱端失败也不阻塞本地切歌
+      }
+
+      const songs = this.data.playlist
+      if (songs.length) {
+        const offset = action === 'next' ? 1 : -1
+        const startIndex = this.data.playlistIndex + offset
+        const { audioUrl, resolvedIndex } = await this.resolvePlayableFromIndex(startIndex)
+
+        if (audioUrl && resolvedIndex >= 0 && previewAudio) {
+          this.applyCurrentSong(resolvedIndex)
+          previewAudio.stop()
+          previewAudio.src = audioUrl
+          previewAudio.play()
+          this.setData({ previewState: 'playing', isPlaying: true })
+          wx.showToast({ title: successTitle, icon: 'none' })
+        } else {
+          wx.showToast({ title: '当前列表暂无可试听歌曲', icon: 'none' })
+          this.setData({ previewState: 'error', isPlaying: false })
+        }
+      } else {
         if (previewAudio) {
           previewAudio.stop()
         }
-        this.setData({ previewState: 'paused' })
-        wx.showToast({ title: successTitle, icon: 'success' })
-      } catch (error) {
-        wx.showToast({ title: '播放控制失败', icon: 'none' })
-      } finally {
-        this.setData({ isActionLoading: false })
-        void this.loadPage()
+        this.setData({ previewState: 'paused', isPlaying: false })
       }
+
+      this.setData({ isActionLoading: false })
     },
     getActiveSong() {
-      return this.data.searchedSongs.find((song) => song.songId === this.data.activeSongId) || null
+      const searched = this.data.searchedSongs.find((song) => song.songId === this.data.activeSongId)
+      if (searched) return searched
+      const inPlaylist = this.data.playlist[this.data.playlistIndex]
+      return inPlaylist || null
     },
     updateSearchedSongs(nextSongs: NeteaseSearchSong[], activeSongId?: string) {
       this.setData({
@@ -170,13 +370,15 @@ Component({
 
       try {
         const [overview, detail, serviceResult] = await Promise.all([
-          getHomeOverview(),
-          getDeviceDetail(),
-          getMusicServices(),
+          getHomeOverview().catch(() => null),
+          getDeviceDetail().catch(() => null),
+          getMusicServices().catch(() => ({ services: [] as any[] })),
         ])
 
-        const services = serviceResult.services.map((service) => ({
-          accountName: service.accountName || '未绑定账号',
+        const services = (serviceResult.services || []).map((service: any) => ({
+          accountName: (service.accountName && !String(service.accountName).includes('兜底'))
+            ? service.accountName
+            : '未绑定账号',
           path: `/pages/auth/index?service=${service.service}`,
           service: service.service,
           serviceName: service.serviceName,
@@ -184,31 +386,33 @@ Component({
         }))
 
         let syncHint = '连接音乐服务后即可同步你的歌单'
-        const activeService = serviceResult.services.find((service) => service.syncStatus === 'syncing')
+        const activeService = (serviceResult.services || []).find(
+          (service: any) => service.syncStatus === 'syncing',
+        )
 
         if (activeService) {
-          const syncProgress = await getMusicSyncProgress(activeService.service)
-          syncHint = `${activeService.serviceName}：${syncProgress.currentTask}`
-        } else if (serviceResult.services.length > 0) {
+          try {
+            const syncProgress = await getMusicSyncProgress(activeService.service)
+            syncHint = `${activeService.serviceName}：${syncProgress.currentTask}`
+          } catch (error) {
+            syncHint = `${activeService.serviceName} 正在同步中`
+          }
+        } else if ((serviceResult.services || []).length > 0) {
           syncHint = `${serviceResult.services[0].serviceName} 已完成最近一次同步`
         }
 
         this.setData({
-          battery: overview.device.battery,
-          currentArtist: overview.playing.artist,
-          currentSong: overview.playing.songName,
-          currentSource: sourceLabel(overview.playing.source),
-          deviceModel: detail.modelName || overview.device.model,
-          deviceName: detail.deviceName || overview.device.name,
-          historyCount: overview.historyCount,
-          isPlaying: overview.playing.isPlaying,
-          online: overview.device.online,
+          battery: overview ? overview.device.battery : this.data.battery,
+          deviceModel: sanitizeDeviceModel(detail ? detail.modelName : (overview ? overview.device.model : '')),
+          deviceName: sanitizeDeviceName(detail ? detail.deviceName : (overview ? overview.device.name : '')),
+          historyCount: overview ? overview.historyCount : 0,
+          online: overview ? overview.device.online : true,
           services,
           syncHint,
-          volume: detail.volume,
+          volume: detail ? detail.volume : this.data.volume,
         })
       } catch (error) {
-        wx.showToast({ title: '首页数据加载失败', icon: 'none' })
+        // 不再弹 toast，避免兜底数据失败干扰用户
       } finally {
         this.setData({ isLoading: false })
       }
@@ -220,55 +424,39 @@ Component({
       try {
         await setPlayerVolume(volume)
       } catch (error) {
-        wx.showToast({ title: '音量同步失败', icon: 'none' })
+        // 忽略音量同步失败
       }
     },
     async playFeaturedSong() {
-      const activeSong = this.getActiveSong()
-
-      if (activeSong) {
-        if (this.data.previewState === 'playing' && previewAudio) {
-          previewAudio.pause()
-          this.setData({ isPlaying: false })
-          try {
-            await controlPlayer('pause')
-          } catch (error) {
-            wx.showToast({ title: '音箱暂停失败', icon: 'none' })
-          }
-          return
+      if (this.data.previewState === 'playing' && previewAudio) {
+        previewAudio.pause()
+        this.setData({ isPlaying: false, previewState: 'paused' })
+        try {
+          await controlPlayer('pause')
+        } catch (error) {
+          // 忽略音箱暂停失败
         }
-
-        await this.playSelectedSong()
         return
       }
 
-      this.setData({ isActionLoading: true })
-      const nextAction = this.data.isPlaying ? 'pause' : 'play'
-
-      try {
-        await controlPlayer(nextAction)
-        this.setData({ isPlaying: nextAction === 'play' })
-        wx.showToast({ title: nextAction === 'play' ? '继续播放' : '已暂停', icon: 'none' })
-      } catch (error) {
-        if (nextAction === 'play') {
-          try {
-            await playSong(FEATURED_TRACK)
-            this.setData({
-              currentArtist: FEATURED_TRACK.artist,
-              currentSong: FEATURED_TRACK.songName,
-              currentSource: sourceLabel(FEATURED_TRACK.source),
-              isPlaying: true,
-            })
-            wx.showToast({ title: '已切换到推荐歌曲', icon: 'success' })
-          } catch (fallbackError) {
-            wx.showToast({ title: '播放控制失败', icon: 'none' })
-          }
-        } else {
-          wx.showToast({ title: '播放控制失败', icon: 'none' })
+      if (previewAudio && this.data.previewState === 'paused') {
+        try {
+          previewAudio.play()
+          this.setData({ isPlaying: true, previewState: 'playing' })
+          return
+        } catch (error) {
+          // fall through
         }
-      } finally {
-        this.setData({ isActionLoading: false })
-        void this.loadPage()
+      }
+
+      if (this.data.playlist.length) {
+        await this.playCurrentFromPlaylist()
+        return
+      }
+
+      await this.loadDefaultPlaylist()
+      if (this.data.playlist.length) {
+        await this.playCurrentFromPlaylist()
       }
     },
     async addSongToQueue() {
@@ -311,11 +499,13 @@ Component({
         }, [] as NeteaseSearchSong[])
 
         this.updateSearchedSongs(merged, (songs[0] && songs[0].songId) || '')
-        this.setData({
-          currentArtist: songs[0].artistText,
-          currentSong: songs[0].name,
-          currentSource: sourceLabel(songs[0].source),
-        })
+
+        const playlist = songs.slice()
+        if (playlist.length) {
+          this.setData({ playlist, playlistIndex: 0 })
+          this.applyCurrentSong(0)
+        }
+
         wx.showToast({ title: `找到 ${songs.length} 首相关歌曲`, icon: 'success' })
       } catch (error) {
         wx.showToast({ title: '搜索失败，请重试', icon: 'none' })
@@ -331,12 +521,14 @@ Component({
         return
       }
 
-      this.setData({
-        activeSongId: songId,
-        currentArtist: song.artistText,
-        currentSong: song.name,
-        currentSource: sourceLabel(song.source),
-      })
+      const playlistIndex = this.data.playlist.findIndex((item) => item.songId === songId)
+      if (playlistIndex >= 0) {
+        this.applyCurrentSong(playlistIndex)
+      } else {
+        const nextPlaylist = [song, ...this.data.playlist]
+        this.setData({ playlist: nextPlaylist, playlistIndex: 0 })
+        this.applyCurrentSong(0)
+      }
     },
     async playSelectedSong(event?: WechatMiniprogram.TouchEvent) {
       const songId = event ? String(event.currentTarget.dataset.songId || '') : this.data.activeSongId
@@ -347,13 +539,15 @@ Component({
         return
       }
 
-      this.setData({
-        activeSongId: song.songId,
-        currentArtist: song.artistText,
-        currentSong: song.name,
-        currentSource: sourceLabel(song.source),
-        isActionLoading: true,
-      })
+      let playlistIndex = this.data.playlist.findIndex((item) => item.songId === song.songId)
+      if (playlistIndex < 0) {
+        const nextPlaylist = [song, ...this.data.playlist]
+        this.setData({ playlist: nextPlaylist })
+        playlistIndex = 0
+      }
+
+      this.applyCurrentSong(playlistIndex)
+      this.setData({ isActionLoading: true })
 
       try {
         await playSong({
@@ -362,18 +556,12 @@ Component({
           songName: song.name,
           source: song.source,
         })
-        const previewStarted = await this.playSongPreview(song)
-        this.setData({
-          isPlaying: true,
-          previewState: previewStarted ? 'playing' : 'error',
-        })
-        wx.showToast({ title: previewStarted ? '音箱与手机试听已开始' : '已发送到音箱播放', icon: 'success' })
       } catch (error) {
-        wx.showToast({ title: '播放失败，请重试', icon: 'none' })
-      } finally {
-        this.setData({ isActionLoading: false })
-        void this.loadPage()
+        // 忽略音箱端失败
       }
+
+      await this.playCurrentFromPlaylist()
+      this.setData({ isActionLoading: false })
     },
     async queueSelectedSong() {
       const song = this.getActiveSong()
@@ -407,12 +595,7 @@ Component({
           : (safeIndex + 1) % songs.length
       const nextSong = songs[nextIndex]
 
-      this.setData({
-        activeSongId: nextSong.songId,
-        currentArtist: nextSong.artistText,
-        currentSong: nextSong.name,
-        currentSource: sourceLabel(nextSong.source),
-      })
+      this.setData({ activeSongId: nextSong.songId })
       await this.playSelectedSong()
     },
     async playPreviousSong() {
@@ -420,6 +603,20 @@ Component({
     },
     async playNextSong() {
       await this.triggerPlayerAction('next', '已切到下一首')
+    },
+    clearSearchResults() {
+      if (previewAudio) {
+        previewAudio.stop()
+      }
+      this.setData({
+        activeSongId: this.data.playlist[this.data.playlistIndex]
+          ? this.data.playlist[this.data.playlistIndex].songId
+          : '',
+        previewState: 'idle',
+        searchKeyword: '',
+        searchedSongs: [],
+      })
+      wx.showToast({ title: '已清空搜索结果', icon: 'none' })
     },
     openAuth(event: WechatMiniprogram.TouchEvent) {
       const path = event.currentTarget.dataset.path as string

@@ -125,7 +125,12 @@ def listening_data_summary():
 
 @api_bp.get("/song-info")
 def song_info():
-    song = get_song(request.args.get("songId") or "1491830535")
+    keyword = str(request.args.get("keyword") or request.args.get("name") or "").strip()
+    song_id = str(request.args.get("songId") or "").strip() or "1491830535"
+    song = get_song(song_id if not keyword else None, keyword=keyword, allow_fallback=not bool(keyword))
+
+    if not song:
+        return ok("未找到对应的网易云歌曲", {"keyword": keyword}, 404)
 
     return plain(
         {

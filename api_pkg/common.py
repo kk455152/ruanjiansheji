@@ -33,6 +33,11 @@ try:
 except Exception:
     project_mongo_db = None
 
+try:
+    from song_info_provider import fetch_song_info
+except Exception:
+    fetch_song_info = None
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "runtime", "api_fallback_state.json")
@@ -528,14 +533,86 @@ def song_from_mongo(song_id=None):
     return None
 
 
-def get_song(song_id=None, mapping_id=None):
+def cache_song(song, provider="", provider_url="", keyword=""):
+    song_id = str(song.get("songId") or "")
+    if not song_id:
+        return False
+
+    now = datetime.now()
+    document = {
+        "song_id": song_id,
+        "songId": song_id,
+        "name": song.get("name") or song.get("songName") or "未知歌曲",
+        "song_name": song.get("songName") or song.get("name") or "未知歌曲",
+        "songName": song.get("songName") or song.get("name") or "未知歌曲",
+        "album": song.get("album") or "",
+        "artist": song.get("artist") or song.get("artistText") or "",
+        "artist_text": song.get("artistText") or song.get("artist") or "",
+        "artistText": song.get("artistText") or song.get("artist") or "",
+        "artists": song.get("artists") or [],
+        "cover_url": song.get("coverUrl") or "",
+        "coverUrl": song.get("coverUrl") or "",
+        "duration_ms": int(song.get("durationMs") or 0),
+        "durationMs": int(song.get("durationMs") or 0),
+        "duration_seconds": int(song.get("durationSeconds") or 0),
+        "durationSeconds": int(song.get("durationSeconds") or 0),
+        "source": song.get("source") or "netease",
+        "provider": provider,
+        "provider_url": provider_url,
+        "keyword": keyword,
+        "doc_type": "song",
+        "updated_at": now,
+    }
+
+    return mongo_update("song_info", {"song_id": song_id}, {"$set": document}, upsert=True)
+
+
+def song_from_provider(keyword):
+    if fetch_song_info is None:
+        return None
+
+    raw_payload = fetch_song_info({"keyword": keyword})
+    raw_song = raw_payload.get("song") or {}
+    artists = [str(item) for item in (raw_song.get("artists") or []) if str(item).strip()]
+    artist_text = " / ".join(artists)
+    duration_ms = int(raw_song.get("duration_ms") or 0)
+
+    song = {
+        "songId": str(raw_song.get("song_id") or ""),
+        "name": raw_song.get("name") or keyword,
+        "songName": raw_song.get("name") or keyword,
+        "album": raw_song.get("album") or "",
+        "artist": artist_text,
+        "artistText": artist_text,
+        "artists": artists,
+        "coverUrl": raw_song.get("cover_url") or "",
+        "durationMs": duration_ms,
+        "durationSeconds": int(duration_ms / 1000) if duration_ms else 0,
+        "source": "netease",
+    }
+    cache_song(
+        song,
+        provider=str(raw_payload.get("provider") or ""),
+        provider_url=str(raw_payload.get("provider_url") or ""),
+        keyword=keyword,
+    )
+    return song
+
+
+def get_song(song_id=None, mapping_id=None, keyword=None, allow_fallback=True):
     song = None
     if song_id:
         song = song_from_mysql(external_id=song_id) or song_from_mongo(song_id)
     elif mapping_id:
         song = song_from_mysql(mapping_id=mapping_id)
 
-    if not song:
+    if not song and keyword:
+        try:
+            song = song_from_provider(str(keyword).strip())
+        except Exception:
+            song = None
+
+    if not song and allow_fallback:
         latest = mysql_one(
             """
             SELECT ph.*, mm.song_title, mm.artist, mm.platform, mm.external_id, mm.cover_url
@@ -561,7 +638,7 @@ def get_song(song_id=None, mapping_id=None):
                 "isPlaying": True,
             }
 
-    if not song:
+    if not song and allow_fallback:
         song = fallback_state()["playing"].copy()
         song.setdefault("artistText", song.get("artist", ""))
         song.setdefault("artists", [song.get("artist", "")])

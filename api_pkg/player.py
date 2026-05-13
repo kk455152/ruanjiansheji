@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from . import api_bp
-from .common import body_json, get_device, get_song, load_state, mongo_update, ok, save_state
+from .common import body_json, cache_song, get_device, get_song, load_state, mongo_update, ok, save_state
 
 
 @api_bp.post("/player/control")
@@ -76,7 +76,26 @@ def play_song():
     body = body_json()
     device_id = str(body.get("deviceId") or get_device()["deviceId"])
     song_id = str(body.get("songId") or get_song()["songId"])
-    song = get_song(song_id)
+    requested_name = str(body.get("songName") or body.get("keyword") or "").strip()
+    requested_artist = str(body.get("artist") or "").strip()
+    requested_source = str(body.get("source") or "netease").strip()
+    song = get_song(song_id, keyword=requested_name or None)
+
+    if requested_name:
+        song = {
+            "songId": song_id or song["songId"],
+            "name": requested_name,
+            "songName": requested_name,
+            "album": song.get("album") or "",
+            "artist": requested_artist or song.get("artist") or "",
+            "artistText": requested_artist or song.get("artistText") or "",
+            "artists": song.get("artists") or ([requested_artist] if requested_artist else []),
+            "coverUrl": str(body.get("coverUrl") or song.get("coverUrl") or ""),
+            "durationMs": int(song.get("durationMs") or 0),
+            "durationSeconds": int(song.get("durationSeconds") or 0),
+            "source": requested_source or song.get("source") or "netease",
+        }
+        cache_song(song, provider="miniprogram_play_song", keyword=requested_name)
 
     mongo_update(
         "player_state",

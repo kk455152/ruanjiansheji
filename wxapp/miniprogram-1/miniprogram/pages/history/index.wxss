@@ -1,73 +1,37 @@
-.hero {
-  padding-top: 12rpx;
-}
-
-.search-card,
-.history-row {
-  padding: 24rpx;
-}
-
-.search-card {
-  margin-top: 24rpx;
+.filter-card {
+  padding: 22rpx;
 }
 
 .search-input {
-  height: 72rpx;
-}
-
-.filter-row,
-.history-row {
-  display: flex;
-  align-items: center;
+  width: 100%;
+  height: 84rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2rpx solid rgba(255, 255, 255, 0.88);
+  color: #2c3e35;
+  font-size: 24rpx;
+  box-sizing: border-box;
 }
 
 .filter-row {
-  gap: 14rpx;
-  margin: 24rpx 0;
-}
-
-.filter-pill,
-.active-pill {
-  height: 52rpx;
-  font-size: 22rpx;
+  margin-top: 18rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
 }
 
 .history-row {
-  justify-content: space-between;
-  gap: 18rpx;
-  margin-bottom: 16rpx;
+  margin-bottom: 14rpx;
 }
 
-.history-dot {
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 16rpx;
-  background: linear-gradient(180deg, #ffedd8 0%, #ffe0c3 100%);
-}
-
-.history-copy {
-  flex: 1;
+.empty-card {
+  padding: 28rpx;
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
-}
-
-.history-song {
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
-.played-at {
-  color: #b39f8d;
-  font-size: 22rpx;
-}
-
-.replay-action {
-  color: #ca6e18;
-  font-size: 24rpx;
-  font-weight: 700;
+  gap: 8rpx;
 }
 
 .clear-button {
-  margin-top: 12rpx;
+  margin-top: 18rpx;
 }

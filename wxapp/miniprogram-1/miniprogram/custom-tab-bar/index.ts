@@ -1,5 +1,4 @@
 type TabItem = {
-  icon: string
   pagePath: string
   text: string
 }
@@ -8,10 +7,10 @@ Component({
   data: {
     selected: 'pages/index/index',
     list: [
-      { pagePath: 'pages/index/index', text: '首页', icon: '♫' },
-      { pagePath: 'pages/friends/index', text: '好友', icon: '◌' },
-      { pagePath: 'pages/data/index', text: '数据', icon: '▥' },
-      { pagePath: 'pages/device/index', text: '设备', icon: '▣' },
+      { pagePath: 'pages/index/index', text: '首页' },
+      { pagePath: 'pages/friends/index', text: '好友' },
+      { pagePath: 'pages/data/index', text: '数据' },
+      { pagePath: 'pages/device/index', text: '设备' },
     ] as TabItem[],
   },
   lifetimes: {

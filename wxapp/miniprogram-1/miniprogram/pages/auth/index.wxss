@@ -1,275 +1,146 @@
-.auth-page {
-  padding-top: 12rpx;
-}
-
-.connect-top {
-  display: flex;
-  align-items: center;
-}
-
-.connect-brand {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.brand-icon {
-  width: 34rpx;
-  height: 34rpx;
-  border-radius: 12rpx;
-  background: #171411;
-  color: #ff6a00;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18rpx;
-}
-
-.brand-text {
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.connect-hero,
-.auth-hero,
-.permission-card,
-.status-card,
-.connect-service {
-  margin-top: 18rpx;
-}
-
 .connect-hero,
 .auth-hero,
 .permission-card,
 .status-card {
-  padding: 30rpx;
+  padding: 28rpx 26rpx;
 }
 
-.connect-device {
-  height: 240rpx;
-  border-radius: 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+.connect-hero,
+.auth-hero {
+  text-align: center;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(132, 169, 140, 0.12) 100%);
 }
 
-.connect-speaker {
+.speaker-orb,
+.service-hero-icon {
   width: 148rpx;
   height: 148rpx;
-  border-radius: 40rpx;
-  background: #fffaf3;
-  box-shadow: 0 0 56rpx rgba(255, 129, 28, 0.22);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
-}
-
-.connect-speaker-dot {
-  width: 30rpx;
-  height: 30rpx;
+  margin: 0 auto 22rpx;
   border-radius: 50%;
-  background: #ff6a00;
-}
-
-.connect-speaker-bars {
-  width: 46rpx;
-  height: 18rpx;
-  border-top: 6rpx solid #171411;
-  border-bottom: 6rpx solid #171411;
-  border-radius: 12rpx;
-}
-
-.connect-wave {
-  position: absolute;
-  top: 38rpx;
-  right: 24rpx;
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fffaf3;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), transparent 55%),
+    rgba(132, 169, 140, 0.2);
+  color: #84a98c;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24rpx;
+  font-size: 54rpx;
+  font-weight: 500;
+  box-shadow:
+    0 0 60rpx rgba(132, 169, 140, 0.26),
+    inset 0 0 0 2rpx rgba(255, 255, 255, 0.5);
 }
 
-.connect-copy {
-  margin-top: 22rpx;
+.connect-hero .section-title,
+.auth-hero .section-title {
+  font-size: 30rpx;
+  white-space: normal;
 }
 
-.connect-title,
-.auth-title {
-  font-size: 46rpx;
-  font-weight: 800;
-}
-
-.connect-desc,
-.hero-copy,
-.task-copy,
-.connect-service-desc,
-.connect-foot {
+.connect-hero .section-copy,
+.auth-hero .section-copy {
   display: block;
-  color: #7f7368;
-  font-size: 24rpx;
-  line-height: 1.7;
-}
-
-.connect-desc,
-.hero-copy,
-.task-copy,
-.connect-foot {
-  margin-top: 14rpx;
-}
-
-.connect-section-title,
-.section-title {
-  margin-top: 20rpx;
-  font-size: 26rpx;
-  font-weight: 800;
-}
-
-.connect-service {
-  padding: 18rpx 22rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.connect-service-active {
-  box-shadow: inset 0 0 0 2rpx rgba(255, 106, 0, 0.24);
-}
-
-.connect-service-left {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  flex: 1;
-}
-
-.service-dot {
-  width: 18rpx;
-  height: 18rpx;
-  border-radius: 50%;
-}
-
-.service-dot-blue {
-  background: #3aa7ff;
-}
-
-.service-dot-red {
-  background: #f0143c;
-}
-
-.connect-service-name {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.connect-service-action {
-  color: #ff6a00;
+  margin-top: 6rpx;
   font-size: 22rpx;
 }
 
-.connect-button {
-  margin-top: 24rpx;
+.service-option {
+  margin-top: 16rpx;
+  padding: 22rpx 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
 }
 
-.connect-foot {
-  text-align: center;
+.service-option-active {
+  border-color: rgba(132, 169, 140, 0.92);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14rpx 34rpx rgba(132, 169, 140, 0.2);
 }
 
-.auth-head {
-  margin-bottom: 18rpx;
-}
-
-.hero-blue {
-  background: linear-gradient(180deg, #e6f2fd 0%, #dbeafa 100%);
-}
-
-.hero-pink {
-  background: linear-gradient(180deg, #f9ecee 0%, #f7e4e7 100%);
-}
-
-.hero-icon {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 28rpx;
-  margin: 0 auto 20rpx;
-  background: #1da1f2;
-  color: #ffffff;
+.service-logo {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffffff 0%, #f4f7f6 100%);
+  border: 4rpx solid #ffffff;
+  color: #2c3e35;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 42rpx;
-  font-weight: 800;
+  font-size: 26rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+  box-shadow: 0 8rpx 22rpx rgba(44, 62, 53, 0.08);
 }
 
-.hero-pink .hero-icon {
-  background: #f0143c;
+.service-option .list-title {
+  font-size: 26rpx;
 }
 
-.hero-title {
-  font-size: 36rpx;
-  font-weight: 800;
-  text-align: center;
+.service-option .list-meta {
+  font-size: 22rpx;
 }
 
-.hero-copy,
-.task-copy {
-  text-align: center;
-}
-
-.permission-row,
-.sync-line {
-  display: flex;
-  align-items: center;
-}
-
-.permission-row {
-  gap: 16rpx;
+.connect-button,
+.later-button {
   margin-top: 22rpx;
 }
 
-.permission-dot {
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  background: #ff6a00;
-}
-
-.permission-text {
-  flex: 1;
-}
-
+.permission-card,
 .status-card {
-  margin-bottom: 22rpx;
+  margin-top: 16rpx;
 }
 
-.sync-line {
+.permission-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 10rpx 0;
+}
+
+.permission-row .section-copy {
+  flex: 1;
+  min-width: 0;
+  font-size: 23rpx;
+  color: #2c3e35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.permission-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #84a98c;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4rpx rgba(132, 169, 140, 0.18);
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 16rpx;
   margin-bottom: 14rpx;
 }
 
-.sync-progress-track {
-  width: 100%;
-  height: 14rpx;
-  margin: 10rpx 0 14rpx;
-  border-radius: 999rpx;
-  background: #eadfd3;
+.status-line .list-title {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #2c3e35;
+  max-width: 60%;
+}
+
+.status-card .progress-track {
+  margin: 4rpx 0 14rpx;
+}
+
+.status-card .section-copy {
+  display: block;
+  white-space: nowrap;
   overflow: hidden;
-}
-
-.sync-progress-value {
-  height: 100%;
-  border-radius: 999rpx;
-  background: linear-gradient(90deg, #ff6a00, #f6c089);
-}
-
-button {
-  margin-top: 18rpx;
+  text-overflow: ellipsis;
 }

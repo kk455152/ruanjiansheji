@@ -1,83 +1,73 @@
-<navigation-bar title="音乐授权" color="#171411" background="transparent"></navigation-bar>
+<navigation-bar title="音乐授权" color="#2C3E35" background="transparent"></navigation-bar>
 <view class="page-shell auth-page" wx:if="{{mode === 'connect'}}">
-  <view class="connect-top">
-    <view class="connect-brand">
-      <view class="brand-icon">◎</view>
-      <text class="brand-text">声盒 Mini</text>
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">连接音乐服务</text>
+      <text class="page-subtitle">选择要同步到声盒 Mini 的音乐账号。</text>
     </view>
   </view>
 
-  <view class="dark-card connect-hero">
-    <view class="connect-device">
-      <view class="connect-speaker">
-        <view class="connect-speaker-dot"></view>
-        <view class="connect-speaker-bars"></view>
-      </view>
-      <view class="connect-wave">◔</view>
-    </view>
+  <view class="connect-hero glass-card">
+    <view class="speaker-orb">♪</view>
+    <text class="section-title">声盒 Mini</text>
+    <text class="section-copy">授权后可同步歌单、播放历史和好友一起听。</text>
   </view>
 
-  <view class="connect-copy">
-    <view class="connect-title">用微信连接你的智能音箱</view>
-    <text class="connect-desc">授权后可绑定 QQ 音乐、网易云音乐、管理设备、电量、播放历史，并同步好友一起听。</text>
-  </view>
-
-  <view class="connect-section-title">请连接的软件</view>
   <view
-    class="surface-card connect-service {{selectedService === item.key ? 'connect-service-active' : ''}}"
+    class="glass-card service-option {{selectedService === item.key ? 'service-option-active' : ''}}"
     wx:for="{{serviceOptions}}"
     wx:key="key"
     data-service="{{item.key}}"
     bindtap="selectService"
   >
-    <view class="connect-service-left">
-      <view class="service-dot {{item.key === 'qq' ? 'service-dot-blue' : 'service-dot-red'}}"></view>
-      <view>
-        <text class="connect-service-name">{{item.title}}</text>
-        <text class="connect-service-desc">{{item.description}}</text>
-      </view>
+    <view class="service-logo">{{item.key === 'qq' ? 'Q' : '云'}}</view>
+    <view class="list-copy">
+      <text class="list-title">{{item.title}}</text>
+      <text class="list-meta">{{item.description}}</text>
     </view>
-    <text class="connect-service-action">待授权</text>
+    <text class="right-link">{{selectedService === item.key ? '已选' : '选择'}}</text>
   </view>
 
   <button class="primary-button connect-button" bindtap="openSelectedService">微信授权并继续</button>
-  <text class="connect-foot">上架应用市场的小程序体验：轻量、免安装、跨音乐服务同步。</text>
 </view>
 
 <view class="page-shell auth-page" wx:elif="{{mode === 'service'}}">
-  <view class="auth-head">
-    <text class="auth-title">连接{{serviceName}}</text>
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">连接 {{serviceName}}</text>
+      <text class="page-subtitle">{{slogan}}</text>
+    </view>
+    <view class="page-action" bindtap="goBack">‹</view>
   </view>
 
-  <view class="surface-card auth-hero {{service === 'qq' ? 'hero-blue' : 'hero-pink'}}">
-    <view class="hero-icon">{{heroIcon}}</view>
-    <view class="hero-title">{{service === 'qq' ? '允许声盒 Mini 访问你的 QQ 音乐' : '授权网易云音乐账号'}}</view>
-    <text class="hero-copy">{{slogan}}</text>
+  <view class="glass-card auth-hero">
+    <view class="service-hero-icon">{{heroIcon}}</view>
+    <text class="section-title">{{service === 'qq' ? '允许声盒 Mini 访问你的 QQ 音乐' : '授权网易云音乐账号'}}</text>
+    <text class="section-copy">{{sectionTitle}}</text>
   </view>
 
-  <view class="surface-card permission-card">
-    <text class="section-title">{{sectionTitle}}</text>
+  <view class="glass-card permission-card">
     <view class="permission-row" wx:for="{{permissions}}" wx:key="*this">
-      <text class="permission-dot"></text>
-      <text class="permission-text">{{item}}</text>
+      <view class="permission-dot"></view>
+      <text class="section-copy">{{item}}</text>
     </view>
   </view>
 
-  <view class="surface-card status-card">
-    <view class="sync-line">
-      <text>当前账号</text>
-      <text>{{accountName}}</text>
+  <view class="glass-card status-card">
+    <view class="status-line">
+      <text class="section-copy">当前账号</text>
+      <text class="list-title">{{accountName}}</text>
     </view>
-    <view class="sync-line">
-      <text>同步状态</text>
-      <text>{{syncStatusText}}</text>
+    <view class="status-line">
+      <text class="section-copy">同步状态</text>
+      <text class="right-link">{{syncStatusText}}</text>
     </view>
-    <view class="sync-progress-track">
-      <view class="sync-progress-value" style="width: {{progress}}%;"></view>
+    <view class="progress-track">
+      <view class="progress-fill" style="width: {{progress}}%;"></view>
     </view>
-    <text class="task-copy">{{currentTask}}</text>
+    <text class="section-copy">{{currentTask}}</text>
   </view>
 
   <button class="primary-button" loading="{{binding}}" bindtap="bindService">{{serviceButtonText}}</button>
-  <button class="ghost-button" bindtap="goBack">稍后再说</button>
+  <button class="ghost-button later-button" bindtap="goBack">稍后再说</button>
 </view>

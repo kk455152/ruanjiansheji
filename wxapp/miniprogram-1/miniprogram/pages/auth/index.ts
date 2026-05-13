@@ -25,17 +25,17 @@ const initialData: AuthPageData = {
   accountName: '未绑定账号',
   binding: false,
   currentTask: '等待开始同步',
-  heroIcon: '♥',
+  heroIcon: 'Q',
   mode: 'connect',
   permissions: [...MUSIC_SERVICE_META.netease.permissions],
   progress: 0,
   selectedService: 'qq',
-  sectionTitle: '稍后用',
+  sectionTitle: '稍后可在这里取消授权',
   service: 'netease',
-  serviceButtonText: '同意并授权网易云',
+  serviceButtonText: '同意并授权网易云音乐',
   serviceOptions: [
-    { key: 'qq', title: 'QQ 音乐', description: '同步收藏歌单、每日歌单和最近播放。' },
-    { key: 'netease', title: '网易云音乐', description: '同步私人 FM、喜欢的歌和日推功能。' },
+    { key: 'qq', title: 'QQ 音乐', description: '同步收藏歌单、每日推荐和最近播放。' },
+    { key: 'netease', title: '网易云音乐', description: '同步私人 FM、喜欢的歌和日推内容。' },
   ],
   serviceName: MUSIC_SERVICE_META.netease.serviceName,
   slogan: MUSIC_SERVICE_META.netease.slogan,
@@ -49,9 +49,9 @@ Page({
     const mode = query.service ? 'service' : 'connect'
     const service = query.service === 'qq' ? 'qq' : 'netease'
     const meta = MUSIC_SERVICE_META[service]
-    const heroIcon = service === 'qq' ? '♫' : '♥'
-    const sectionTitle = service === 'qq' ? '授权内容' : '稍后用'
-    const serviceButtonText = service === 'qq' ? '同意并绑定 QQ 音乐' : '同意并授权网易云'
+    const heroIcon = service === 'qq' ? 'Q' : '云'
+    const sectionTitle = service === 'qq' ? '授权内容' : '稍后可在这里取消授权'
+    const serviceButtonText = service === 'qq' ? '同意并绑定 QQ 音乐' : '同意并授权网易云音乐'
 
     this.setData({
       heroIcon,

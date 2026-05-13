@@ -1,65 +1,100 @@
-<navigation-bar title="好友" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
+<navigation-bar title="一起听歌" back="{{false}}" color="#2C3E35" background="transparent"></navigation-bar>
 <scroll-view class="page-shell friends-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
-  <view class="hero hero-split">
-    <view>
-      <text class="section-kicker">Shared Listening</text>
-      <view class="page-title">听歌好友</view>
-      <text class="page-subtitle">和朋友共享当前播放，用房间和歌曲卡片把一首歌传到同一个时刻。</text>
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">一起听歌</text>
+      <text class="page-subtitle">随时看见好友在听什么，一键加入他们的房间。</text>
     </view>
-    <view class="hero-circle hero-search">⌕</view>
+    <view class="page-action" bindtap="refreshPage">↻</view>
   </view>
 
-  <view class="dark-card room-card">
-    <view class="card-top">
-      <text class="card-kicker">一起听进行中</text>
-      <text class="mini-badge">{{roomMemberCount}} 人</text>
+  <view class="room-hero">
+    <view class="music-orb">
+      <view class="music-orb-inner">♪</view>
     </view>
+    <text class="room-title">{{roomName}}</text>
+    <text class="section-copy">{{roomSongName}} · {{roomMemberCount}} 位成员</text>
+  </view>
 
-    <view class="room-main">
-      <view class="room-cover">
-        <text class="room-glyph">♫</text>
+  <view class="glass-card member-card">
+    <view class="member-head">
+      <text class="section-copy">房间成员</text>
+      <text class="right-link" bindtap="copyRoomName">复制房间名</text>
+    </view>
+    <view class="avatar-stack">
+      <view
+        class="avatar {{item.avatarTone}}"
+        wx:for="{{members}}"
+        wx:key="name"
+      >
+        <text class="avatar-char">{{item.shortName}}</text>
+        <text class="avatar-badge">{{item.badgeIcon}}</text>
       </view>
-      <view class="room-copy">
-        <view class="room-title">{{roomName}}</view>
-        <text class="room-song">{{roomSongName}}</text>
-        <text class="room-meta">房间已创建，当前成员可以同步加入播放节奏</text>
-      </view>
+      <view class="avatar avatar-add" wx:if="{{!members.length}}">＋</view>
     </view>
+  </view>
 
-    <view class="avatar-row">
-      <view class="member-badge" wx:for="{{members}}" wx:key="name">{{item.shortName}}</view>
-      <view class="member-badge member-badge-ghost" wx:if="{{!members.length}}">M</view>
-    </view>
-
-    <view class="button-row">
-      <button class="primary-button half-button" loading="{{isCreating}}" bindtap="createRoom">一起听</button>
-      <button class="dark-button half-button" loading="{{isSharing}}" bindtap="shareCurrentSong">分享歌曲</button>
-    </view>
+  <view class="room-actions">
+    <button class="primary-button" loading="{{isCreating}}" bindtap="createRoom">新建一起听</button>
+    <button class="ghost-button" loading="{{isSharing}}" bindtap="shareCurrentSong">生成分享卡片</button>
   </view>
 
   <view class="section-heading">
-    <text>最近一起听的好友</text>
-    <text class="right-link" wx:if="{{isLoading}}">刷新中</text>
+    <text class="section-title">最近好友</text>
+    <text class="right-link">{{isLoading ? '刷新中' : recentFriends.length + ' 位'}}</text>
   </view>
-
-  <view class="surface-card friend-row" wx:for="{{recentFriends}}" wx:key="friendId">
-    <view class="friend-avatar">{{item.shortName}}</view>
-    <view class="friend-copy">
-      <view class="friend-name-line">
-        <text class="friend-name">{{item.name}}</text>
-        <view class="status-dot {{item.isOnline ? 'status-online' : 'status-offline'}}"></view>
+  <view
+    class="glass-card list-row friend-row"
+    wx:for="{{recentFriends}}"
+    wx:key="friendId"
+  >
+    <view class="friend-avatar {{item.avatarTone}}">
+      <text class="friend-avatar-char">{{item.shortName}}</text>
+      <view class="friend-avatar-status {{item.isOnline ? 'status-online' : 'status-offline'}}"></view>
+    </view>
+    <view class="list-copy">
+      <text class="list-title">{{item.name}}</text>
+      <view class="friend-activity">
+        <text class="activity-icon {{item.activityTone}}">{{item.activityIcon}}</text>
+        <text class="list-meta">{{item.status}}</text>
       </view>
-      <text class="muted-text">{{item.status}}</text>
     </view>
-    <text class="join-pill" data-name="{{item.name}}" bindtap="createRoomWithFriend">{{item.isOnline ? '加入' : '邀请'}}</text>
+    <text
+      class="{{item.isOnline ? 'pill' : 'outline-pill'}}"
+      data-name="{{item.name}}"
+      bindtap="createRoomWithFriend"
+    >{{item.isOnline ? '加入' : '邀请'}}</text>
   </view>
 
-  <view class="soft-card soft-peach invite-card">
-    <view>
-      <text class="section-card-title">把这首歌发给你想一起听的好友</text>
-      <text class="section-card-copy" wx:if="{{sharePreviewUrl}}">{{sharePreviewUrl}}</text>
-      <text class="section-card-copy" wx:else>生成分享卡片后，预览地址会显示在这里，方便你继续转发。</text>
-    </view>
-    <text class="invite-icon">↗</text>
+  <view class="glass-card empty-card" wx:if="{{!recentFriends.length && !isLoading}}">
+    <text class="section-title">还没有好友动态</text>
+    <text class="section-copy">先创建房间，再生成分享卡片发给好友。</text>
   </view>
+
+  <view class="glass-card share-card">
+    <text class="section-title">分享卡片</text>
+    <text class="section-copy">点预览即刻生成一张带听歌时长和正在听的歌的卡片。</text>
+
+    <view class="share-preview" wx:if="{{shareCardPath}}">
+      <image class="share-preview-image" src="{{shareCardPath}}" mode="widthFix" show-menu-by-longpress></image>
+      <text class="section-copy">长按图片可保存到相册</text>
+    </view>
+    <view class="share-preview share-preview-empty" wx:else>
+      <view class="share-preview-orb">♪</view>
+      <text class="section-title">{{cardMinutes}} 分钟</text>
+      <text class="section-copy">{{cardTopPercent || '基于本地真实听歌数据实时生成'}}</text>
+    </view>
+
+    <view class="share-actions">
+      <text class="quiet-button" bindtap="copyShareLink">复制链接</text>
+      <text class="primary-button" bindtap="previewShareCard">预览卡片</text>
+    </view>
+  </view>
+
+  <canvas
+    type="2d"
+    id="shareCanvas"
+    class="share-canvas"
+    disable-scroll
+  ></canvas>
 </scroll-view>

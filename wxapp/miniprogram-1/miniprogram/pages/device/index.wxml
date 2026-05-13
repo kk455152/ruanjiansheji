@@ -1,109 +1,96 @@
-<navigation-bar title="设备" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
+<navigation-bar title="高级设置" back="{{false}}" color="#2C3E35" background="transparent"></navigation-bar>
 <scroll-view class="page-shell device-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
-  <view class="hero">
-    <text class="section-kicker">Device Center</text>
-    <view class="page-title">设备管理</view>
-    <text class="page-subtitle">集中查看音箱状态、同步服务、附近设备和当前配网进度。</text>
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">高级设置</text>
+      <text class="page-subtitle">管理音箱状态、听感、提醒和附近设备。</text>
+    </view>
+    <view class="page-action" bindtap="refreshNearbyDevices">扫</view>
   </view>
 
-  <view class="dark-card device-card">
-    <view class="device-head">
-      <view class="device-icon">
-        <view class="device-dot"></view>
-        <view class="device-bar"></view>
+  <view class="glass-card device-card">
+    <view class="device-main">
+      <view class="speaker-mark">
+        <view class="speaker-dot"></view>
+        <view class="speaker-line"></view>
       </view>
-      <view class="device-copy">
-        <view class="device-name">{{deviceName}}</view>
-        <text class="device-subtitle">{{modelName}}</text>
-        <text class="device-status-line">{{online ? '在线' : '离线'}} · {{currentNetwork}}</text>
+      <view class="list-copy">
+        <text class="list-title">{{deviceName}}</text>
+        <text class="list-meta">{{modelName}} · {{online ? '在线' : '离线'}} · {{currentNetwork}}</text>
       </view>
-      <text class="mini-badge">{{batteryLevel}}%</text>
+      <view class="battery-circle">{{batteryLevel}}%</view>
     </view>
-
-    <view class="battery-track">
-      <view class="battery-value" style="width: {{batteryLevel}}%;"></view>
+    <view class="progress-track battery-track">
+      <view class="progress-fill" style="width: {{batteryLevel}}%;"></view>
     </view>
-    <text class="device-caption">{{isCharging ? '正在充电中' : '预计可播放 ' + estimatedPlayTime}}</text>
+    <text class="section-copy">{{isCharging ? '正在充电中' : '预计可播放 ' + estimatedPlayTime}}</text>
   </view>
 
-  <view class="surface-card management-card">
-    <view class="manage-row">
-      <view>
-        <text class="manage-title">高级听感配置</text>
-        <text class="manage-copy">音量上限 {{volumeLimit}}% / 低音增益 {{bassGain}}</text>
-      </view>
-      <text class="manage-arrow">›</text>
+  <view class="glass-card setting-row">
+    <view class="list-copy">
+      <text class="list-title">音量上限</text>
+      <text class="list-meta">{{volumeLimit}}%</text>
     </view>
-    <view class="manage-row">
-      <view>
-        <text class="manage-title">设备感知与扫描</text>
-        <text class="manage-copy">信号 {{signalStrength}} dBm，点击重新发现附近设备</text>
-      </view>
-      <text class="manage-link" bindtap="refreshNearbyDevices">扫描</text>
-    </view>
+    <slider class="setting-slider" value="{{volumeLimit}}" min="20" max="100" activeColor="#84A98C" backgroundColor="#DCE8E1" bindchange="changeVolumeLimit" />
   </view>
 
-  <view class="surface-card settings-card">
-    <view class="settings-line">
-      <text>音量上限</text>
-      <text>{{volumeLimit}}%</text>
+  <view class="glass-card setting-row">
+    <view class="list-copy">
+      <text class="list-title">低音增强</text>
+      <text class="list-meta">{{bassGain}}</text>
     </view>
-    <slider value="{{volumeLimit}}" min="20" max="100" activeColor="#ff6a00" backgroundColor="#eadfd3" bindchange="changeVolumeLimit" />
-
-    <view class="settings-line">
-      <text>低音增强</text>
-      <text>{{bassGain}}</text>
-    </view>
-    <slider value="{{bassGain}}" min="0" max="12" activeColor="#ff6a00" backgroundColor="#eadfd3" bindchange="changeBassGain" />
-
-    <view class="switch-line">
-      <view>
-        <text class="switch-title">满电提醒</text>
-        <text class="muted-text">当前低电量提醒阈值 {{lowBatteryThreshold}}%</text>
-      </view>
-      <switch checked="{{fullChargeNotice}}" color="#ff6a00" bindchange="toggleFullChargeNotice" />
-    </view>
-
-    <button class="primary-button" loading="{{saving}}" bindtap="saveDeviceSettings">保存设备设置</button>
+    <slider class="setting-slider" value="{{bassGain}}" min="0" max="12" activeColor="#84A98C" backgroundColor="#DCE8E1" bindchange="changeBassGain" />
   </view>
 
-  <view class="surface-card services-card">
-    <text class="section-card-title">已连接音乐服务</text>
+  <view class="glass-card list-row switch-row">
+    <view class="list-copy">
+      <text class="list-title">满电提醒</text>
+      <text class="list-meta">低电量阈值 {{lowBatteryThreshold}}%</text>
+    </view>
+    <switch checked="{{fullChargeNotice}}" color="#84A98C" bindchange="toggleFullChargeNotice" />
+  </view>
+
+  <button class="primary-button save-button" loading="{{saving}}" bindtap="saveDeviceSettings">保存设备设置</button>
+
+  <view class="glass-card account-card">
+    <text class="section-title">账号同步</text>
     <view class="service-pills">
-      <view class="outline-pill service-pill" wx:for="{{services}}" wx:key="serviceName">
-        <text>{{item.serviceName}} · {{item.syncText}}</text>
-      </view>
-      <view class="outline-pill service-pill" wx:if="{{!services.length}}">
-        <text>还没有已绑定的音乐服务</text>
-      </view>
+      <view class="outline-pill" wx:for="{{services}}" wx:key="serviceName">{{item.serviceName}} · {{item.syncText}}</view>
+      <view class="outline-pill" wx:if="{{!services.length}}">还没有已绑定的音乐服务</view>
     </view>
   </view>
-
-  <button class="primary-button add-button" bindtap="refreshNearbyDevices">绑定新设备</button>
 
   <view class="section-heading">
-    <text>附近设备</text>
+    <text class="section-title">附近设备</text>
     <text class="right-link" bindtap="refreshNearbyDevices">重新扫描</text>
   </view>
-  <view class="surface-card nearby-card" wx:for="{{nearbyDevices}}" wx:key="deviceId">
-    <view>
-      <text class="nearby-name">{{item.deviceName}}</text>
-      <text class="muted-text">{{item.modelName}}</text>
+  <view
+    class="glass-card list-row nearby-row"
+    wx:for="{{nearbyDevices}}"
+    wx:key="deviceId"
+    data-device-id="{{item.deviceId}}"
+    data-device-name="{{item.deviceName}}"
+    data-model-name="{{item.modelName}}"
+    data-signal-strength="{{item.signalStrength}}"
+    bindtap="inspectNearbyDevice"
+  >
+    <view class="circle-mark">声</view>
+    <view class="list-copy">
+      <text class="list-title">{{item.deviceName}}</text>
+      <text class="list-meta">{{item.modelName}}</text>
     </view>
-    <text class="nearby-signal">{{item.signalStrength}} dBm</text>
+    <text class="right-link">{{item.signalStrength}} dBm</text>
   </view>
 
-  <view class="surface-card progress-card">
-    <view class="section-line">
-      <text class="progress-title">配网进度</text>
-      <text class="progress-percent">{{bindProgress}}%</text>
+  <view class="glass-card progress-card">
+    <view class="progress-head">
+      <text class="section-title">配网进度</text>
+      <text class="right-link">{{bindProgress}}%</text>
     </view>
-    <view class="progress-track">
-      <view class="progress-value" style="width: {{bindProgress}}%;"></view>
-    </view>
+    <view class="progress-track"><view class="progress-fill" style="width: {{bindProgress}}%;"></view></view>
     <view class="step-row" wx:for="{{bindSteps}}" wx:key="name">
-      <text>{{item.name}}</text>
-      <text class="muted-text">{{item.label}}</text>
+      <text class="section-copy">{{item.name}}</text>
+      <text class="right-link">{{item.label}}</text>
     </view>
   </view>
 </scroll-view>

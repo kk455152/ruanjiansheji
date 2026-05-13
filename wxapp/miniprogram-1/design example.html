@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声盒 Mini - 轻盈自然风 UI 原型</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* =========================================
+           全局设计系统 (原研哉自然风)
+           ========================================= */
+        :root {
+            /* 背景与卡片：晨雾白与毛玻璃半透明 */
+            --bg-body: #EAEFEA;
+            --bg-mockup: linear-gradient(180deg, #FFFFFF 0%, #F4F7F6 100%);
+            --bg-card: rgba(255, 255, 255, 0.7);
+            
+            /* 文字颜色：柔和墨绿系 */
+            --text-primary: #2C3E35; 
+            --text-secondary: #7B8F84; 
+            
+            /* 强调色：鼠尾草绿与暖橙 */
+            --accent-green: #84A98C; 
+            --accent-orange: #F4A261; 
+            
+            /* 边框与光影：轻柔散射光 */
+            --border-light: rgba(255, 255, 255, 0.8);
+            --shadow-soft: 0 12px 32px rgba(132, 169, 140, 0.08);
+            --shadow-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+            
+            /* 圆角：鹅卵石形态 */
+            --radius-mockup: 45px;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #EAEFEA 0%, #D4E1DA 100%);
+            min-height: 100vh;
+            padding: 60px 20px;
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header-title {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .header-title h1 {
+            font-weight: 500;
+            font-size: 32px;
+            margin-bottom: 12px;
+            letter-spacing: 2px;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+        /* 手机模型画廊容器 */
+        .mockup-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 40px;
+            justify-content: center;
+            max-width: 1600px;
+        }
+
+        /* =========================================
+           移动端 UI 基础组件
+           ========================================= */
+        .mobile-mockup {
+            width: 360px;
+            height: 720px;
+            background: var(--bg-mockup);
+            border-radius: var(--radius-mockup);
+            border: 10px solid #FFFFFF;
+            box-shadow: 0 30px 60px rgba(132, 169, 140, 0.15), var(--shadow-inner);
+            padding: 24px 16px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部状态栏 */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 20px;
+            padding: 0 8px;
+            color: var(--text-primary);
+        }
+
+        /* 页面标题栏 */
+        .nav-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding: 0 8px;
+        }
+        .nav-header h2 {
+            font-size: 22px;
+            font-weight: 500;
+        }
+        .nav-header i {
+            font-size: 20px;
+            color: var(--text-primary);
+        }
+
+        /* 滚动区域隐藏滚动条 */
+        .scroll-view {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding-bottom: 20px;
+        }
+        .scroll-view::-webkit-scrollbar { display: none; }
+
+        /* 毛玻璃卡片基类 */
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-light);
+        }
+
+        /* 布局辅助 */
+        .flex-row { display: flex; align-items: center; gap: 12px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        
+        /* 文本规范 */
+        .title-md { font-size: 17px; font-weight: 500; color: var(--text-primary); margin: 0; line-height: 1.4; }
+        .sub-text { font-size: 13px; color: var(--text-secondary); margin: 4px 0 0 0; font-weight: 300; line-height: 1.5; }
+        
+        /* 交互组件：鹅卵石开关 */
+        .switch-toggle {
+            width: 48px; height: 28px;
+            background-color: var(--accent-green);
+            border-radius: 14px; position: relative;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .switch-toggle::after {
+            content: ''; position: absolute;
+            width: 24px; height: 24px;
+            background-color: white; border-radius: 50%;
+            top: 2px; right: 2px;
+            box-shadow: 0 2px 8px rgba(132, 169, 140, 0.3);
+        }
+
+        /* 交互组件：主按钮 */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #6B9080 100%);
+            border-radius: 99px; color: white;
+            padding: 16px; text-align: center;
+            font-weight: 500; font-size: 16px; border: none; width: 100%;
+            box-shadow: 0 8px 24px rgba(132, 169, 140, 0.25);
+            cursor: pointer;
+        }
+
+        /* =========================================
+           特定业务 UI 样式
+           ========================================= */
+        /* 首页：电量环 */
+        .battery-circle {
+            width: 52px; height: 52px;
+            border-radius: 50%;
+            border: 4px solid var(--accent-green);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 500; font-size: 15px; color: var(--text-primary);
+        }
+
+        /* 首页：宫格菜单 */
+        .grid-menu {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+        }
+        .grid-item {
+            background: var(--bg-card); border-radius: var(--radius-lg);
+            padding: 20px 16px; text-align: center;
+            box-shadow: var(--shadow-soft); border: 1px solid var(--border-light);
+        }
+        .grid-item i { font-size: 28px; color: var(--accent-green); margin-bottom: 12px; }
+        .grid-item span { font-size: 14px; color: var(--text-primary); font-weight: 500; }
+
+        /* 社交：头像组 */
+        .avatar-stack { display: flex; padding-left: 10px; }
+        .avatar {
+            width: 44px; height: 44px; border-radius: 50%; 
+            background: #F4F7F6; border: 2px solid white; margin-left: -12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; font-weight: 500; color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        /* 数据：进度条 */
+        .progress-track { width: 100%; height: 10px; background: rgba(255,255,255,0.6); border-radius: 5px; overflow: hidden; margin-top: 8px;}
+        .progress-fill { height: 100%; border-radius: 5px; background: var(--accent-green); }
+        .progress-fill.orange { background: var(--accent-orange); }
+
+    </style>
+</head>
+<body>
+
+    <div class="header-title">
+        <h1>声盒 Mini - 小程序 UI 原型</h1>
+        <p>基于 HTML/CSS 的轻量级自然风设计实现 (Responsive 布局)</p>
+    </div>
+
+    <div class="mockup-gallery">
+
+        <div class="mobile-mockup">
+            <div class="status-bar"><span>9:41</span><span>5G 100%</span></div>
+            <div class="nav-header">
+                <h2>声盒 Mini</h2>
+                <i class="fa-solid fa-plus"></i>
+            </div>
+            
+            <div class="scroll-view">
+                <div class="glass-card flex-between">
+                    <div>
+                        <h3 class="title-md">客厅音箱</h3>
+                        <p class="sub-text"><span style="color:var(--accent-green);">● 在线</span> · 固件 2.4.8</p>
+                    </div>
+                    <div class="battery-circle">82%</div>
+                </div>
+
+                <div class="glass-card" style="background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(244,162,97,0.08) 100%);">
+                    <div class="flex-row" style="margin-bottom: 24px;">
+                        <div style="width: 56px; height: 56px; border-radius: var(--radius-sm); background: #2C3E35; display:flex; align-items:center; justify-content:center; color:#fff;">
+                            <i class="fa-solid fa-record-vinyl" style="font-size: 24px; opacity: 0.5;"></i>
+                        </div>
+                        <div>
+                            <h3 class="title-md">城市夜航</h3>
+                            <p class="sub-text">来自 网易云音乐</p>
+                        </div>
+                    </div>
+                    <div class="flex-between" style="padding: 0 16px;">
+                        <i class="fa-solid fa-backward-step" style="font-size: 20px; color: var(--text-secondary);"></i>
+                        <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--text-primary); color: white; display:flex; align-items:center; justify-content:center; font-size:20px; box-shadow: 0 8px 16px rgba(44,62,53,0.3);">
+                            <i class="fa-solid fa-pause"></i>
+                        </div>
+                        <i class="fa-solid fa-forward-step" style="font-size: 20px; color: var(--text-secondary);"></i>
+                    </div>
+                </div>
+
+                <div class="grid-menu">
+                    <div class="grid-item"><i class="fa-solid fa-users"></i><br><span>听歌好友</span></div>
+                    <div class="grid-item"><i class="fa-solid fa-chart-pie"></i><br><span>听歌数据</span></div>
+                    <div class="grid-item"><i class="fa-solid fa-sliders"></i><br><span>设备管理</span></div>
+                    <div class="grid-item"><i class="fa-solid fa-clock-rotate-left"></i><br><span>播放历史</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mobile-mockup">
+            <div class="status-bar"><span>9:41</span><span>5G 100%</span></div>
+            <div class="nav-header">
+                <div class="flex-row">
+                    <i class="fa-solid fa-angle-left"></i>
+                    <h2>一起听歌</h2>
+                </div>
+            </div>
+
+            <div class="scroll-view">
+                <div style="text-align: center; margin: 30px 0;">
+                    <div style="width: 140px; height: 140px; border-radius: 50%; background: rgba(132, 169, 140, 0.15); margin: 0 auto 24px auto; display:flex; align-items:center; justify-content:center; box-shadow: 0 0 60px rgba(132, 169, 140, 0.3);">
+                        <i class="fa-solid fa-music" style="font-size: 48px; color: var(--accent-green);"></i>
+                    </div>
+                    <h3 class="title-md" style="font-size: 24px;">雨后电台</h3>
+                    <p class="sub-text">同步延迟 0.2s · 网易云音乐</p>
+                </div>
+
+                <div class="glass-card">
+                    <p class="sub-text" style="margin-bottom: 16px;">房间成员 (3)</p>
+                    <div class="flex-between">
+                        <div class="avatar-stack">
+                            <div class="avatar" style="z-index: 3; background: #fff;">我</div>
+                            <div class="avatar" style="z-index: 2; border-color: var(--accent-green);">青</div>
+                            <div class="avatar" style="z-index: 1;">北</div>
+                        </div>
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center; color: var(--text-primary); border: 1px dashed var(--accent-green);">
+                            <i class="fa-solid fa-plus"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: auto; padding-top: 20px;">
+                    <button class="btn-primary"><i class="fa-brands fa-weixin" style="margin-right: 8px;"></i> 分享给微信好友</button>
+                    <div style="background: rgba(255,255,255,0.6); border-radius: 99px; padding: 16px 20px; font-size: 14px; color: var(--text-secondary); margin-top: 16px; text-align: center;">
+                        发送一句听歌评论...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mobile-mockup">
+            <div class="status-bar"><span>9:41</span><span>5G 100%</span></div>
+            <div class="nav-header">
+                <div class="flex-row">
+                    <i class="fa-solid fa-angle-left"></i>
+                    <h2>听歌总结</h2>
+                </div>
+            </div>
+
+            <div class="scroll-view">
+                <div class="glass-card" style="text-align: center; padding: 40px 20px; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(132,169,140,0.1) 100%);">
+                    <p class="sub-text" style="margin-bottom: 8px;">本周累计陪伴</p>
+                    <h2 style="font-size: 56px; color: var(--accent-green); margin-bottom: 4px; font-weight: 300;">428<span style="font-size: 18px; color: var(--text-primary); font-weight: 400;"> 分钟</span></h2>
+                    <p class="sub-text" style="color: var(--accent-orange); font-weight: 500;">超越了 Top 12% 的听众</p>
+                </div>
+
+                <div class="glass-card">
+                    <h3 class="title-md" style="margin-bottom: 24px;">偏好风格流</h3>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div class="flex-between">
+                            <span class="sub-text">华语流行</span><span class="title-md" style="font-size: 15px;">42%</span>
+                        </div>
+                        <div class="progress-track"><div class="progress-fill" style="width: 42%;"></div></div>
+                    </div>
+
+                    <div>
+                        <div class="flex-between">
+                            <span class="sub-text">轻音乐 / 白噪音</span><span class="title-md" style="font-size: 15px;">28%</span>
+                        </div>
+                        <div class="progress-track"><div class="progress-fill orange" style="width: 28%;"></div></div>
+                    </div>
+                </div>
+
+                <div class="glass-card flex-between">
+                    <div>
+                        <h3 class="title-md">常听时段</h3>
+                        <p class="sub-text">21:00 - 23:00</p>
+                    </div>
+                    <i class="fa-regular fa-moon" style="font-size: 28px; color: var(--accent-green);"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="mobile-mockup">
+            <div class="status-bar"><span>9:41</span><span>5G 100%</span></div>
+            <div class="nav-header">
+                <div class="flex-row">
+                    <i class="fa-solid fa-angle-left"></i>
+                    <h2>高级设置</h2>
+                </div>
+            </div>
+
+            <div class="scroll-view">
+                <div class="glass-card flex-between">
+                    <div>
+                        <h3 class="title-md">设备名称</h3>
+                        <p class="sub-text">当前: 客厅音箱</p>
+                    </div>
+                    <i class="fa-solid fa-angle-right" style="color: var(--text-secondary);"></i>
+                </div>
+
+                <div class="glass-card flex-between">
+                    <div>
+                        <h3 class="title-md">夜间勿扰</h3>
+                        <p class="sub-text">23:00-07:00</p>
+                    </div>
+                    <div class="switch-toggle"></div>
+                </div>
+
+                <div class="glass-card flex-between" style="margin-bottom: 24px;">
+                    <div>
+                        <h3 class="title-md">低电量提醒</h3>
+                        <p class="sub-text">低于 20% 时微信推送</p>
+                    </div>
+                    <div class="switch-toggle"></div>
+                </div>
+
+                <h3 class="title-md" style="padding: 0 8px; margin-bottom: 8px;">账号同步</h3>
+                
+                <div class="glass-card">
+                    <div class="flex-row" style="margin-bottom: 24px; justify-content: center;">
+                        <i class="fa-brands fa-qq" style="font-size: 32px; color: var(--text-primary);"></i>
+                        <span class="title-md">QQ音乐已连接</span>
+                    </div>
+                    
+                    <div class="flex-between" style="margin-bottom: 16px;">
+                        <span class="title-md" style="font-size: 15px;">读取收藏歌单</span>
+                        <div class="switch-toggle"></div>
+                    </div>
+                    <div class="flex-between" style="margin-bottom: 24px;">
+                        <span class="title-md" style="font-size: 15px;">同步播放历史</span>
+                        <div class="switch-toggle"></div>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.4); padding: 16px; border-radius: var(--radius-sm);">
+                        <div class="flex-between" style="margin-bottom: 8px;">
+                            <span class="sub-text" style="margin: 0; color: var(--text-primary);">同步进度</span>
+                            <span class="title-md" style="font-size: 14px;">68%</span>
+                        </div>
+                        <div class="progress-track" style="background: rgba(255,255,255,0.8);"><div class="progress-fill" style="width: 68%;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

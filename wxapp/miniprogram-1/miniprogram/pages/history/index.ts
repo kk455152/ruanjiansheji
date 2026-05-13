@@ -17,6 +17,7 @@ type HistoryRow = {
 Component({
   data: {
     filteredList: [] as HistoryRow[],
+    historyList: [] as HistoryRow[],
     isClearing: false,
     isLoading: false,
     keyword: '',
@@ -26,7 +27,6 @@ Component({
       { key: 'netease', label: '网易云' },
       { key: 'qq', label: 'QQ 音乐' },
     ],
-    historyList: [] as HistoryRow[],
   },
   lifetimes: {
     attached() {
@@ -81,6 +81,15 @@ Component({
       })
 
       this.setData({ filteredList })
+    },
+    clearFilters() {
+      this.setData(
+        {
+          keyword: '',
+          selectedSource: 'all',
+        },
+        () => this.applyFilters(),
+      )
     },
     async replay(event: WechatMiniprogram.TouchEvent) {
       const songId = String(event.currentTarget.dataset.songId || '')

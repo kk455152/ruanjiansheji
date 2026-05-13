@@ -1,78 +1,156 @@
-<navigation-bar title="首页" back="{{false}}" color="#171411" background="transparent"></navigation-bar>
+<navigation-bar title="声盒 Mini" back="{{false}}" color="#2C3E35" background="transparent"></navigation-bar>
 <scroll-view class="page-shell home-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
-  <view class="hero hero-split">
-    <view>
-      <text class="section-kicker section-kicker-home">声音 Mini</text>
-      <view class="page-title">智能音箱小程序</view>
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">声盒 Mini</text>
+      <text class="page-subtitle">自然一点地控制音乐、音箱和一起听。</text>
     </view>
-    <view class="hero-circle" bindtap="openDevice">+</view>
+    <view class="page-action" bindtap="openDevice">＋</view>
   </view>
 
-  <view class="dark-card now-card">
-    <view class="card-top">
-      <text class="card-kicker">{{deviceName}} · {{online ? '已连接' : '离线'}}</text>
-      <text class="mini-badge">{{battery}}%</text>
+  <view class="glass-card device-summary">
+    <view class="device-copy">
+      <text class="section-title">{{deviceName}}</text>
+      <text class="section-copy">
+        <text class="status-dot {{online ? 'status-online' : 'status-offline'}}"></text>{{online ? '在线' : '离线'}} · {{deviceModel}}
+      </text>
     </view>
-
-    <view class="media-row">
-      <view class="cover-box">
-        <text class="cover-glyph">♪</text>
-      </view>
-      <view class="media-copy">
-        <text class="player-kicker">正在播放</text>
-        <view class="song-title">{{currentSong}}</view>
-        <text class="artist-line">{{currentArtist}}</text>
-        <text class="muted-light">{{currentSource}}</text>
-      </view>
-    </view>
+    <view class="battery-circle">{{battery}}%</view>
   </view>
 
-  <view class="surface-card control-card">
-    <view class="control-strip">
-      <button class="icon-button" bindtap="playPreviousSong">◁</button>
-      <button class="play-core" loading="{{isActionLoading}}" bindtap="playFeaturedSong">
-        {{previewState === 'playing' || isPlaying ? '暂停' : '播放'}}
-      </button>
-      <button class="icon-button" bindtap="playNextSong">▷</button>
-      <view class="volume-compact">
-        <text class="volume-icon">))</text>
-        <view class="volume-meter">
-          <view class="volume-meter-fill" style="width: {{volume}}%;"></view>
+  <view class="glass-card glass-card-strong player-card">
+    <view class="track-row">
+      <image
+        class="cover-image"
+        wx:if="{{currentCover}}"
+        src="{{currentCover}}"
+        mode="aspectFill"
+      ></image>
+      <view class="cover-tile" wx:else>♪</view>
+      <view class="track-copy">
+        <text class="section-title">{{currentSong}}</text>
+        <text class="section-copy">{{currentArtist}} · {{currentSource}}</text>
+        <view class="track-meta">
+          <text class="track-meta-pill" wx:if="{{currentAlbum}}">《{{currentAlbum}}》</text>
+          <text class="track-meta-pill track-meta-dim">{{currentDuration}}</text>
         </view>
       </view>
     </view>
 
-    <slider
-      class="hidden-slider"
-      value="{{volume}}"
-      min="0"
-      max="100"
-      activeColor="#ff6a00"
-      backgroundColor="#e8ddd1"
-      bindchange="changeVolume"
-    />
+    <view class="player-controls">
+      <button class="step-button" loading="{{isActionLoading}}" bindtap="playPreviousSong">‹</button>
+      <button class="play-button" bindtap="playFeaturedSong">
+        {{previewState === 'playing' || isPlaying ? '暂停' : '播放'}}
+      </button>
+      <button class="step-button" loading="{{isActionLoading}}" bindtap="playNextSong">›</button>
+    </view>
+
+    <view class="volume-box">
+      <view class="volume-head">
+        <text>音量</text>
+        <text>{{volume}}%</text>
+      </view>
+      <slider
+        class="volume-slider"
+        value="{{volume}}"
+        min="0"
+        max="100"
+        activeColor="#84A98C"
+        backgroundColor="#DCE8E1"
+        block-size="24"
+        bindchange="changeVolume"
+      />
+    </view>
   </view>
 
-  <view class="feature-grid">
-    <view class="soft-card soft-peach feature-card" bindtap="openFriends">
-      <text class="feature-icon">♫</text>
-      <text class="section-card-title">听歌好友</text>
-      <text class="section-card-copy">一起听 / 分享</text>
+  <view class="grid-menu">
+    <view class="grid-item" bindtap="openFriends">
+      <text class="grid-icon">友</text>
+      <text>听歌好友</text>
     </view>
-    <view class="soft-card soft-blue feature-card" bindtap="openData">
-      <text class="feature-icon">▥</text>
-      <text class="section-card-title">听歌数据</text>
-      <text class="section-card-copy">个人总结</text>
+    <view class="grid-item" bindtap="openData">
+      <text class="grid-icon">数</text>
+      <text>听歌数据</text>
     </view>
-    <view class="soft-card soft-green feature-card" bindtap="openDevice">
-      <text class="feature-icon">▣</text>
-      <text class="section-card-title">设备管理</text>
-      <text class="section-card-copy">电量 / 连接 / 听感</text>
+    <view class="grid-item" bindtap="openDevice">
+      <text class="grid-icon">控</text>
+      <text>设备管理</text>
     </view>
-    <view class="soft-card soft-purple feature-card" bindtap="openHistory">
-      <text class="feature-icon">↺</text>
-      <text class="section-card-title">播放历史</text>
-      <text class="section-card-copy">最近 {{historyCount}} 首</text>
+    <view class="grid-item" bindtap="openHistory">
+      <text class="grid-icon">史</text>
+      <text>播放历史</text>
     </view>
+  </view>
+
+  <view class="glass-card search-card">
+    <view class="search-head">
+      <view>
+        <text class="section-title">搜歌</text>
+        <text class="section-copy">搜索后可播放、试听或加入下一首。</text>
+      </view>
+      <text class="right-link" wx:if="{{searchedSongs.length}}" bindtap="clearSearchResults">清空</text>
+    </view>
+    <view class="search-bar">
+      <input
+        class="search-input"
+        placeholder="歌曲名或歌手"
+        value="{{searchKeyword}}"
+        bindinput="inputSongKeyword"
+        bindconfirm="searchNeteaseSong"
+        confirm-type="search"
+      />
+      <button class="search-button" loading="{{isSongSearching}}" bindtap="searchNeteaseSong">搜索</button>
+    </view>
+
+    <view class="selected-song" wx:if="{{searchedSongs.length}}">
+      <view class="list-copy">
+        <text class="list-title">{{currentSong}}</text>
+        <text class="list-meta">{{currentArtist}} · {{currentSource}}</text>
+      </view>
+      <text class="pill">{{previewState === 'playing' ? '试听中' : '已选'}}</text>
+    </view>
+
+    <view class="action-grid" wx:if="{{searchedSongs.length}}">
+      <text class="quiet-button" data-direction="prev" bindtap="switchSearchedSong">上一首结果</text>
+      <text class="primary-button" bindtap="playSelectedSong">播放选中</text>
+      <text class="quiet-button" bindtap="queueSelectedSong">加入下一首</text>
+      <text class="quiet-button" data-direction="next" bindtap="switchSearchedSong">下一首结果</text>
+    </view>
+
+    <view class="song-list" wx:if="{{searchedSongs.length}}">
+      <view
+        class="glass-card list-row song-row {{activeSongId === item.songId ? 'song-row-active' : ''}}"
+        wx:for="{{searchedSongs}}"
+        wx:key="songId"
+        data-song-id="{{item.songId}}"
+        bindtap="selectSearchSong"
+      >
+        <view class="circle-mark">♪</view>
+        <view class="list-copy">
+          <text class="list-title">{{item.name}}</text>
+          <text class="list-meta">{{item.artistText}} · {{item.album || '单曲'}}</text>
+        </view>
+        <text class="right-link" data-song-id="{{item.songId}}" catchtap="playSelectedSong">播放</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-heading">
+    <text class="section-title">账号同步</text>
+    <text class="right-link">{{syncHint}}</text>
+  </view>
+  <view
+    class="glass-card list-row"
+    wx:for="{{services}}"
+    wx:key="service"
+    data-path="{{item.path}}"
+    bindtap="openAuth"
+  >
+    <view class="circle-mark">音</view>
+    <view class="list-copy">
+      <text class="list-title">{{item.serviceName}}</text>
+      <text class="list-meta">{{item.accountName}}</text>
+    </view>
+    <text class="outline-pill">{{item.syncText}}</text>
   </view>
 </scroll-view>

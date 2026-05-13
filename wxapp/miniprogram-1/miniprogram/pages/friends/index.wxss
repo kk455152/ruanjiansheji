@@ -1,165 +1,331 @@
-.hero,
-.card-top,
-.friend-name-line,
-.invite-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.room-hero {
+  padding: 20rpx 0 14rpx;
+  text-align: center;
 }
 
-.hero {
-  padding-top: 12rpx;
-}
-
-.hero-search {
-  background: rgba(255, 255, 255, 0.92);
-  color: #171411;
-  box-shadow: 0 18rpx 34rpx rgba(30, 26, 23, 0.08);
-}
-
-.room-card {
-  margin-top: 24rpx;
-  padding: 28rpx;
-}
-
-.card-kicker,
-.room-song,
-.room-meta {
-  color: rgba(255, 250, 243, 0.74);
-}
-
-.card-kicker {
-  font-size: 22rpx;
-}
-
-.room-main {
-  margin-top: 18rpx;
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-}
-
-.room-cover {
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(180deg, #ffcf9d 0%, #ff8c34 100%);
+.music-orb {
+  width: 180rpx;
+  height: 180rpx;
+  margin: 0 auto 20rpx;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), transparent 55%),
+    rgba(132, 169, 140, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #171411;
+  box-shadow:
+    0 0 80rpx rgba(132, 169, 140, 0.32),
+    inset 0 0 0 2rpx rgba(255, 255, 255, 0.55);
 }
 
-.room-glyph {
-  font-size: 46rpx;
-  font-weight: 800;
-}
-
-.room-copy {
-  flex: 1;
+.music-orb-inner {
+  width: 108rpx;
+  height: 108rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffffff 0%, #e5efe8 100%);
+  color: #6b9080;
   display: flex;
-  flex-direction: column;
-  gap: 8rpx;
+  align-items: center;
+  justify-content: center;
+  font-size: 56rpx;
+  font-weight: 500;
+  box-shadow:
+    0 12rpx 28rpx rgba(132, 169, 140, 0.28),
+    inset 0 0 0 2rpx rgba(255, 255, 255, 0.9);
 }
 
 .room-title {
-  font-size: 40rpx;
-  font-weight: 800;
+  display: block;
+  color: #2c3e35;
+  font-size: 38rpx;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 2rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 40rpx;
 }
 
-.room-song,
-.room-meta {
-  font-size: 22rpx;
+.room-hero .section-copy {
+  display: block;
+  margin-top: 6rpx;
+  padding: 0 40rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.avatar-row,
-.button-row {
+.member-card,
+.share-card,
+.empty-card {
+  padding: 26rpx;
+}
+
+.member-head {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16rpx;
 }
 
-.avatar-row {
-  margin: 24rpx 0;
+.avatar-stack {
+  margin-top: 22rpx;
+  display: flex;
+  padding-left: 16rpx;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
-.member-badge,
-.friend-avatar {
-  width: 72rpx;
-  height: 72rpx;
+.avatar {
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  margin-left: -16rpx;
   border-radius: 50%;
+  border: 4rpx solid #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 10rpx 24rpx rgba(44, 62, 53, 0.14);
+}
+
+.avatar-char {
+  color: #2c3e35;
   font-size: 26rpx;
-  font-weight: 800;
+  font-weight: 600;
 }
 
-.member-badge {
-  background: rgba(255, 255, 255, 0.14);
+.avatar-badge {
+  position: absolute;
+  right: -4rpx;
+  bottom: -4rpx;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #6b9080;
+  font-size: 18rpx;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 10rpx rgba(44, 62, 53, 0.12);
 }
 
-.member-badge-ghost {
-  color: rgba(255, 250, 243, 0.56);
+.avatar-add {
+  border-style: dashed;
+  border-color: #84a98c;
+  background: rgba(255, 255, 255, 0.6);
+  color: #84a98c;
+  font-size: 32rpx;
 }
 
-.half-button {
-  flex: 1;
+.tone-sage {
+  background: linear-gradient(135deg, #cfe0d4 0%, #a8c4b0 100%);
 }
 
-.dark-button {
-  height: 92rpx;
-  margin: 0;
-  border: 0;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fffaf3;
+.tone-mist {
+  background: linear-gradient(135deg, #e4ece7 0%, #c2d1c8 100%);
+}
+
+.tone-sand {
+  background: linear-gradient(135deg, #f6e1c8 0%, #f4a261 100%);
+}
+
+.tone-sea {
+  background: linear-gradient(135deg, #d2e4e4 0%, #8fb8b8 100%);
+}
+
+.tone-peach {
+  background: linear-gradient(135deg, #fad9cb 0%, #e8927c 100%);
+}
+
+.tone-cloud {
+  background: linear-gradient(135deg, #ecece9 0%, #b9bfb3 100%);
+}
+
+.tone-sand .avatar-char,
+.tone-peach .avatar-char {
+  color: #ffffff;
+}
+
+.room-actions {
+  margin-top: 20rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.room-actions .primary-button,
+.room-actions .ghost-button {
+  padding: 0 14rpx;
+  font-size: 24rpx;
+  min-height: 88rpx;
 }
 
 .friend-row {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 24rpx;
-  margin-bottom: 16rpx;
+  margin-bottom: 14rpx;
+  padding: 20rpx 22rpx;
 }
 
 .friend-avatar {
-  background: #f1e5d7;
-  color: #ca6e18;
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 10rpx 22rpx rgba(44, 62, 53, 0.1),
+    inset 0 0 0 3rpx rgba(255, 255, 255, 0.8);
 }
 
-.friend-copy {
+.friend-avatar-char {
+  color: #2c3e35;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.friend-avatar.tone-sand .friend-avatar-char,
+.friend-avatar.tone-peach .friend-avatar-char {
+  color: #ffffff;
+}
+
+.friend-avatar-status {
+  position: absolute;
+  right: 0rpx;
+  bottom: 2rpx;
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  border: 3rpx solid #ffffff;
+  box-sizing: content-box;
+}
+
+.friend-activity {
+  margin-top: 6rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.activity-icon {
+  flex-shrink: 0;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  font-size: 20rpx;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b9080;
+  background: rgba(132, 169, 140, 0.18);
+}
+
+.activity-icon.tone-peach {
+  color: #e76f51;
+  background: rgba(244, 162, 97, 0.22);
+}
+
+.activity-icon.tone-sand {
+  color: #b5651d;
+  background: rgba(244, 162, 97, 0.28);
+}
+
+.activity-icon.tone-sea {
+  color: #4e8484;
+  background: rgba(143, 184, 184, 0.25);
+}
+
+.activity-icon.tone-cloud {
+  color: #7f8979;
+  background: rgba(185, 191, 179, 0.35);
+}
+
+.activity-icon.tone-mist {
+  color: #8a9b91;
+  background: rgba(194, 209, 200, 0.4);
+}
+
+.friend-activity .list-meta {
   flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.share-card {
+  margin-top: 18rpx;
+  padding: 26rpx;
+}
+
+.share-preview {
+  margin-top: 18rpx;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.6);
+  border: 2rpx dashed rgba(132, 169, 140, 0.32);
+  padding: 22rpx;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 10rpx;
 }
 
-.friend-name {
-  font-size: 30rpx;
-  font-weight: 800;
+.share-preview-image {
+  width: 100%;
+  border-radius: 20rpx;
+  box-shadow: 0 16rpx 38rpx rgba(132, 169, 140, 0.22);
 }
 
-.join-pill {
-  display: inline-flex;
+.share-preview-empty {
+  padding: 34rpx 22rpx;
+}
+
+.share-preview-orb {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffffff 0%, #d4e1da 100%);
+  color: #6b9080;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 88rpx;
-  height: 52rpx;
-  padding: 0 18rpx;
-  border-radius: 999rpx;
-  background: #171411;
-  color: #fffaf3;
-  font-size: 22rpx;
+  font-size: 44rpx;
+  font-weight: 500;
+  box-shadow:
+    0 0 48rpx rgba(132, 169, 140, 0.26),
+    inset 0 0 0 2rpx rgba(255, 255, 255, 0.9);
 }
 
-.invite-card {
-  margin-top: 12rpx;
-  padding: 24rpx;
-  gap: 20rpx;
+.share-canvas {
+  position: fixed;
+  left: -9999rpx;
+  top: -9999rpx;
+  width: 600rpx;
+  height: 840rpx;
+  pointer-events: none;
 }
 
-.invite-icon {
-  font-size: 34rpx;
-  color: #ff6a00;
+.share-actions {
+  margin-top: 20rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.share-actions .primary-button,
+.share-actions .quiet-button {
+  padding: 0 14rpx;
+  font-size: 24rpx;
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
 }

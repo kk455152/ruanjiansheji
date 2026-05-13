@@ -505,15 +505,49 @@ export async function getNeteaseSongPreviewUrl(songId: string) {
     }>
   }
 
-  const previewUrl =
-    `https://netease-cloud-music-api-one-rouge.vercel.app/song/url/v1?id=${encodeURIComponent(songId)}&level=standard`
-  try {
-    const payload = await requestAbsolute<PreviewResponse>(previewUrl, 'GET')
-    const item = payload.data && payload.data[0]
-    return normalizeAudioUrl(item ? item.url : '')
-  } catch (error) {
+  if (!songId) {
     return ''
   }
+
+  const mirrors = [
+    'https://netease-cloud-music-api-one-rouge.vercel.app',
+    'https://music-api.focalors.ltd',
+    'https://netease-cloud-music-api-binaryify.vercel.app',
+  ]
+  const levels = ['standard', 'higher', 'exhigh', 'lossless']
+
+  for (const base of mirrors) {
+    for (const level of levels) {
+      try {
+        const url =
+          `${base}/song/url/v1?id=${encodeURIComponent(songId)}&level=${encodeURIComponent(level)}`
+        const payload = await requestAbsolute<PreviewResponse>(url, 'GET')
+        const item = payload.data && payload.data[0]
+        const normalized = normalizeAudioUrl(item ? item.url || '' : '')
+        if (normalized) {
+          return normalized
+        }
+      } catch (error) {
+        // try next mirror / level
+      }
+    }
+  }
+
+  for (const base of mirrors) {
+    try {
+      const url = `${base}/song/url?id=${encodeURIComponent(songId)}&br=320000`
+      const payload = await requestAbsolute<PreviewResponse>(url, 'GET')
+      const item = payload.data && payload.data[0]
+      const normalized = normalizeAudioUrl(item ? item.url || '' : '')
+      if (normalized) {
+        return normalized
+      }
+    } catch (error) {
+      // ignore
+    }
+  }
+
+  return `https://music.163.com/song/media/outer/url?id=${encodeURIComponent(songId)}.mp3`
 }
 
 export function clearOldHistory(days = 30) {

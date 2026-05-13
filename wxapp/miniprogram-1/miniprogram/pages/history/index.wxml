@@ -1,29 +1,35 @@
-<navigation-bar title="播放历史" color="#171411" background="transparent"></navigation-bar>
+<navigation-bar title="播放历史" color="#2C3E35" background="transparent"></navigation-bar>
 <scroll-view class="page-shell history-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
-  <view class="hero">
-    <text class="section-kicker">Playback Archive</text>
-    <view class="page-title">播放历史</view>
-    <text class="page-subtitle">筛选最近播过的歌曲，快速回放，或清理较早的历史记录。</text>
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">播放历史</text>
+      <text class="page-subtitle">筛选最近播放，轻点即可发送到音箱重播。</text>
+    </view>
+    <view class="page-action" bindtap="clearFilters">清</view>
   </view>
 
-  <view class="surface-card search-card">
+  <view class="glass-card filter-card">
     <input class="search-input" placeholder="搜索歌曲、歌手或来源" value="{{keyword}}" bindinput="inputKeyword" />
+    <view class="filter-row">
+      <text
+        class="{{selectedSource === item.key ? 'pill' : 'outline-pill'}}"
+        wx:for="{{sourceOptions}}"
+        wx:key="key"
+        data-key="{{item.key}}"
+        bindtap="selectSource"
+      >
+        {{item.label}}
+      </text>
+    </view>
   </view>
 
-  <view class="filter-row">
-    <text
-      class="{{selectedSource === item.key ? 'pill active-pill' : 'outline-pill filter-pill'}}"
-      wx:for="{{sourceOptions}}"
-      wx:key="key"
-      data-key="{{item.key}}"
-      bindtap="selectSource"
-    >
-      {{item.label}}
-    </text>
+  <view class="section-heading">
+    <text class="section-title">{{filteredList.length}} 条记录</text>
+    <text class="right-link">{{isLoading ? '刷新中' : '点击重播'}}</text>
   </view>
 
   <view
-    class="surface-card history-row"
+    class="glass-card list-row history-row"
     wx:for="{{filteredList}}"
     wx:key="historyId"
     data-song-id="{{item.songId}}"
@@ -32,13 +38,17 @@
     data-source="{{item.source}}"
     bindtap="replay"
   >
-    <view class="history-dot"></view>
-    <view class="history-copy">
-      <text class="history-song">{{item.songName}}</text>
-      <text class="muted-text">{{item.sourceText}}</text>
-      <text class="played-at">{{item.playedAtText}}</text>
+    <view class="circle-mark">♪</view>
+    <view class="list-copy">
+      <text class="list-title">{{item.songName}}</text>
+      <text class="list-meta">{{item.sourceText}} · {{item.playedAtText}}</text>
     </view>
-    <text class="replay-action">重播</text>
+    <text class="right-link">重播</text>
+  </view>
+
+  <view class="glass-card empty-card" wx:if="{{!filteredList.length && !isLoading}}">
+    <text class="section-title">没有匹配到记录</text>
+    <text class="section-copy">换个关键词，或点击右上角清空筛选。</text>
   </view>
 
   <button class="ghost-button clear-button" loading="{{isClearing}}" bindtap="clearOldRecords">清理 30 天前历史</button>
