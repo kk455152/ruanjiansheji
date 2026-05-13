@@ -16,6 +16,7 @@ import {
 import { FEATURED_TRACK } from '../../services/config'
 import { sourceLabel, syncStatusLabel } from '../../utils/display'
 import { recordListeningSession } from '../../utils/listening-stats'
+import { ensureAuthenticated } from '../../utils/auth'
 
 let previewAudio: WechatMiniprogram.InnerAudioContext | null = null
 let currentSessionStart = 0
@@ -166,6 +167,7 @@ Component({
   },
   pageLifetimes: {
     show() {
+      if (!ensureAuthenticated('pages/index/index')) return
       this.syncTabBar()
       void this.loadPage()
       if (!this.data.playlist.length) {

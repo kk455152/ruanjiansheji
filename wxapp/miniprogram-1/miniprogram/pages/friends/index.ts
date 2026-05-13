@@ -2,6 +2,7 @@ import { createListenRoom, shareSongCard } from '../../services/api'
 import { FEATURED_TRACK } from '../../services/config'
 import { firstChar } from '../../utils/display'
 import { getWeekAggregates } from '../../utils/listening-stats'
+import { ensureAuthenticated } from '../../utils/auth'
 
 type FriendRow = {
   friendId: string
@@ -194,6 +195,7 @@ Component({
   },
   pageLifetimes: {
     show() {
+      if (!ensureAuthenticated('pages/friends/index')) return
       this.syncTabBar()
       this.loadPage()
       this.refreshCardSummary()

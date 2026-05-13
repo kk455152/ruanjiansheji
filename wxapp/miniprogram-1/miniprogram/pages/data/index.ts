@@ -7,6 +7,7 @@ import {
 } from '../../services/api'
 import { sourceLabel } from '../../utils/display'
 import { getWeekAggregates, ArtistAggregate } from '../../utils/listening-stats'
+import { ensureAuthenticated } from '../../utils/auth'
 
 type HistoryPreview = {
   artist: string
@@ -108,6 +109,7 @@ Component({
   },
   pageLifetimes: {
     show() {
+      if (!ensureAuthenticated('pages/data/index')) return
       this.syncTabBar()
       void this.loadPage()
       this.startLiveTick()

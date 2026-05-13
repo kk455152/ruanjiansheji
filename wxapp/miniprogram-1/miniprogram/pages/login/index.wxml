@@ -1,0 +1,49 @@
+<view class="login-shell">
+  <view class="login-glow glow-top"></view>
+  <view class="login-glow glow-bottom"></view>
+
+  <view class="login-brand">
+    <view class="logo-outer">
+      <view class="logo-inner">
+        <text class="logo-glyph">♪</text>
+      </view>
+    </view>
+    <text class="brand-title">声盒 Mini</text>
+    <text class="brand-subtitle">把音乐、音箱和一起听，放进一个自然的空间里。</text>
+  </view>
+
+  <view class="feature-card glass-card">
+    <view class="feature-row">
+      <view class="feature-dot tone-sage">♪</view>
+      <view class="feature-copy">
+        <text class="feature-title">实时播放</text>
+        <text class="feature-desc">搜歌、上一首下一首、音量都在一张手掌大小的卡片里。</text>
+      </view>
+    </view>
+    <view class="feature-row">
+      <view class="feature-dot tone-peach">✦</view>
+      <view class="feature-copy">
+        <text class="feature-title">一起听</text>
+        <text class="feature-desc">把房间分享给朋友，延迟小于 0.3 秒。</text>
+      </view>
+    </view>
+    <view class="feature-row">
+      <view class="feature-dot tone-sea">☾</view>
+      <view class="feature-copy">
+        <text class="feature-title">听歌总结</text>
+        <text class="feature-desc">按实际播放次数统计本周常听艺人与陪伴分钟数。</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="login-tips">
+    <text class="tip-text">登录后即可进入首页、好友、数据和设备管理。</text>
+  </view>
+
+  <button class="primary-button login-button" open-type="getUserInfo" loading="{{loading}}" bindgetuserinfo="onGetUserInfo" bindtap="onQuickLogin">
+    <text class="wx-mark">微</text>
+    <text>微信一键登录</text>
+  </button>
+
+  <text class="muted-text agreement">登录即表示同意《用户协议》与《隐私政策》</text>
+</view>

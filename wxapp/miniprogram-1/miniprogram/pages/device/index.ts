@@ -8,6 +8,7 @@ import {
   searchNearbyDevices,
 } from '../../services/api'
 import { stepStatusLabel, syncStatusLabel } from '../../utils/display'
+import { ensureAuthenticated } from '../../utils/auth'
 
 type NearbyCard = {
   deviceId: string
@@ -99,6 +100,7 @@ Component({
   },
   pageLifetimes: {
     show() {
+      if (!ensureAuthenticated('pages/device/index')) return
       this.syncTabBar()
       this.applyStoredSettings()
       void this.loadPage()
