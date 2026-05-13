@@ -1,16 +1,5 @@
 import { setLoginSession, getLoginSession } from '../../utils/auth'
 
-type UserInfoDetail = WechatMiniprogram.GetUserInfoSuccessCallbackResult
-
-function persistSession(userInfo: { nickName?: string; avatarUrl?: string }, code: string) {
-  setLoginSession({
-    nickname: (userInfo && userInfo.nickName) || '声盒用户',
-    avatarUrl: (userInfo && userInfo.avatarUrl) || '',
-    loginAt: Date.now(),
-    code,
-  })
-}
-
 function loginCode() {
   return new Promise<string>((resolve) => {
     wx.login({
@@ -23,52 +12,84 @@ function loginCode() {
 Page({
   data: {
     loading: false,
+    confirmed: false,
+    nickName: '',
+    avatarUrl: '',
+    manualMode: false,
+    manualAvatar: '',
+    manualNick: '',
   },
   onLoad() {
     if (getLoginSession()) {
       wx.switchTab({ url: '/pages/index/index' })
     }
   },
-  async onGetUserInfo(event: { detail: UserInfoDetail & { errMsg?: string } }) {
-    const detail = event && event.detail
-    if (!detail || !detail.userInfo) {
-      return
-    }
-    this.setData({ loading: true })
-    try {
-      const code = await loginCode()
-      persistSession(detail.userInfo, code)
-      wx.showToast({ title: '登录成功', icon: 'success' })
-      setTimeout(() => {
-        wx.switchTab({ url: '/pages/index/index' })
-      }, 500)
-    } finally {
-      this.setData({ loading: false })
-    }
-  },
   async onQuickLogin() {
     if (this.data.loading) return
     this.setData({ loading: true })
-    try {
-      const code = await loginCode()
 
-      let nickName = ''
-      let avatarUrl = ''
+    const canUseProfile = typeof wx.getUserProfile === 'function'
+
+    if (canUseProfile) {
       try {
-        const profile = await wx.getUserProfile({ desc: '用于展示登录信息' })
-        nickName = profile.userInfo.nickName
-        avatarUrl = profile.userInfo.avatarUrl
+        const profile = await wx.getUserProfile({
+          desc: '用于在声盒 Mini 中展示你的头像和昵称',
+          lang: 'zh_CN',
+        })
+        await this.finalizeLogin(profile.userInfo.nickName, profile.userInfo.avatarUrl)
+        return
       } catch (error) {
-        nickName = '声盒用户'
+        const errMsg = error && (error as any).errMsg ? String((error as any).errMsg) : ''
+        if (errMsg.indexOf('cancel') >= 0 || errMsg.indexOf('deny') >= 0) {
+          this.setData({ loading: false })
+          wx.showToast({ title: '已取消登录', icon: 'none' })
+          return
+        }
+        // getUserProfile 在新基础库被禁用，降级到 chooseAvatar + nickname
       }
-
-      persistSession({ nickName, avatarUrl }, code)
-      wx.showToast({ title: '登录成功', icon: 'success' })
-      setTimeout(() => {
-        wx.switchTab({ url: '/pages/index/index' })
-      }, 500)
-    } finally {
-      this.setData({ loading: false })
     }
+
+    this.setData({ manualMode: true, loading: false })
+  },
+  onChooseAvatar(event: WechatMiniprogram.CustomEvent<{ avatarUrl: string }>) {
+    const url = event && event.detail && event.detail.avatarUrl
+    if (url) {
+      this.setData({ manualAvatar: url })
+    }
+  },
+  onNickInput(event: WechatMiniprogram.Input) {
+    this.setData({ manualNick: event.detail.value })
+  },
+  async confirmManualLogin() {
+    const nick = (this.data.manualNick || '').trim() || '声盒用户'
+    const avatar = this.data.manualAvatar || ''
+    this.setData({ loading: true, manualMode: false })
+    await this.finalizeLogin(nick, avatar)
+  },
+  closeManual() {
+    this.setData({ manualMode: false, loading: false })
+  },
+  async finalizeLogin(nickName: string, avatarUrl: string) {
+    const code = await loginCode()
+    const finalNick = (nickName || '').trim() || '声盒用户'
+
+    setLoginSession({
+      nickname: finalNick,
+      avatarUrl: avatarUrl || '',
+      loginAt: Date.now(),
+      code,
+    })
+
+    this.setData({
+      confirmed: true,
+      loading: false,
+      nickName: finalNick,
+      avatarUrl: avatarUrl || '',
+    })
+
+    wx.showToast({ title: '登录成功', icon: 'success' })
+    setTimeout(() => {
+      wx.switchTab({ url: '/pages/index/index' })
+    }, 900)
   },
 })

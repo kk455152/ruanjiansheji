@@ -36,14 +36,50 @@
     </view>
   </view>
 
-  <view class="login-tips">
-    <text class="tip-text">登录后即可进入首页、好友、数据和设备管理。</text>
+  <view class="profile-card glass-card" wx:if="{{confirmed}}">
+    <image class="profile-avatar" src="{{avatarUrl}}" wx:if="{{avatarUrl}}" mode="aspectFill"></image>
+    <view class="profile-avatar profile-avatar-placeholder" wx:else>♪</view>
+    <view class="profile-copy">
+      <text class="feature-title">你好，{{nickName}}</text>
+      <text class="feature-desc">登录成功，正在进入声盒 Mini …</text>
+    </view>
   </view>
 
-  <button class="primary-button login-button" open-type="getUserInfo" loading="{{loading}}" bindgetuserinfo="onGetUserInfo" bindtap="onQuickLogin">
-    <text class="wx-mark">微</text>
-    <text>微信一键登录</text>
-  </button>
+  <view wx:else>
+    <view class="login-tips">
+      <text class="tip-text">登录后即可进入首页、好友、数据和设备管理。</text>
+    </view>
+    <button class="primary-button login-button" loading="{{loading}}" bindtap="onQuickLogin">
+      <text class="wx-mark">微</text>
+      <text>微信一键登录</text>
+    </button>
+    <text class="muted-text agreement">登录即表示同意《用户协议》与《隐私政策》</text>
+  </view>
 
-  <text class="muted-text agreement">登录即表示同意《用户协议》与《隐私政策》</text>
+  <view class="sheet-mask" wx:if="{{manualMode}}" bindtap="closeManual"></view>
+  <view class="sheet" wx:if="{{manualMode}}">
+    <view class="sheet-handle"></view>
+    <text class="sheet-title">使用微信账号登录</text>
+    <text class="sheet-subtitle">轻触头像可从微信头像/相册选择，昵称支持自动填入微信昵称。</text>
+
+    <view class="sheet-row">
+      <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image class="avatar-picker-image" src="{{manualAvatar}}" wx:if="{{manualAvatar}}" mode="aspectFill"></image>
+        <text class="avatar-picker-placeholder" wx:else>选择头像</text>
+      </button>
+      <view class="sheet-input-wrap">
+        <text class="muted-text">昵称</text>
+        <input
+          class="sheet-input"
+          type="nickname"
+          value="{{manualNick}}"
+          placeholder="请输入昵称"
+          bindinput="onNickInput"
+        />
+      </view>
+    </view>
+
+    <button class="primary-button sheet-confirm" loading="{{loading}}" bindtap="confirmManualLogin">确认登录</button>
+    <text class="muted-text sheet-cancel" bindtap="closeManual">取消</text>
+  </view>
 </view>
