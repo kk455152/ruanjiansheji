@@ -1,0 +1,290 @@
+=== Page 1 ===
+设计和开发文档
+设计文档
+一.小程序草图与接口的关系
+我们首先完成了小程序的设计草图，并且根据设计草图完成了对应 api 接口的设计
+
+=== Page 2 ===
+对应 API：
+
+=== Page 3 ===
+
+
+=== Page 4 ===
+对应 API:
+获取首页信息 GET /api/home/overview
+
+=== Page 5 ===
+播放控制 POST /api/player/play-control
+音量调节 POST /api/device/volume
+听歌好友入口 GET /api/friend/listening
+听歌数据入口 GET /api/stats/weekly
+设备管理入口 GET /api/device/list
+播放历史入口 GET /api/play-history
+
+=== Page 6 ===
+对应 API：
+
+=== Page 7 ===
+
+
+=== Page 8 ===
+对应 API：
+
+=== Page 9 ===
+
+
+=== Page 10 ===
+对应 API：
+
+=== Page 11 ===
+
+
+=== Page 12 ===
+
+
+=== Page 13 ===
+对应 API：
+同意绑定：POST /api/music-service/bind
+
+=== Page 14 ===
+对应 API：
+
+=== Page 15 ===
+
+
+=== Page 16 ===
+对应 API：
+
+=== Page 17 ===
+
+
+=== Page 18 ===
+对应 API：
+
+=== Page 19 ===
+
+
+=== Page 20 ===
+对应 API：
+
+=== Page 21 ===
+
+
+=== Page 22 ===
+对应 API：
+
+=== Page 23 ===
+
+
+=== Page 24 ===
+对应 API：
+
+=== Page 25 ===
+
+
+=== Page 26 ===
+对应 API：
+
+=== Page 27 ===
+
+
+=== Page 28 ===
+对应 API：
+
+=== Page 29 ===
+
+
+=== Page 30 ===
+对应 API：
+
+=== Page 31 ===
+
+
+=== Page 32 ===
+对应 API：
+
+=== Page 33 ===
+
+
+=== Page 34 ===
+对应 API：
+
+=== Page 35 ===
+
+
+=== Page 36 ===
+对应 API：
+
+=== Page 37 ===
+
+
+=== Page 38 ===
+对应 API：
+
+=== Page 39 ===
+
+
+=== Page 40 ===
+对应 API:
+
+=== Page 41 ===
+
+
+=== Page 42 ===
+对应 API：
+
+=== Page 43 ===
+
+
+=== Page 44 ===
+对应 API：
+
+=== Page 45 ===
+
+
+=== Page 46 ===
+对应 API:
+
+=== Page 47 ===
+
+
+=== Page 48 ===
+对应 API：
+
+=== Page 49 ===
+
+
+=== Page 50 ===
+对应 API：
+
+=== Page 51 ===
+开发文档：通过数据库与开发出来小程序的接口以及
+后端连接来解释
+一.项目完成逻辑
+这是一个“智能音箱音乐小程序”。用户在小程序里登录、看设备、搜歌、播放歌曲、调
+音量、看听歌数据、创建一起听房间、生成分享卡片。小程序自己不连数据库，它只
+发 HTTP 请求给后端，后端再去读写 MySQL、MongoDB 或 RabbitMQ。
+ 
+二.存储数据的分类
+
+=== Page 52 ===
+三.MySQL 中表的解释
+user（用户表）
+auth_token（用户授权 Token 表）登入微信
+存储用户登录授权信息
+主要用于：
+ 用户登录状态维护
+ 小程序鉴权
+ 第三方平台授权
+
+=== Page 53 ===
+ 自动续期登录
+ Token 刷新
+operation_log（操作日志表） 记录用户在系统中的行为操
+作
+
+=== Page 54 ===
+用来解释 operation_log 这个表里面的 action_id
+device（设备表）存储智能音箱设备的基础信息
+
+=== Page 55 ===
+media_mapping（媒体映射表）统一管理不同音乐平台的
+歌曲信息
+为什么需要：
+不同平台歌曲 ID 不一样。
+表里存储音乐元数据，不真正存音频
+
+=== Page 56 ===
+play_history（播放历史表）记录用户在设备上的每一次播
+放行为
+
+=== Page 57 ===
+friendship（好友关系表）保存用户之间的好友关系
+
+=== Page 58 ===
+user_device_binding（用户设备绑定表）记录“哪个用户
+绑定了哪个设备”
+为什么需要：
+一个用户可以绑定多个设备，一个设备可以被家里面的多个人共享
+
+=== Page 59 ===
+user_feedback（用户反馈表）保存用户提交的意见、问
+题、建议
+Daily_Stats（每日统计表）保存系统每天的听歌统计结果
+数据统计汇总表
+
+=== Page 60 ===
+device_settings（设备设置表）保存设备的高级设置配置
+
+=== Page 61 ===
+battery_notice_setting（电量通知设置表）保存设备的电
+量提醒配置
+
+=== Page 62 ===
+listen_room（一起听房间表）保存“一起听歌房间”的信息
+
+=== Page 63 ===
+listen_room_member（一起听房间成员表）
+
+=== Page 64 ===
+share_record（分享记录表）保存用户的分享行为记录
+
+=== Page 65 ===
+music_service_permission（音乐服务权限表）保存用户
+对第三方音乐平台授权的权限范围
+
+=== Page 66 ===
+device_bind_task（设备绑定任务表）保存“设备配网/绑
+定过程”的任务状态
+
+=== Page 67 ===
+
+
+=== Page 68 ===
+listen_room_comment（一起听房间评论表）保存一起听
+房间中的聊天/评论消息
+music_service_binding（音乐服务绑定表）保存用户绑
+定的第三方音乐平台账号信息 登入相关音乐平台
+
+=== Page 69 ===
+总结：
+
+=== Page 70 ===
+四.MongoDB 中数据的解释
+解释：
+
+=== Page 71 ===
+
+
+=== Page 72 ===
+解释：
+
+=== Page 73 ===
+
+
+=== Page 74 ===
+五.小程序中执行的动作对数据库与本地缓存的影响
+六.小程序与接口对应（根据最终确定的小程序界面我们统
+计了如下接口）
+
+=== Page 75 ===
+
+
+=== Page 76 ===
+
+
+=== Page 77 ===
+总结：页面和接口流程图
+
+=== Page 78 ===
+七.后端
+1.总体框架图
+2.业务数据流动
+
+=== Page 79 ===
+以播放功能为例的数据流动图：
+
+=== Page 80 ===
+
+
