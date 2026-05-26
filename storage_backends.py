@@ -269,6 +269,9 @@ def ensure_mongo_schema():
     create_index_safely(get_bind_progress_collection(), "task_id", unique=True)
     create_index_safely(get_bind_progress_collection(), "device_sn")
     create_index_safely(get_music_sync_progress_collection(), [("user_id", 1), ("service", 1)], unique=True)
+    # Event-log collections recommended by 数据库交接 文档
+    from mongo_event_logs import ensure_event_log_indexes
+    ensure_event_log_indexes()
     _mongo_schema_ready = True
 
 
@@ -1603,6 +1606,17 @@ def persist_payload(payload):
         course_device_id,
     )
 
+    # Mirror every gateway payload into the analytics / event-log collections
+    # described in the 数据库交接 文档. Failures here must not affect the main
+    # MySQL/MongoDB persistence flow.
+    write_event_log_for_payload(
+        payload=payload,
+        metric_type=metric_type,
+        account=account,
+        course_user_id=course_user_id,
+        course_device_id=course_device_id,
+    )
+
     if metric_type in PREFERENCE_TYPES:
         upsert_user_preference(payload, user_id)
         persist_like_feedback_to_relational(payload, account, password)
@@ -1678,3 +1692,193 @@ def get_user_preference(device_id, account):
             (device_id, user_row["user_id"]),
         )
         return cursor.fetchone()
+
+
+# ---------------------------------------------------------------------------
+# 事件日志写入（数据库交接 PDF 中的 9 个 MongoDB collection）
+# ---------------------------------------------------------------------------
+
+PLAY_EVENT_LOG_TYPES = {
+    "play_event",
+    "play_start",
+    "PLAY_START",
+    "play_pause",
+    "PLAY_PAUSE",
+    "play_resume",
+    "PLAY_RESUME",
+    "play_complete",
+    "PLAY_COMPLETE",
+    "play_failed",
+    "PLAY_FAILED",
+    "song_switch",
+    "seek",
+}
+VOICE_COMMAND_LOG_TYPES = {"voice_command", "voice", "asr_result"}
+USER_BEHAVIOR_EVENT_TYPES = {"user_behavior", "behavior_event", "ui_event"}
+LISTEN_ROOM_MESSAGE_TYPES = {"listen_room_message", "room_message"}
+FEEDBACK_ATTACHMENT_TYPES = {"feedback_attachment", "feedback"}
+THIRD_PARTY_MUSIC_RAW_TYPES = {"third_party_music_raw", "third_party_response", "platform_response"}
+DEVICE_CONFIG_SNAPSHOT_TYPES = {"device_config_snapshot", "config_change"}
+DEVICE_STATUS_SNAPSHOT_TYPES = {"device_status_snapshot", "device_status"}
+
+
+def _device_sn_for_payload(payload):
+    return str(
+        payload.get("device_sn")
+        or payload.get("device_serial")
+        or payload.get("serial_number")
+        or payload.get("device_id")
+        or "unknown_device"
+    )
+
+
+def _safe_int(value, default=None):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def write_event_log_for_payload(payload, metric_type, account, course_user_id, course_device_id):
+    """Mirror a gateway payload into the event-log collections from the PDF.
+
+    The function never raises – any failure is logged-and-swallowed so the
+    primary persistence pipeline is unaffected.
+    """
+
+    try:
+        from mongo_event_logs import (
+            insert_device_event_log,
+            insert_play_event_log,
+            insert_voice_command_log,
+            insert_device_status_snapshot,
+            insert_user_behavior_event,
+            insert_listen_room_message,
+            insert_feedback_attachment,
+            insert_third_party_music_raw,
+            insert_device_config_snapshot,
+        )
+    except Exception as exc:  # pragma: no cover - import-time defence
+        print(f"[EVENT_LOG] import failed: {exc!r}")
+        return
+
+    raw_type = payload.get("type") or metric_type or ""
+    raw_type_str = str(raw_type)
+    device_id = payload.get("device_id", "unknown_device")
+    device_sn = _device_sn_for_payload(payload)
+    user_id = course_user_id
+
+    try:
+        # 1) Always record a generic device_event_log entry – this is the
+        #    "完整原始日志" the PDF asks for.
+        insert_device_event_log({
+            "device_id": device_id,
+            "device_sn": device_sn,
+            "device_type": payload.get("device_type") or "smart_speaker",
+            "model_name": payload.get("model_name") or "S1",
+            "log_type": payload.get("log_type") or "runtime",
+            "log_level": payload.get("log_level") or "info",
+            "event_code": payload.get("event_code") or raw_type_str.upper() or "DEVICE_EVENT",
+            "message": payload.get("message") or f"{raw_type_str} from {payload.get('api_path') or 'gateway'}",
+            "raw_payload": payload,
+            "trace_id": payload.get("trace_id") or f"trace_{uuid.uuid4().hex[:12]}",
+        })
+
+        # 2) Routed event-log writes based on payload type.
+        if metric_type == "song_info" or raw_type_str in PLAY_EVENT_LOG_TYPES:
+            song = payload.get("song") or payload.get("value") or {}
+            insert_play_event_log({
+                "user_id": user_id,
+                "device_id": device_id,
+                "room_id": payload.get("room_id"),
+                "event_type": payload.get("event_type") or "PLAY_START",
+                "source_platform": payload.get("source_platform") or song.get("platform") or "netease",
+                "song": {
+                    "external_id": str(song.get("song_id") or song.get("external_id") or ""),
+                    "title": song.get("name") or song.get("title") or "",
+                    "artist": song.get("artist_text") or song.get("artist") or "",
+                    "album": song.get("album") or "",
+                    "duration_seconds": _safe_int(song.get("duration_seconds")),
+                    "cover_url": song.get("cover_url") or "",
+                },
+                "play_context": payload.get("play_context") or {},
+                "raw_payload": payload,
+            })
+
+        if raw_type_str in VOICE_COMMAND_LOG_TYPES or payload.get("asr_text"):
+            insert_voice_command_log({
+                "user_id": user_id,
+                "device_id": device_id,
+                "session_id": payload.get("session_id") or f"voice_session_{uuid.uuid4().hex[:8]}",
+                "request_id": payload.get("request_id") or f"req_{uuid.uuid4().hex[:8]}",
+                "audio_url": payload.get("audio_url") or "",
+                "asr_text": payload.get("asr_text") or "",
+                "nlu": payload.get("nlu") or {},
+                "result": payload.get("result") or {},
+                "raw_asr_response": payload.get("raw_asr_response") or {},
+                "raw_nlu_response": payload.get("raw_nlu_response") or {},
+            })
+
+        if metric_type in METRIC_TYPES or raw_type_str in DEVICE_STATUS_SNAPSHOT_TYPES:
+            insert_device_status_snapshot({
+                "device_id": device_id,
+                "device_sn": device_sn,
+                "reported_at": _utcnow_for_event_log(),
+                "status": payload.get("status") or value_document(payload),
+                "hardware": payload.get("hardware") or {},
+                "raw_payload": payload,
+            })
+
+        if raw_type_str in USER_BEHAVIOR_EVENT_TYPES:
+            insert_user_behavior_event({
+                "user_id": user_id,
+                "platform": payload.get("platform") or "app",
+                "event_name": payload.get("event_name") or raw_type_str.upper() or "USER_BEHAVIOR",
+                "page": payload.get("page") or "",
+                "device_id": device_id,
+                "properties": payload.get("properties") or {},
+                "ip_address": payload.get("ip_address") or "",
+                "user_agent": payload.get("user_agent") or "",
+            })
+
+        if raw_type_str in LISTEN_ROOM_MESSAGE_TYPES:
+            insert_listen_room_message({
+                "room_id": payload.get("room_id"),
+                "user_id": user_id,
+                "message_type": payload.get("message_type") or "text",
+                "content": payload.get("content") or "",
+                "extra": payload.get("extra") or {},
+            })
+
+        if raw_type_str in FEEDBACK_ATTACHMENT_TYPES and payload.get("attachments"):
+            insert_feedback_attachment({
+                "feedback_id": _safe_int(payload.get("feedback_id")) or 0,
+                "user_id": user_id,
+                "attachments": payload.get("attachments") or [],
+                "extra_context": payload.get("extra_context") or {},
+            })
+
+        if raw_type_str in THIRD_PARTY_MUSIC_RAW_TYPES:
+            insert_third_party_music_raw({
+                "platform": payload.get("platform") or "netease",
+                "api_name": payload.get("api_name") or raw_type_str,
+                "request": payload.get("request") or {},
+                "response": payload.get("response") or payload.get("value") or {},
+                "success": bool(payload.get("success", True)),
+                "cost_ms": _safe_int(payload.get("cost_ms")) or 0,
+            })
+
+        if raw_type_str in DEVICE_CONFIG_SNAPSHOT_TYPES:
+            insert_device_config_snapshot({
+                "device_id": device_id,
+                "changed_by": payload.get("changed_by") or {"type": "user", "user_id": user_id},
+                "before": payload.get("before") or {},
+                "after": payload.get("after") or value_document(payload),
+            })
+    except Exception as exc:
+        # Best-effort logging only; never break the main pipeline.
+        print(f"[EVENT_LOG] persist failed type={raw_type_str!r}: {exc!r}")
+
+
+def _utcnow_for_event_log():
+    return utcnow()
