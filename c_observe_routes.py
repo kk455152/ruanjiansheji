@@ -1,347 +1,269 @@
-import html
 import json
 import os
-from collections import deque
-from datetime import datetime, date, time, timedelta
-from time import perf_counter
+import time
+from datetime import datetime
 
-from flask import jsonify, request, g
+from flask import Blueprint, Response, g, jsonify, request
 
-from api_pkg.common import mysql_all, mongo_db
+c_observe_bp = Blueprint("c_observe", __name__)
 
-
-REQUEST_LOGS = deque(maxlen=200)
-LOG_FILE = "/www/wwwroot/mysite/runtime/c_observe_request_logs.jsonl"
-
-
-def bj_now(fmt="%Y-%m-%d %H:%M:%S"):
-    return (datetime.utcnow() + timedelta(hours=8)).strftime(fmt)
+RUNTIME_DIR = "/www/wwwroot/mysite/runtime"
+LOG_FILE = os.path.join(RUNTIME_DIR, "c_observe_requests.jsonl")
+SNAPSHOT_FILE = os.path.join(RUNTIME_DIR, "c_observe_snapshot.json")
 
 
-def safe_text(v, max_len=180):
-    if v is None:
-        s = "null"
-    elif isinstance(v, (datetime, date, time, timedelta)):
-        s = str(v)
-    elif isinstance(v, (dict, list, tuple)):
-        s = json.dumps(v, ensure_ascii=False, default=str)
-    else:
-        s = str(v)
-    if len(s) > max_len:
-        s = s[:max_len] + "..."
-    return html.escape(s)
+def ensure_runtime():
+    os.makedirs(RUNTIME_DIR, exist_ok=True)
 
 
-def save_log(item):
-    REQUEST_LOGS.append(item)
+def read_snapshot():
+    if not os.path.exists(SNAPSHOT_FILE):
+        return {
+            "updated_at": "暂无快照",
+            "mysql": [],
+            "mongo": []
+        }
+
     try:
-        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        with open(SNAPSHOT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        return {
+            "updated_at": "快照读取失败",
+            "mysql": [
+                {
+                    "name": "snapshot_error",
+                    "count": 0,
+                    "columns": ["error"],
+                    "rows": [{"error": str(exc)}],
+                }
+            ],
+            "mongo": [],
+        }
+
+
+def append_log(item):
+    ensure_runtime()
+    try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(item, ensure_ascii=False, default=str) + "\n")
     except Exception:
         pass
 
 
-def read_logs(limit=120):
-    logs = []
+def read_logs(limit=30):
+    if not os.path.exists(LOG_FILE):
+        return []
+
     try:
         with open(LOG_FILE, "r", encoding="utf-8") as f:
             lines = f.readlines()[-limit:]
-        for line in lines:
-            try:
-                logs.append(json.loads(line))
-            except Exception:
-                pass
-    except Exception:
-        pass
-    if not logs:
-        logs = list(REQUEST_LOGS)[-limit:]
-    return logs[-limit:]
-
-
-def mysql_tables():
-    try:
-        rows = mysql_all("SHOW TABLES")
-        return [str(list(r.values())[0]) for r in rows]
     except Exception:
         return []
 
-
-def mysql_columns(table):
-    try:
-        rows = mysql_all("SHOW COLUMNS FROM `{}`".format(table))
-        return [r.get("Field") for r in rows if r.get("Field")]
-    except Exception:
-        return []
-
-
-def mysql_count(table):
-    try:
-        rows = mysql_all("SELECT COUNT(*) AS c FROM `{}`".format(table))
-        return int(rows[0].get("c") or 0) if rows else 0
-    except Exception:
-        return 0
-
-
-def mysql_rows(table, cols, limit=8):
-    try:
-        if cols:
-            return mysql_all("SELECT * FROM `{}` ORDER BY `{}` DESC LIMIT {}".format(table, cols[0], int(limit)))
-        return mysql_all("SELECT * FROM `{}` LIMIT {}".format(table, int(limit)))
-    except Exception:
+    out = []
+    for line in lines:
         try:
-            return mysql_all("SELECT * FROM `{}` LIMIT {}".format(table, int(limit)))
+            out.append(json.loads(line))
         except Exception:
-            return []
+            pass
+
+    return list(reversed(out))
 
 
-def mongo_cols():
-    db = mongo_db()
-    if db is None:
-        return []
+@c_observe_bp.before_app_request
+def observe_before():
+    if request.path.startswith("/c-observe"):
+        return
+
+    g.c_observe_start = time.time()
+
+
+@c_observe_bp.after_app_request
+def observe_after(response):
+    if request.path.startswith("/c-observe"):
+        return response
+
+    if not (
+        request.path.startswith("/api")
+        or request.path.startswith("/device")
+        or request.path.startswith("/auth")
+        or request.path.startswith("/stats")
+    ):
+        return response
+
+    cost_ms = 0
+    if hasattr(g, "c_observe_start"):
+        cost_ms = int((time.time() - g.c_observe_start) * 1000)
+
+    body = None
     try:
-        return sorted(db.list_collection_names())
+        if request.is_json:
+            body = request.get_json(silent=True)
+        elif request.form:
+            body = request.form.to_dict()
+        elif request.data:
+            body = request.data.decode("utf-8", errors="replace")[:500]
     except Exception:
-        return []
+        body = None
 
-
-def mongo_count(name):
-    db = mongo_db()
-    if db is None:
-        return 0
+    resp_text = ""
     try:
-        return db[name].count_documents({})
+        resp_text = response.get_data(as_text=True)[:500]
     except Exception:
-        return 0
+        resp_text = ""
+
+    append_log({
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "method": request.method,
+        "path": request.path,
+        "query": request.query_string.decode("utf-8", errors="replace"),
+        "status": response.status_code,
+        "cost_ms": cost_ms,
+        "body": body,
+        "response": resp_text,
+    })
+
+    return response
 
 
-def mongo_rows(name, limit=8):
-    db = mongo_db()
-    if db is None:
-        return []
-    try:
-        return list(db[name].find({}).sort("_id", -1).limit(int(limit)))
-    except Exception:
-        try:
-            return list(db[name].find({}).limit(int(limit)))
-        except Exception:
-            return []
-
-
-def columns_from_rows(rows):
-    cols = []
-    seen = set()
-    for r in rows:
-        if not isinstance(r, dict):
-            continue
-        for k in r.keys():
-            if k not in seen:
-                seen.add(k)
-                cols.append(k)
-    return cols
-
-
-def render_log_card():
-    logs = read_logs(120)
-    if logs:
-        lines = []
-        for item in logs[-80:]:
-            line = "{}  {}  {}  {}  {}ms".format(
-                item.get("time", ""),
-                item.get("method", ""),
-                item.get("status", ""),
-                item.get("path", ""),
-                item.get("cost_ms", ""),
-            )
-            lines.append(line)
-        text = "\n".join(lines)
-    else:
-        text = "暂无请求日志。刷新本页面或请求 /api/_health 后这里会出现。"
-
-    return """
-<section class="card">
-  <div class="card-head">
-    <div>
-      <h2>实时请求日志</h2>
-      <p>滚动日志屏幕，刷新后保留最近请求记录。</p>
-    </div>
-    <span class="tag">已展开</span>
-  </div>
-  <pre class="log-screen">{}</pre>
-</section>
-""".format(html.escape(text))
-
-
-def render_table_card(kind, name, total, cols, rows):
-    if not cols:
-        cols = columns_from_rows(rows)
-    if not cols:
-        cols = ["数据"]
-
-    th = "".join("<th>{}</th>".format(safe_text(c, 80)) for c in cols)
-
-    if rows:
-        trs = []
-        for r in rows:
-            tds = []
-            for c in cols:
-                val = r.get(c) if isinstance(r, dict) else ""
-                tds.append("<td>{}</td>".format(safe_text(val, 180)))
-            trs.append("<tr>{}</tr>".format("".join(tds)))
-        tbody = "\n".join(trs)
-    else:
-        tbody = '<tr><td colspan="{}" class="empty">暂无数据</td></tr>'.format(len(cols))
-
-    return """
-<section class="card">
-  <div class="card-head">
-    <div>
-      <h2>{}：{}</h2>
-      <p>{} 条记录 · {} 字段 · 当前展示 {} 条</p>
-    </div>
-    <span class="tag">已展开</span>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead><tr>{}</tr></thead>
-      <tbody>{}</tbody>
-    </table>
-  </div>
-</section>
-""".format(
-        safe_text(kind, 40),
-        safe_text(name, 80),
-        total,
-        len(cols),
-        len(rows or []),
-        th,
-        tbody,
-    )
-
-
-def render_page():
-    cards = [render_log_card()]
-
-    for t in mysql_tables():
-        cols = mysql_columns(t)
-        rows = mysql_rows(t, cols, 8)
-        cards.append(render_table_card("MySQL 表", t, mysql_count(t), cols, rows))
-
-    for c in mongo_cols():
-        rows = mongo_rows(c, 8)
-        cols = columns_from_rows(rows)
-        cards.append(render_table_card("MongoDB 集合", c, mongo_count(c), cols, rows))
-
-    body = "\n".join(cards)
-
-    return """<!doctype html>
+@c_observe_bp.route("/c-observe")
+def c_observe_page():
+    html = r'''
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="5">
 <title>C 后端联调数据库看板</title>
 <style>
-:root{
-  --bg:#fff7fb;
-  --card:#ffffff;
-  --line:#f3cfe0;
-  --line2:#f8e3ed;
-  --text:#3f2532;
-  --muted:#9a667c;
-  --strong:#5a2d42;
-  --tag:#fff0f7;
-}
-*{box-sizing:border-box}
 body{
   margin:0;
-  background:linear-gradient(180deg,#fff7fb,#ffffff);
-  color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;
-  font-size:13px;
+  font-family:Arial,"Microsoft YaHei",sans-serif;
+  background:#fff9fc;
+  color:#4d3443;
 }
 header{
+  background:#fff7fb;
+  border-bottom:1px solid #f8dce9;
+  padding:16px 22px;
   position:sticky;
   top:0;
-  z-index:10;
-  background:rgba(255,247,251,.96);
-  border-bottom:1px solid var(--line2);
-  padding:12px 16px;
+  z-index:20;
 }
-.header-inner{
-  max-width:1180px;
-  margin:0 auto;
+h1{margin:0;font-size:23px;color:#4d2941}
+.sub{margin-top:5px;font-size:13px;color:#8a6578}
+.wrap{padding:14px;max-width:1180px;margin:0 auto}
+.panel{
+  background:#fff;
+  border:1px solid #f8dce9;
+  border-radius:18px;
+  box-shadow:0 6px 18px rgba(234,145,184,.10);
+  overflow:hidden;
+  margin-bottom:16px;
 }
-h1{
+.panel h2{
   margin:0;
-  font-size:22px;
-  color:var(--strong);
+  padding:13px 16px;
+  background:#fff7fb;
+  border-bottom:1px solid #f8dce9;
+  color:#4d2941;
+  font-size:18px;
 }
-.sub{
-  margin-top:5px;
-  color:var(--muted);
+.body{padding:12px}
+.request{
+  border:1px solid #f8dce9;
+  border-left:5px solid #f3bad4;
+  border-radius:12px;
+  padding:8px;
+  background:#fffdfd;
+  margin-bottom:8px;
+}
+.request.ok{border-left-color:#a7d9b2}
+.request.err{border-left-color:#ef8aa4}
+.tag{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  background:#fff3f8;
+  color:#70495d;
   font-size:12px;
+  margin-right:5px;
 }
-main{
-  max-width:1180px;
-  margin:14px auto 40px;
-  padding:0 12px;
+pre{
+  margin:7px 0 0;
+  white-space:pre-wrap;
+  word-break:break-word;
+  background:#fff9fc;
+  border:1px solid #f8dce9;
+  color:#564251;
+  border-radius:8px;
+  padding:7px;
+  font-size:12px;
+  max-height:90px;
+  overflow:auto;
+}
+.db-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.group-title{
+  color:#60364e;
+  font-size:18px;
+  font-weight:bold;
+  margin:0 0 10px;
 }
 .card{
-  width:100%;
-  background:var(--card);
-  border:1px solid var(--line);
+  border:1px solid #f8dce9;
   border-radius:16px;
-  margin-bottom:14px;
+  background:#fff;
+  margin-bottom:10px;
   overflow:hidden;
-  box-shadow:0 4px 16px rgba(126,58,89,.06);
 }
 .card-head{
+  padding:10px 12px;
+  background:#fffdfd;
+  cursor:pointer;
   display:flex;
   justify-content:space-between;
-  gap:10px;
+  gap:12px;
   align-items:center;
-  padding:10px 12px;
+}
+.card-head:hover{background:#fff7fb}
+.card.active .card-head{
   background:#fff3f8;
-  border-bottom:1px solid var(--line2);
+  border-bottom:1px solid #f8dce9;
 }
-.card h2{
-  margin:0;
-  font-size:15px;
-  color:var(--strong);
+.card-name{
+  font-weight:bold;
+  color:#4d2941;
+  font-size:14px;
 }
-.card p{
-  margin:4px 0 0;
-  color:var(--muted);
+.card-meta{
+  color:#9a6b80;
   font-size:12px;
+  margin-top:4px;
 }
-.tag{
-  padding:3px 8px;
-  border:1px solid var(--line);
-  border-radius:999px;
-  background:var(--tag);
-  color:#a45375;
+.arrow{
+  color:#b77a96;
   font-size:12px;
+  white-space:nowrap;
+}
+.card-body{
+  display:none;
+}
+.card.active .card-body{
+  display:block;
 }
 .table-wrap{
-  width:100%;
   overflow:auto;
-  max-height:460px;
+  max-height:300px;
 }
 table{
   width:100%;
-  border-collapse:collapse;
   table-layout:fixed;
+  border-collapse:collapse;
   font-size:12px;
-}
-th,td{
-  border-bottom:1px solid var(--line2);
-  border-right:1px solid #faedf3;
-  padding:6px;
-  vertical-align:top;
-  word-break:break-word;
-  overflow-wrap:anywhere;
-  line-height:1.35;
 }
 th{
   position:sticky;
@@ -349,78 +271,197 @@ th{
   background:#fffafd;
   color:#70495d;
   text-align:left;
-  z-index:1;
-}
-.empty{
-  color:var(--muted);
-  padding:16px;
-}
-.log-screen{
-  margin:0;
-  padding:12px;
-  height:260px;
-  overflow:auto;
-  white-space:pre-wrap;
+  padding:6px;
+  border-bottom:1px solid #f8dce9;
+  white-space:normal;
   word-break:break-word;
-  background:#2d1f29;
-  color:#fff7fb;
-  font-family:Consolas,Menlo,Monaco,"Courier New",monospace;
-  font-size:12px;
-  line-height:1.55;
+  overflow-wrap:anywhere;
+}
+td{
+  padding:6px;
+  border-bottom:1px solid #fbedf3;
+  max-width:110px;
+  white-space:normal;
+  overflow:hidden;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  line-height:1.35;
+}
+tr:hover td{background:#fff9fc}
+.empty{padding:14px;color:#9b7084}
+@media(max-width:1100px){
+  .db-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
 <header>
-  <div class="header-inner">
-    <h1>C 后端联调数据库看板</h1>
-    <div class="sub">单列展示 MySQL 表 / MongoDB 集合，默认全部展开。页面自动刷新：5 秒。北京时间：""" + bj_now() + """</div>
-  </div>
+  <h1>C 后端联调数据库看板</h1>
+  <div class="sub">点击卡片后原地展开表格；自动刷新。快照时间：<span id="snap">加载中</span>，页面刷新：<span id="last">加载中</span></div>
 </header>
-<main>
-""" + body + """
-</main>
+
+<div class="wrap">
+  <section class="panel">
+    <h2>实时请求日志</h2>
+    <div class="body" id="requests"><div class="empty">加载中...</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>数据库卡片看板</h2>
+    <div class="body db-grid">
+      <div>
+        <div class="group-title">MySQL 表</div>
+        <div id="mysqlCards"></div>
+      </div>
+      <div>
+        <div class="group-title">MongoDB 集合</div>
+        <div id="mongoCards"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+let openKeys = new Set();
+
+function esc(v){
+  if(v===null||v===undefined)return '';
+  return String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+function short(v,n=36){
+  let s=typeof v==='object'?JSON.stringify(v):String(v??'');
+  return s.length>n?s.slice(0,n)+'...':s;
+}
+async function getJson(url){
+  const r=await fetch(url,{cache:'no-store'});
+  const text=await r.text();
+  try{return JSON.parse(text)}
+  catch(e){throw new Error(url+' 返回非 JSON：'+text.slice(0,100))}
+}
+function toggleCard(key){
+  if(openKeys.has(key)) openKeys.delete(key);
+  else openKeys.add(key);
+  const el=document.querySelector(`[data-key="${key}"]`);
+  if(el) el.classList.toggle('active', openKeys.has(key));
+}
+function renderTable(item){
+  const cols=item.columns||[];
+  const rows=item.rows||[];
+
+  if(!cols.length){
+    return '<div class="empty">暂无字段</div>';
+  }
+
+  if(!rows.length){
+    return `<div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead></table></div><div class="empty">暂无数据</div>`;
+  }
+
+  return `<div class="table-wrap">
+    <table>
+      <thead><tr>${cols.map(c=>`<th title="${esc(c)}">${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${rows.map(r=>`<tr>${cols.map(c=>`<td title="${esc(String(r[c]??''))}">${esc(short(r[c],36))}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+function renderCards(list, prefix){
+  return list.map((x)=>{
+    const key=prefix+':'+x.name;
+    const active=openKeys.has(key);
+    return `<div class="card ${active?'active':''}" data-key="${esc(key)}">
+      <div class="card-head" onclick="toggleCard('${esc(key)}')">
+        <div>
+          <div class="card-name">${esc(x.name)}</div>
+          <div class="card-meta">${esc(x.count)} 条记录 · ${(x.columns||[]).length} 个字段 · 显示 ${(x.rows||[]).length} 条</div>
+        </div>
+        <div class="arrow">${active?'收起 ▲':'展开 ▼'}</div>
+      </div>
+      <div class="card-body">${renderTable(x)}</div>
+    </div>`;
+  }).join('');
+}
+async function loadReq(){
+  const box=document.getElementById('requests');
+  try{
+    const data=await getJson('/c-observe/api/requests');
+    const logs=data.logs||[];
+    if(!logs.length){
+      box.innerHTML='<div class="empty">暂无后端请求日志。请求 /api/... 后这里会显示。</div>';
+      return;
+    }
+    box.innerHTML=logs.slice(0,12).map(x=>{
+      const ok=x.status>=200&&x.status<300;
+      return `<div class="request ${ok?'ok':'err'}">
+        <span class="tag">${esc(x.time)}</span>
+        <span class="tag">${esc(x.method)}</span>
+        <span class="tag">${esc(x.status)}</span>
+        <b>${esc(x.path)}</b>
+        <span class="tag">${esc(x.cost_ms)}ms</span>
+        <pre>请求体：${esc(short(x.body,160))}
+返回：${esc(short(x.response,160))}</pre>
+      </div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML='<div class="empty">请求日志加载失败：'+esc(e.message)+'</div>';
+  }
+}
+async function loadDb(){
+  try{
+    const mysql=await getJson('/c-observe/api/mysql');
+    document.getElementById('mysqlCards').innerHTML =
+      renderCards(mysql.tables||[], 'mysql') || '<div class="empty">没有 MySQL 表</div>';
+    document.getElementById('snap').innerText=mysql.updated_at||'未知';
+  }catch(e){
+    document.getElementById('mysqlCards').innerHTML =
+      '<div class="empty">MySQL 加载失败：'+esc(e.message)+'</div>';
+  }
+
+  try{
+    const mongo=await getJson('/c-observe/api/mongo');
+    document.getElementById('mongoCards').innerHTML =
+      renderCards(mongo.collections||[], 'mongo') || '<div class="empty">没有 MongoDB 集合</div>';
+  }catch(e){
+    document.getElementById('mongoCards').innerHTML =
+      '<div class="empty">MongoDB 加载失败：'+esc(e.message)+'</div>';
+  }
+}
+async function refresh(){
+  await Promise.all([loadReq(), loadDb()]);
+  document.getElementById('last').innerText=new Date().toLocaleTimeString();
+}
+refresh();
+setInterval(refresh,2500);
+</script>
 </body>
-</html>"""
+</html>
+'''
+    return Response(html, mimetype="text/html")
+
+
+@c_observe_bp.route("/c-observe/api/requests")
+def c_observe_api_requests():
+    return jsonify({"logs": read_logs(40)})
+
+
+@c_observe_bp.route("/c-observe/api/mysql")
+def c_observe_api_mysql():
+    snap = read_snapshot()
+    return jsonify({
+        "updated_at": snap.get("updated_at"),
+        "tables": snap.get("mysql", []),
+    })
+
+
+@c_observe_bp.route("/c-observe/api/mongo")
+def c_observe_api_mongo():
+    snap = read_snapshot()
+    return jsonify({
+        "updated_at": snap.get("updated_at"),
+        "collections": snap.get("mongo", []),
+    })
 
 
 def register_c_observe_routes(app):
-    @app.before_request
-    def c_observe_before():
-        if request.path.startswith("/api/") or request.path == "/c-observe":
-            g.c_observe_start = perf_counter()
-
-    @app.after_request
-    def c_observe_after(response):
-        if request.path.startswith("/api/") or request.path == "/c-observe":
-            try:
-                start = getattr(g, "c_observe_start", perf_counter())
-                item = {
-                    "time": bj_now("%H:%M:%S"),
-                    "method": request.method,
-                    "path": request.path,
-                    "status": response.status_code,
-                    "cost_ms": int((perf_counter() - start) * 1000),
-                }
-                save_log(item)
-            except Exception:
-                pass
-        return response
-
-    def c_observe():
-        return render_page()
-
-    def api_c_observe():
-        return jsonify({
-            "code": 200,
-            "message": "ok",
-            "data": {
-                "mysqlTables": mysql_tables(),
-                "mongoCollections": mongo_cols(),
-            }
-        })
-
-    if "c_observe" not in app.view_functions:
-        app.add_url_rule("/c-observe", "c_observe", c_observe, methods=["GET"])
-    if "api_c_observe" not in app.view_functions:
-        app.add_url_rule("/api/c-observe", "api_c_observe", api_c_observe, methods=["GET"])
+    if "c_observe" not in app.blueprints:
+        app.register_blueprint(c_observe_bp)

@@ -30,11 +30,16 @@ from device_routes import device_bp
 from stats_routes import stats_bp
 from mongo_routes import mongo_bp
 from api_routes import api_bp
+from c_observe_routes import c_observe_bp
+from admin_routes import admin_bp, admin_compat_bp
 app.register_blueprint(auth_bp)
 app.register_blueprint(device_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(mongo_bp)
 app.register_blueprint(api_bp)
+app.register_blueprint(c_observe_bp)
+app.register_blueprint(admin_bp)
+app.register_blueprint(admin_compat_bp)
 # =========================
 # 原来的网关配置，不要乱改
 # =========================
@@ -389,6 +394,16 @@ def validate_and_decrypt(request_json, auth_token, timestamp):
 @app.after_request
 def ensure_connection_close(response):
     response.headers['Connection'] = 'close'
+    response.headers['Access-Control-Allow-Origin'] = os.environ.get(
+        'CORS_ALLOW_ORIGIN',
+        '*'
+    )
+    response.headers['Access-Control-Allow-Methods'] = (
+        'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+    )
+    response.headers['Access-Control-Allow-Headers'] = (
+        'Content-Type,Authorization'
+    )
     return response
 
 
@@ -512,9 +527,3 @@ if __name__ == '__main__':
 
 
 # C 同学浅粉色联调数据库看板
-try:
-    from c_observe_routes import register_c_observe_routes
-    register_c_observe_routes(app)
-except Exception as exc:
-    print("c_observe_routes register failed:", exc)
-
