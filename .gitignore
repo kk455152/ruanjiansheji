@@ -9,22 +9,57 @@ nginx/cert/
 # Python cache
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+*.egg-info/
 
 # Logs and pid files
+log/
 *.log
 *.pid
 log.txt
 gunicorn.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Local environment config
 .env
+.env.*
+!.env.example
+!.env.*.example
 config.local.py
+project.private.config.json
 
 # Node / miniprogram local dependencies
 node_modules/
 .npm-cache/
 miniprogram_npm/
 dist/
+.vite/
+
+# Runtime and generated outputs
+runtime/*.json
+runtime/*.log
+runtime/*.offset
+runtime/*.zip
+runtime/current_working_code_for_github/
+runtime/final_code_for_github/
+
+# Rendered/exported document assets
+_ascii/
+_extract_acceptance/
+_extract_pdf/
+_imgs/
+_pptx_imgs/
+_qa_render/
 
 # OS files
 .DS_Store
