@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声盒 Mini - Web 管理后台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* =========================================
+           全局设计系统 (原研哉自然风 - Web 端扩展)
+           ========================================= */
+        :root {
+            /* 晨雾白与沙色背景 */
+            --bg-body: #EAEFEA;
+            --bg-gradient: linear-gradient(135deg, #F4F7F6 0%, #D4E1DA 100%);
+            /* 玻璃态卡片底色 */
+            --bg-glass: rgba(255, 255, 255, 0.65);
+            --bg-glass-hover: rgba(255, 255, 255, 0.85);
+            
+            /* 文字颜色：柔和墨绿系 */
+            --text-primary: #2C3E35; 
+            --text-secondary: #7B8F84; 
+            --text-muted: #A4C3B2;
+            
+            /* 强调色：鼠尾草绿与暖橙 */
+            --accent-green: #84A98C; 
+            --accent-green-light: rgba(132, 169, 140, 0.2);
+            --accent-orange: #F4A261; 
+            
+            /* 边框与光影：轻柔散射光 */
+            --border-light: rgba(255, 255, 255, 0.6);
+            --shadow-soft: 0 12px 32px rgba(132, 169, 140, 0.08);
+            --shadow-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+            
+            /* Web 端大圆角 */
+            --radius-lg: 32px;
+            --radius-md: 20px;
+            --radius-sm: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* =========================================
+           侧边栏 (Sidebar)
+           ========================================= */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-light);
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 10px 0 30px rgba(132, 169, 140, 0.05);
+            z-index: 10;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 40px;
+            padding-left: 12px;
+        }
+
+        .brand i {
+            font-size: 32px;
+            color: var(--accent-green);
+        }
+
+        .brand-text h2 {
+            font-size: 20px;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+
+        .brand-text p {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .nav-menu {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 15px;
+            font-weight: 400;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-glass-hover);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--accent-green-light);
+            color: var(--accent-green);
+            font-weight: 500;
+            box-shadow: var(--shadow-inner);
+        }
+
+        .nav-item i {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .user-profile {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.5);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-green);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+        }
+
+        /* =========================================
+           主内容区 (Main Content)
+           ========================================= */
+        .main-content {
+            flex: 1;
+            padding: 40px 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        /* 顶部导航 */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-title h1 {
+            font-size: 28px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .page-title p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .search-bar {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-light);
+            padding: 12px 24px;
+            border-radius: 99px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 300px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .search-bar input {
+            border: none;
+            background: transparent;
+            outline: none;
+            color: var(--text-primary);
+            width: 100%;
+            font-size: 14px;
+        }
+        
+        .search-bar input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* 核心数据指标卡片 */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+
+        .metric-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 32px 24px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 卡片光晕点缀 */
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+        }
+
+        .metric-title {
+            color: var(--text-secondary);
+            font-size: 15px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .metric-value {
+            font-size: 40px;
+            font-weight: 300;
+            color: var(--accent-green);
+            margin-bottom: 8px;
+            line-height: 1;
+        }
+
+        .metric-trend {
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .trend-up { color: var(--accent-green); background: var(--accent-green-light); padding: 2px 8px; border-radius: 99px; font-weight: 500;}
+        .trend-neutral { color: var(--accent-orange); background: rgba(244,162,97,0.15); padding: 2px 8px; border-radius: 99px; font-weight: 500;}
+
+        /* 图表与排行区域 */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 32px;
+        }
+
+        .chart-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            border: 1px solid var(--border-light);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .chart-header h3 {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        /* 纯 CSS 拟态柱状图 (还原 PDF 视觉) */
+        .mock-chart {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 200px;
+            padding-bottom: 20px;
+            border-bottom: 1px dashed rgba(255,255,255,0.8);
+        }
+
+        .bar-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .bar {
+            width: 32px;
+            background: linear-gradient(180deg, var(--accent-green) 0%, rgba(132,169,140,0.4) 100%);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .bar:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(132, 169, 140, 0.2);
+            background: linear-gradient(180deg, #A4C3B2 0%, var(--accent-green) 100%);
+        }
+
+        .bar-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* 活跃排行榜 */
+        .ranking-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: rgba(255,255,255,0.4);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.5);
+            transition: transform 0.2s ease;
+        }
+
+        .ranking-item:hover {
+            transform: scale(1.02);
+            background: rgba(255,255,255,0.8);
+        }
+
+        .rank-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .rank-num {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #EAEFEA;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        /* 前三名特殊样式 */
+        .ranking-item:nth-child(1) .rank-num { background: var(--accent-orange); color: white; }
+        .ranking-item:nth-child(2) .rank-num { background: var(--accent-green); color: white; }
+        .ranking-item:nth-child(3) .rank-num { background: #A4C3B2; color: white; }
+
+        .song-name {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .play-count {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <i class="fa-solid fa-leaf"></i>
+            <div class="brand-text">
+                <h2>声盒 Mini</h2>
+                <p>超级管理员</p>
+            </div>
+        </div>
+
+        <ul class="nav-menu">
+            <a href="#" class="nav-item active"><i class="fa-solid fa-chart-pie"></i> 数据总览</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-arrow-trend-up"></i> 趋势分析</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-map-location-dot"></i> 区域热力图</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-user-tag"></i> 用户画像</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i> 留存分析</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-star"></i> 用户价值</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-wave-square"></i> 设备活跃度</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-comment-dots"></i> 用户反馈</a>
+            <div style="height: 1px; background: var(--border-light); margin: 16px 0;"></div>
+            <a href="#" class="nav-item"><i class="fa-solid fa-sliders"></i> 设备管理</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-microchip"></i> 设备固件</a>
+            <a href="#" class="nav-item"><i class="fa-solid fa-list-check"></i> 设备日志</a>
+        </ul>
+
+        <div class="user-profile">
+            <div class="avatar">A</div>
+            <div>
+                <p style="font-size: 14px; font-weight: 500;">Admin User</p>
+                <p style="font-size: 12px; color: var(--text-secondary);">已连接微信</p>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <div class="page-title">
+                <h1>系统数据概览</h1>
+                <p>实时掌控设备状态与音乐播放趋势</p>
+            </div>
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass" style="color: var(--text-secondary);"></i>
+                <input type="text" placeholder="搜索设备 ID 或用户...">
+            </div>
+        </header>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">总用户 <i class="fa-solid fa-users" style="color: var(--accent-green);"></i></div>
+                <div class="metric-value">3,842</div>
+                <div class="metric-trend"><span class="trend-up"><i class="fa-solid fa-arrow-up"></i> 156</span> 本周新增</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-title">激活设备数 <i class="fa-solid fa-speaker-deck" style="color: var(--text-secondary);"></i></div>
+                <div class="metric-value" style="color: var(--text-primary);">1,024</div>
+                <div class="metric-trend"><span class="trend-neutral">在线率 75%</span> 实时数据</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">活跃度 (DAU) <i class="fa-solid fa-bolt" style="color: var(--accent-orange);"></i></div>
+                <div class="metric-value" style="color: var(--accent-orange);">72%</div>
+                <div class="metric-trend"><span class="trend-up"><i class="fa-solid fa-arrow-up"></i> 3.1%</span> 较昨日</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">本月销售额 <i class="fa-solid fa-wallet" style="color: var(--text-secondary);"></i></div>
+                <div class="metric-value" style="color: var(--text-primary);">58.6K</div>
+                <div class="metric-trend"><span class="trend-up"><i class="fa-solid fa-arrow-up"></i> 8.2%</span> 环比增长</div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3>设备活跃度走势 (接口调用量)</h3>
+                    <div style="font-size: 13px; color: var(--text-secondary); background: rgba(255,255,255,0.5); padding: 4px 12px; border-radius: 99px;">本周</div>
+                </div>
+                
+                <div class="mock-chart">
+                    <div class="bar-group">
+                        <div class="bar" style="height: 60px;"></div>
+                        <span class="bar-label">Mon</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: 110px;"></div>
+                        <span class="bar-label">Tue</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: 85px;"></div>
+                        <span class="bar-label">Wed</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: 150px;"></div>
+                        <span class="bar-label">Thu</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: 120px;"></div>
+                        <span class="bar-label">Fri</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: 180px;"></div>
+                        <span class="bar-label">Sat</span>
+                    </div>
+                    <div class="bar-group">
+                        <div class="bar" style="height: 140px;"></div>
+                        <span class="bar-label">Sun</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3>活跃用户热歌排行</h3>
+                </div>
+                <ul class="ranking-list">
+                    <li class="ranking-item">
+                        <div class="rank-info">
+                            <div class="rank-num">1</div>
+                            <span class="song-name">夜航</span>
+                        </div>
+                        <span class="play-count">1280 次播放</span>
+                    </li>
+                    <li class="ranking-item">
+                        <div class="rank-info">
+                            <div class="rank-num">2</div>
+                            <span class="song-name">星河入梦</span>
+                        </div>
+                        <span class="play-count">986 次播放</span>
+                    </li>
+                    <li class="ranking-item">
+                        <div class="rank-info">
+                            <div class="rank-num">3</div>
+                            <span class="song-name">晚风轻响</span>
+                        </div>
+                        <span class="play-count">742 次播放</span>
+                    </li>
+                    <li class="ranking-item">
+                        <div class="rank-info">
+                            <div class="rank-num">4</div>
+                            <span class="song-name">浅海</span>
+                        </div>
+                        <span class="play-count">698 次播放</span>
+                    </li>
+                    <li class="ranking-item">
+                        <div class="rank-info">
+                            <div class="rank-num">5</div>
+                            <span class="song-name">晨光电台</span>
+                        </div>
+                        <span class="play-count">520 次播放</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>
