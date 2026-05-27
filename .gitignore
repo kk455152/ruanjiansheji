@@ -24,6 +24,7 @@ config.local.py
 node_modules/
 .npm-cache/
 miniprogram_npm/
+dist/
 
 # OS files
 .DS_Store
