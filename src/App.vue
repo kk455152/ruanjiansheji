@@ -925,7 +925,7 @@ onMounted(restoreSession)
         <span>用户名</span>
         <span class="field-input">
           <i class="fa-solid fa-user"></i>
-          <input v-model="state.loginForm.username" autocomplete="username" placeholder="admin / market / operator" />
+          <input v-model="state.loginForm.username" autocomplete="username" placeholder="请输入用户名" />
         </span>
       </label>
       <label class="field">
