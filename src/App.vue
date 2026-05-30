@@ -11,15 +11,28 @@ const roleNames = {
 
 const menus = [
   { key: "overview", label: "数据总览", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
+  { key: "decision", label: "决策驾驶舱", section: "核心看板", roles: ["super_admin", "market_admin"] },
   { key: "trend", label: "趋势分析", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
   { key: "region", label: "区域热力图", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "profile", label: "用户画像", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "value", label: "用户价值", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "segments", label: "用户分群", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "insights", label: "营销洞察", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "songs", label: "热歌排行", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "reports", label: "决策报表", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "feedback", label: "用户反馈", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "devices", label: "设备管理", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "groups", label: "设备分组", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "alerts", label: "告警中心", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "firmware", label: "设备固件", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "tasks", label: "任务中心", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "logs", label: "设备日志", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "users", label: "用户管理", section: "系统管理", roles: ["super_admin"] },
+  { key: "roles", label: "角色权限", section: "系统管理", roles: ["super_admin"] },
+  { key: "system", label: "系统配置", section: "系统管理", roles: ["super_admin"] },
+  { key: "monitor", label: "系统监控", section: "系统管理", roles: ["super_admin"] },
+  { key: "notices", label: "系统公告", section: "系统管理", roles: ["super_admin"] },
+  { key: "audit", label: "审计日志", section: "系统管理", roles: ["super_admin"] },
   { key: "account", label: "个人信息", section: "账户", roles: ["super_admin", "market_admin", "operator_admin"] },
 ]
 
@@ -37,32 +50,42 @@ const state = reactive({
   keyword: "",
   lastUpdated: "",
   overview: {},
+  decision: { cards: [], trend: [], risks: [] },
   trend: { type: "user", dimension: "day", list: [] },
   region: { sales: [], users: [] },
-  profile: {
-    age: [],
-    region: [],
-    activity: [],
-    service: [],
-  },
+  profile: { age: [], region: [], activity: [], service: [] },
   value: {},
   songs: [],
   retention: [],
+  insights: { funnels: [], recommendations: [] },
+  segments: { total: 0, list: [] },
+  reports: { total: 0, list: [], raw: [] },
   feedback: { total: 0, list: [] },
   devices: { total: 0, list: [] },
+  groups: { total: 0, list: [] },
+  alerts: { total: 0, list: [] },
   runtime: null,
   firmware: null,
+  firmwarePackages: { total: 0, list: [] },
+  firmwareTasks: { total: 0, list: [] },
   logs: { total: 0, list: [] },
+  users: { total: 0, list: [] },
+  roles: { total: 0, list: [] },
+  settings: {},
+  monitor: { services: [], metrics: {}, exceptions: [] },
+  notices: { total: 0, list: [] },
+  audit: { total: 0, list: [] },
   detail: null,
 })
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"])
 const isLoggedIn = computed(() => Boolean(state.token && state.admin))
 const currentRole = computed(() => state.admin?.role || "")
 const currentRoleName = computed(() => state.admin?.roleName || roleNames[currentRole.value] || "未登录")
-const activeMenu = computed(() => menus.find((item) => item.key === state.active) || menus[0])
-const apiLabel = computed(() => API_BASE || "当前站点")
-
 const visibleMenus = computed(() => menus.filter((item) => item.roles.includes(currentRole.value)))
+const activeMenu = computed(() => menus.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
+const apiLabel = computed(() => API_BASE || (LOCAL_HOSTS.has(window.location.hostname) ? "服务器接口" : "当前站点"))
+
 const groupedMenus = computed(() => {
   const groups = []
   visibleMenus.value.forEach((item) => {
@@ -83,9 +106,9 @@ const metricCards = computed(() => {
     const pending = (state.feedback.list || []).filter((item) => item.status === "pending").length
     return [
       { label: "设备总数", value: formatNumber(state.devices.total || devices.length), hint: `${online} 台在线`, tone: "green" },
-      { label: "在线率", value: percent(devices.length ? online / devices.length : 0), hint: "来自设备列表", tone: "orange" },
-      { label: "固件版本", value: state.firmware?.currentVersion || "-", hint: state.firmware?.needUpdate ? "可更新" : "已是最新", tone: "ink" },
-      { label: "待处理反馈", value: formatNumber(pending), hint: `共 ${state.feedback.total || 0} 条`, tone: "green" },
+      { label: "在线率", value: percent(devices.length ? online / devices.length : 0), hint: "来自设备列表", tone: "blue" },
+      { label: "固件版本", value: state.firmware?.currentVersion || "-", hint: state.firmware?.needUpdate ? "可更新" : "已是最新", tone: "orange" },
+      { label: "待处理反馈", value: formatNumber(pending), hint: `共 ${state.feedback.total || 0} 条`, tone: "red" },
     ]
   }
 
@@ -94,9 +117,9 @@ const metricCards = computed(() => {
     const avgRetention = average(state.retention.map((item) => item.day7RetentionRate))
     return [
       { label: "热歌播放", value: formatNumber(totalPlays), hint: `${state.songs.length} 首上榜歌曲`, tone: "green" },
-      { label: "高活用户", value: formatNumber(state.value.highActiveUserCount || 0), hint: "近周期活跃", tone: "orange" },
-      { label: "普通用户", value: formatNumber(state.value.normalUserCount || 0), hint: "用户价值分层", tone: "ink" },
-      { label: "7日留存", value: percent(avgRetention), hint: "购买设备后持续使用", tone: "green" },
+      { label: "高活用户", value: formatNumber(state.value.highActiveUserCount || 0), hint: "近周期活跃", tone: "blue" },
+      { label: "普通用户", value: formatNumber(state.value.normalUserCount || 0), hint: "用户价值分层", tone: "orange" },
+      { label: "7 日留存", value: percent(avgRetention), hint: "购买设备后持续使用", tone: "red" },
     ]
   }
 
@@ -104,9 +127,9 @@ const metricCards = computed(() => {
   const onlineRate = deviceTotal ? (state.overview.device?.onlineDeviceCount || 0) / deviceTotal : 0
   return [
     { label: "总用户", value: formatNumber(state.overview.user?.userCount || 0), hint: `新增 ${formatNumber(state.overview.user?.newUserCount || 0)}`, tone: "green" },
-    { label: "设备数", value: formatNumber(deviceTotal), hint: `在线率 ${percent(onlineRate)}`, tone: "ink" },
+    { label: "设备数", value: formatNumber(deviceTotal), hint: `在线率 ${percent(onlineRate)}`, tone: "blue" },
     { label: "销售额", value: money(state.overview.sales?.salesAmount || 0), hint: `${formatNumber(state.overview.sales?.orderCount || 0)} 笔订单`, tone: "orange" },
-    { label: "活跃度", value: percent(state.overview.activity?.activityRate || 0), hint: `${formatNumber(state.overview.activity?.activeUserCount || 0)} 活跃用户`, tone: "green" },
+    { label: "活跃度", value: percent(state.overview.activity?.activityRate || 0), hint: `${formatNumber(state.overview.activity?.activeUserCount || 0)} 活跃用户`, tone: "red" },
   ]
 })
 
@@ -114,7 +137,7 @@ const filteredDevices = computed(() => {
   const word = state.keyword.trim().toLowerCase()
   if (!word) return state.devices.list || []
   return (state.devices.list || []).filter((item) =>
-    [item.deviceId, item.deviceName, item.ownerName, item.modelName].some((value) =>
+    [item.deviceId, item.deviceName, item.ownerName, item.modelName, item.firmwareVersion].some((value) =>
       String(value || "").toLowerCase().includes(word),
     ),
   )
@@ -130,10 +153,6 @@ const filteredFeedback = computed(() => {
   )
 })
 
-function canUse(key) {
-  return visibleMenus.value.some((item) => item.key === key)
-}
-
 function average(values) {
   const usable = values.map(Number).filter((item) => Number.isFinite(item))
   return usable.length ? usable.reduce((sum, item) => sum + item, 0) / usable.length : 0
@@ -145,7 +164,7 @@ function formatNumber(value) {
 
 function money(value) {
   const number = Number(value || 0)
-  if (number >= 10000) return `${(number / 10000).toFixed(1)}万`
+  if (number >= 10000) return `${(number / 10000).toFixed(1)} 万`
   return number.toLocaleString("zh-CN")
 }
 
@@ -163,8 +182,26 @@ function maxOf(list, key = "value") {
   return Math.max(1, ...list.map((item) => Number(item[key] || 0)))
 }
 
-function barHeight(value, max) {
-  return `${Math.max(14, Math.round((Number(value || 0) / Math.max(max, 1)) * 150))}px`
+function barHeight(value, max, min = 16, scale = 160) {
+  return `${Math.max(min, Math.round((Number(value || 0) / Math.max(max, 1)) * scale))}px`
+}
+
+function statusText(status) {
+  return {
+    enabled: "启用",
+    readonly: "只读",
+    pending: "待处理",
+    processing: "处理中",
+    processed: "已处理",
+    success: "成功",
+    open: "待处理",
+    closed: "已关闭",
+    published: "已发布",
+    draft: "草稿",
+    gray: "灰度",
+    stable: "稳定",
+    rollback: "可回滚",
+  }[status] || status || "-"
 }
 
 function setUpdated() {
@@ -174,6 +211,10 @@ function setUpdated() {
     hour: "2-digit",
     minute: "2-digit",
   })
+}
+
+function canUse(key) {
+  return visibleMenus.value.some((item) => item.key === key)
 }
 
 function api(path, options) {
@@ -204,18 +245,13 @@ async function handleLogin() {
   state.loading = true
   try {
     const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password)
-    const token = data.token || data.access_token
-    state.token = token
-    state.admin = data.adminInfo
-    localStorage.setItem("admin_token", token)
-    localStorage.setItem("admin_info", JSON.stringify(data.adminInfo))
+    applySession(data)
     if (state.loginForm.remember) {
       localStorage.setItem("admin_username", state.loginForm.username.trim())
     } else {
       localStorage.removeItem("admin_username")
     }
     state.loginForm.password = ""
-    state.active = firstMenuForRole(data.adminInfo.role)
     ElMessage.success("登录成功，正在加载后台数据")
     await loadPage(true)
   } catch (error) {
@@ -223,6 +259,33 @@ async function handleLogin() {
   } finally {
     state.loading = false
   }
+}
+
+async function handleWechatLogin() {
+  state.loading = true
+  try {
+    const data = await request("/api/admin/wechat-login", {
+      method: "POST",
+      token: "",
+      body: { code: "demo-wechat-code" },
+    })
+    applySession(data)
+    ElMessage.success("微信快捷登录成功")
+    await loadPage(true)
+  } catch (error) {
+    ElMessage.error(error.message || "微信登录失败")
+  } finally {
+    state.loading = false
+  }
+}
+
+function applySession(data) {
+  const token = data.token || data.access_token
+  state.token = token
+  state.admin = data.adminInfo
+  localStorage.setItem("admin_token", token)
+  localStorage.setItem("admin_info", JSON.stringify(data.adminInfo))
+  state.active = firstMenuForRole(data.adminInfo.role)
 }
 
 function firstMenuForRole(role) {
@@ -265,6 +328,7 @@ async function selectPage(key) {
   if (state.active === key) return
   state.active = key
   state.detail = null
+  state.keyword = ""
   await nextTick()
   await loadPage()
 }
@@ -275,15 +339,28 @@ async function loadPage(initial = false) {
 
   try {
     if (initial || state.active === "overview") await loadOverview()
+    if (state.active === "decision") await loadDecision()
     if (state.active === "trend") await loadTrend()
     if (state.active === "region") await loadRegion()
     if (state.active === "profile") await loadProfile()
     if (state.active === "value") await loadValue()
+    if (state.active === "segments") await loadSegments()
+    if (state.active === "insights") await loadInsights()
     if (state.active === "songs") await loadSongs()
+    if (state.active === "reports") await loadReports()
     if (state.active === "feedback") await loadFeedback()
     if (state.active === "devices") await loadDevices()
+    if (state.active === "groups") await loadGroups()
+    if (state.active === "alerts") await loadAlerts()
     if (state.active === "firmware") await loadFirmware()
+    if (state.active === "tasks") await loadTasks()
     if (state.active === "logs") await loadLogs()
+    if (state.active === "users") await loadUsers()
+    if (state.active === "roles") await loadRoles()
+    if (state.active === "system") await loadSettings()
+    if (state.active === "monitor") await loadMonitor()
+    if (state.active === "notices") await loadNotices()
+    if (state.active === "audit") await loadAudit()
     if (state.active === "account") await loadAccount()
     setUpdated()
   } catch (error) {
@@ -295,7 +372,7 @@ async function loadPage(initial = false) {
 
 async function loadOverview() {
   if (currentRole.value === "super_admin") {
-    const [user, device, sales, activity, trend, songs, feedback, salesRegion] = await Promise.all([
+    const [user, device, sales, activity, trend, songs, feedback, salesRegion, monitor] = await Promise.all([
       silent(() => api("/api/admin/super/overview/user-count"), {}),
       silent(() => api("/api/admin/super/overview/device-count"), {}),
       silent(() => api("/api/admin/super/overview/sales-amount"), {}),
@@ -304,17 +381,19 @@ async function loadOverview() {
       silent(() => api("/api/admin/market/top-songs"), { list: [] }),
       silent(() => api("/api/admin/super/feedback/list", { params: { page: 1, pageSize: 5 } }), { list: [], total: 0 }),
       silent(() => api("/api/admin/super/region/sales-heatmap"), { list: [] }),
+      silent(() => api("/api/admin/super/monitor"), { metrics: {}, exceptions: [] }),
     ])
     state.overview = { user, device, sales, activity }
     state.trend = trend
     state.songs = songs.list || []
     state.feedback = feedback
     state.region.sales = salesRegion.list || []
+    state.monitor = monitor
     return
   }
 
   if (currentRole.value === "market_admin") {
-    await Promise.all([loadSongs(), loadValue(), loadRetention(), loadRegion(), loadProfile()])
+    await Promise.all([loadSongs(), loadValue(), loadRetention(), loadRegion(), loadProfile(), loadDecision()])
     state.trend = {
       type: "retention",
       dimension: "day",
@@ -326,7 +405,12 @@ async function loadOverview() {
     return
   }
 
-  await Promise.all([loadDevices(), loadFirmware(), loadFeedback(), loadLogs()])
+  await Promise.all([loadDevices(), loadFirmware(), loadFeedback(), loadLogs(), loadAlerts()])
+}
+
+async function loadDecision() {
+  const prefix = currentRole.value === "market_admin" ? "/api/admin/market" : "/api/admin/super"
+  state.decision = await api(`${prefix}/decision/summary`)
 }
 
 async function loadTrend() {
@@ -336,6 +420,11 @@ async function loadTrend() {
     })
   } else if (currentRole.value === "market_admin") {
     await loadRetention()
+    state.trend = {
+      type: "retention",
+      dimension: "day",
+      list: state.retention.map((item) => ({ date: item.date, value: Math.round(Number(item.day7RetentionRate || 0) * 100) })),
+    }
   } else {
     await loadLogs()
   }
@@ -384,6 +473,19 @@ async function loadRetention() {
   state.retention = data.list || []
 }
 
+async function loadSegments() {
+  state.segments = await api("/api/admin/market/segments")
+}
+
+async function loadInsights() {
+  state.insights = await api("/api/admin/market/insights")
+}
+
+async function loadReports() {
+  const prefix = currentRole.value === "market_admin" ? "/api/admin/market" : "/api/admin/super"
+  state.reports = await api(`${prefix}/reports`)
+}
+
 async function loadFeedback() {
   const prefix = currentRole.value === "operator_admin" ? "/api/admin/operator" : "/api/admin/super"
   state.feedback = await api(`${prefix}/feedback/list`, { params: { page: 1, pageSize: 20 } })
@@ -400,12 +502,55 @@ async function loadDevices() {
   }
 }
 
+async function loadGroups() {
+  state.groups = await api("/api/admin/operator/device/groups")
+}
+
+async function loadAlerts() {
+  state.alerts = await api("/api/admin/operator/device/alerts")
+}
+
 async function loadFirmware() {
-  state.firmware = await api("/api/admin/operator/device/firmware-version")
+  const [firmware, packages, tasks] = await Promise.all([
+    api("/api/admin/operator/device/firmware-version"),
+    silent(() => api("/api/admin/operator/device/firmware-packages"), { total: 0, list: [] }),
+    silent(() => api("/api/admin/operator/device/firmware-tasks"), { total: 0, list: [] }),
+  ])
+  state.firmware = firmware
+  state.firmwarePackages = packages
+  state.firmwareTasks = tasks
+}
+
+async function loadTasks() {
+  state.firmwareTasks = await api("/api/admin/operator/device/firmware-tasks")
 }
 
 async function loadLogs() {
   state.logs = await api("/api/admin/operator/device/logs", { params: { page: 1, pageSize: 20 } })
+}
+
+async function loadUsers() {
+  state.users = await api("/api/admin/super/users")
+}
+
+async function loadRoles() {
+  state.roles = await api("/api/admin/super/roles")
+}
+
+async function loadSettings() {
+  state.settings = await api("/api/admin/super/system/config")
+}
+
+async function loadMonitor() {
+  state.monitor = await api("/api/admin/super/monitor")
+}
+
+async function loadNotices() {
+  state.notices = await api("/api/admin/super/notices")
+}
+
+async function loadAudit() {
+  state.audit = await api("/api/admin/super/security/logs")
 }
 
 async function loadAccount() {
@@ -416,6 +561,15 @@ async function loadAccount() {
 async function showFeedbackDetail(item) {
   const prefix = currentRole.value === "operator_admin" ? "/api/admin/operator" : "/api/admin/super"
   state.detail = await api(`${prefix}/feedback/detail`, { params: { feedbackId: item.feedbackId } })
+}
+
+async function handleFeedback(item) {
+  await api("/api/admin/operator/feedback/handle", {
+    method: "POST",
+    body: { feedbackId: item.feedbackId, status: "processed", remark: "后台已处理" },
+  })
+  ElMessage.success("反馈状态已更新")
+  await loadFeedback()
 }
 
 async function showDeviceDetail(item) {
@@ -462,15 +616,69 @@ async function unbindDevice(item) {
   }
 }
 
-async function updateFirmware() {
-  const deviceId = state.firmware?.deviceId || state.devices.list?.[0]?.deviceId
-  const targetVersion = state.firmware?.latestVersion
-  await api("/api/admin/operator/device/update-firmware", {
+async function createFirmwareTask() {
+  const targetVersion = state.firmware?.latestVersion || "1.0.5"
+  await api("/api/admin/operator/device/firmware-task", {
     method: "POST",
-    body: { deviceId, targetVersion },
+    body: { targetVersion, targetScope: "灰度 20%" },
   })
   ElMessage.success("固件升级任务已创建")
   await loadFirmware()
+}
+
+async function saveSystemConfig() {
+  state.settings = await api("/api/admin/super/system/config", {
+    method: "POST",
+    body: state.settings,
+  })
+  ElMessage.success("系统配置已保存")
+}
+
+async function createNotice() {
+  try {
+    const { value } = await ElMessageBox.prompt("请输入公告标题", "发布系统公告", {
+      inputValue: "设备固件升级通知",
+      confirmButtonText: "创建",
+      cancelButtonText: "取消",
+    })
+    await api("/api/admin/super/notices", {
+      method: "POST",
+      body: { title: value, type: "notice", status: "draft" },
+    })
+    ElMessage.success("公告已创建")
+    await loadNotices()
+  } catch (error) {
+    if (!error?.action && error !== "cancel") ElMessage.error(error.message || "公告创建失败")
+  }
+}
+
+function exportRows(filename, rows) {
+  const list = Array.isArray(rows) ? rows : []
+  if (!list.length) {
+    ElMessage.warning("暂无可导出数据")
+    return
+  }
+  const keys = Array.from(new Set(list.flatMap((row) => Object.keys(row))))
+  const csv = [
+    keys.join(","),
+    ...list.map((row) =>
+      keys
+        .map((key) => {
+          const value = row[key]
+          const text = typeof value === "object" ? JSON.stringify(value) : String(value ?? "")
+          return `"${text.replaceAll('"', '""')}"`
+        })
+        .join(","),
+    ),
+  ].join("\n")
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success("导出文件已生成")
 }
 
 onMounted(restoreSession)
@@ -484,17 +692,14 @@ onMounted(restoreSession)
   <main v-else-if="!isLoggedIn" class="login-shell">
     <section class="login-brand">
       <div class="brand-mark">Mini</div>
-      <div>
-        <p class="eyebrow">后台管理系统</p>
-        <h1>声盒 Mini</h1>
-        <p class="login-copy">让设备管理、音乐趋势与用户反馈在一张柔和的工作台里安静流动。</p>
-      </div>
+      <p class="eyebrow">Smart Speaker Console</p>
+      <h1>声盒 Mini</h1>
+      <p>智能音箱设备、音乐运营、用户反馈与系统配置的统一后台。</p>
     </section>
 
     <section class="login-panel" @keyup.enter="handleLogin">
       <p class="eyebrow">Welcome back</p>
-      <h2>欢迎登录</h2>
-      <p class="muted">请使用服务器后台管理员账号进入系统</p>
+      <h2>登录后台</h2>
       <label class="field">
         <span>用户名</span>
         <input v-model="state.loginForm.username" autocomplete="username" placeholder="admin / market / operator" />
@@ -508,7 +713,10 @@ onMounted(restoreSession)
         <span>记住用户名</span>
       </label>
       <button class="primary-button" :disabled="state.loading" @click="handleLogin">
-        {{ state.loading ? "登录中..." : "登录" }}
+        {{ state.loading ? "登录中..." : "账号登录" }}
+      </button>
+      <button class="ghost-button wide" :disabled="state.loading" @click="handleWechatLogin">
+        微信快捷登录
       </button>
       <p class="api-note">API：{{ apiLabel }}</p>
     </section>
@@ -519,13 +727,13 @@ onMounted(restoreSession)
       <div class="brand">
         <div class="logo">声</div>
         <div>
-          <h2>声盒 Mini</h2>
-          <p>{{ currentRoleName }}</p>
+          <strong>声盒 Mini</strong>
+          <small>后台管理系统</small>
         </div>
       </div>
 
       <nav class="nav-groups">
-        <section v-for="group in groupedMenus" :key="group.section" class="nav-group">
+        <section v-for="group in groupedMenus" :key="group.section">
           <p>{{ group.section }}</p>
           <button
             v-for="item in group.items"
@@ -533,7 +741,6 @@ onMounted(restoreSession)
             :class="['nav-item', { active: state.active === item.key }]"
             @click="selectPage(item.key)"
           >
-            <span>{{ item.label.slice(0, 1) }}</span>
             {{ item.label }}
           </button>
         </section>
@@ -543,15 +750,16 @@ onMounted(restoreSession)
         <div class="avatar">{{ state.admin?.username?.slice(0, 1).toUpperCase() }}</div>
         <div>
           <strong>{{ state.admin?.realName || state.admin?.username }}</strong>
-          <small>{{ state.admin?.jobNo || "在线" }}</small>
+          <small>{{ currentRoleName }}</small>
         </div>
+        <button @click="handleLogout">退出</button>
       </div>
     </aside>
 
     <section class="content">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Web Admin Console</p>
+          <p class="eyebrow">{{ currentRoleName }}</p>
           <h1>{{ activeMenu.label }}</h1>
           <p class="muted">最近同步：{{ state.lastUpdated || "等待刷新" }}</p>
         </div>
@@ -561,7 +769,6 @@ onMounted(restoreSession)
             <input v-model="state.keyword" placeholder="设备、反馈、用户..." />
           </label>
           <button class="ghost-button" :disabled="state.loading" @click="loadPage()">刷新</button>
-          <button class="ghost-button" @click="handleLogout">退出</button>
         </div>
       </header>
 
@@ -574,122 +781,103 @@ onMounted(restoreSession)
       </section>
 
       <section v-if="state.active === 'overview'" class="dashboard-grid">
-        <article class="panel wide">
+        <article class="panel">
           <div class="panel-head">
             <div>
-              <h3>{{ currentRole === "operator_admin" ? "设备运行概览" : "增长走势" }}</h3>
-              <p>{{ currentRole === "operator_admin" ? "在线设备、日志与固件任务" : "接口实时返回的数据序列" }}</p>
+              <h3>{{ currentRole === 'operator_admin' ? '设备运行概览' : '增长趋势' }}</h3>
+              <p>{{ currentRole === 'operator_admin' ? '当前播放、音量、电量与在线状态' : '按角色展示核心业务指标' }}</p>
             </div>
           </div>
-          <div v-if="currentRole === 'operator_admin'" class="device-live">
-            <div>
-              <small>当前歌曲</small>
-              <strong>{{ state.runtime?.currentSong || "暂无播放" }}</strong>
-              <span>{{ state.runtime?.currentArtist || "未知艺术家" }}</span>
-            </div>
-            <div>
-              <small>音量</small>
-              <strong>{{ state.runtime?.volume ?? "-" }}</strong>
-              <span>电量 {{ state.runtime?.battery ?? "-" }}%</span>
-            </div>
-            <div>
-              <small>心跳</small>
-              <strong>{{ state.runtime?.online ? "在线" : "离线" }}</strong>
-              <span>{{ state.runtime?.lastHeartbeat || "-" }}</span>
-            </div>
+          <div v-if="currentRole === 'operator_admin'" class="live-grid">
+            <div><span>当前歌曲</span><strong>{{ state.runtime?.currentSong || "暂无播放" }}</strong><small>{{ state.runtime?.currentArtist || "未知艺术家" }}</small></div>
+            <div><span>音量</span><strong>{{ state.runtime?.volume ?? "-" }}</strong><small>电量 {{ state.runtime?.battery ?? "-" }}%</small></div>
+            <div><span>在线状态</span><strong>{{ state.runtime?.online ? "在线" : "离线" }}</strong><small>{{ state.runtime?.lastHeartbeat || "-" }}</small></div>
           </div>
           <div v-else class="bar-chart">
-            <div
-              v-for="item in state.trend.list"
-              :key="item.date"
-              class="bar-item"
-              :title="`${item.date}: ${item.value}`"
-            >
+            <div v-for="item in state.trend.list" :key="item.date" class="bar-item">
               <div class="bar" :style="{ height: barHeight(item.value, maxOf(state.trend.list)) }"></div>
               <span>{{ labelDate(item.date) }}</span>
+              <small>{{ item.value }}</small>
             </div>
           </div>
         </article>
 
         <article class="panel">
-          <div class="panel-head">
-            <div>
-              <h3>{{ currentRole === "operator_admin" ? "最近反馈" : "活跃用户热歌排行" }}</h3>
-              <p>{{ currentRole === "operator_admin" ? "来自用户反馈接口" : "来自热歌排行接口" }}</p>
-            </div>
-          </div>
+          <div class="panel-head"><div><h3>{{ currentRole === 'operator_admin' ? '待处理反馈' : '热歌排行' }}</h3><p>用于快速发现运营重点</p></div></div>
           <ul v-if="currentRole !== 'operator_admin'" class="rank-list">
             <li v-for="song in state.songs.slice(0, 6)" :key="`${song.rank}-${song.songName}`">
               <span>{{ song.rank }}</span>
               <strong>{{ song.songName }}</strong>
-              <em>{{ formatNumber(song.playCount) }} 次</em>
+              <em>{{ formatNumber(song.playCount) }}</em>
             </li>
           </ul>
           <ul v-else class="rank-list">
             <li v-for="item in state.feedback.list.slice(0, 6)" :key="item.feedbackId">
-              <span>{{ item.rating || "F" }}</span>
-              <strong>{{ item.nickname }}</strong>
+              <span>{{ item.rating || 4 }}</span>
+              <strong>{{ item.content }}</strong>
               <em>{{ item.statusText }}</em>
             </li>
           </ul>
         </article>
+      </section>
 
-        <article v-if="currentRole !== 'operator_admin'" class="panel full">
-          <div class="panel-head">
-            <div>
-              <h3>区域动能</h3>
-              <p>销售额最高的省份，用于快速判断市场热度</p>
+      <section v-if="state.active === 'decision'" class="dashboard-grid">
+        <article class="panel full">
+          <div class="panel-head"><div><h3>管理决策指标</h3><p>播放、用户、设备与异常提醒</p></div></div>
+          <div class="mini-cards">
+            <div v-for="card in state.decision.cards" :key="card.label">
+              <span>{{ card.label }}</span>
+              <strong>{{ card.value }}</strong>
+              <em>{{ card.trend }}</em>
             </div>
           </div>
-          <div class="heat-list">
-            <div v-for="item in state.region.sales" :key="item.regionCode" class="heat-row">
-              <span>{{ item.regionName }}</span>
-              <div>
-                <i :style="{ width: `${Math.max(10, (item.salesAmount / maxOf(state.region.sales, 'salesAmount')) * 100)}%` }"></i>
-              </div>
-              <strong>{{ money(item.salesAmount) }}</strong>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h3>播放趋势</h3><p>来自 Daily_Stats 聚合</p></div></div>
+          <div class="bar-chart">
+            <div v-for="item in state.decision.trend" :key="item.stat_date" class="bar-item">
+              <div class="bar" :style="{ height: barHeight(item.total_play_count, maxOf(state.decision.trend, 'total_play_count')) }"></div>
+              <span>{{ labelDate(item.stat_date) }}</span>
+              <small>{{ item.total_play_count }}</small>
             </div>
           </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h3>异常提醒</h3><p>销售、活跃、设备、差评</p></div></div>
+          <ul class="pill-list">
+            <li v-for="risk in state.decision.risks" :key="risk.name" class="pill-row">
+              <strong>{{ risk.name }}</strong><span :class="['badge', risk.level]">{{ risk.value }}</span>
+            </li>
+          </ul>
         </article>
       </section>
 
       <section v-if="state.active === 'trend'" class="panel full">
         <div class="panel-head">
-          <div>
-            <h3>{{ currentRole === "market_admin" ? "购买后留存趋势" : currentRole === "operator_admin" ? "设备日志趋势" : "增长趋势分析" }}</h3>
-            <p>{{ currentRole === "super_admin" ? "可切换用户、设备、销售额增长指标" : "根据角色自动展示可访问数据" }}</p>
-          </div>
+          <div><h3>{{ currentRole === 'operator_admin' ? '设备日志趋势' : '增长趋势分析' }}</h3><p>按用户、设备、销售或留存查看趋势</p></div>
           <div v-if="currentRole === 'super_admin'" class="segmented">
             <button :class="{ active: state.trend.type === 'user' }" @click="state.trend.type = 'user'; loadTrend()">用户</button>
             <button :class="{ active: state.trend.type === 'device' }" @click="state.trend.type = 'device'; loadTrend()">设备</button>
             <button :class="{ active: state.trend.type === 'sales' }" @click="state.trend.type = 'sales'; loadTrend()">销售</button>
           </div>
         </div>
-        <div v-if="currentRole === 'market_admin'" class="retention-grid">
-          <article v-for="item in state.retention" :key="item.date">
-            <span>{{ labelDate(item.date) }}</span>
-            <strong>{{ percent(item.day7RetentionRate) }}</strong>
-            <small>购买 {{ item.purchaseUserCount }} 人</small>
-          </article>
-        </div>
-        <div v-else-if="currentRole === 'operator_admin'" class="data-table">
+        <div v-if="currentRole === 'operator_admin'" class="data-table">
           <div v-for="log in state.logs.list" :key="log.logId" class="table-row" @click="showLogDetail(log)">
-            <span>{{ log.logId }}</span>
-            <strong>{{ log.content }}</strong>
-            <em>{{ log.createdAt }}</em>
+            <strong>{{ log.deviceName }}</strong><span>{{ log.content }}</span><em>{{ log.createdAt }}</em>
           </div>
         </div>
         <div v-else class="bar-chart large">
           <div v-for="item in state.trend.list" :key="item.date" class="bar-item">
-            <div class="bar" :style="{ height: barHeight(item.value, maxOf(state.trend.list)) }"></div>
+            <div class="bar" :style="{ height: barHeight(item.value, maxOf(state.trend.list), 20, 260) }"></div>
             <span>{{ labelDate(item.date) }}</span>
+            <small>{{ item.value }}</small>
           </div>
         </div>
       </section>
 
       <section v-if="state.active === 'region'" class="two-column">
         <article class="panel">
-          <div class="panel-head"><h3>销售热力</h3><p>地区销售额与订单数</p></div>
+          <div class="panel-head"><div><h3>销售额分布</h3><p>按地区查看销售热度</p></div></div>
           <div class="heat-list">
             <div v-for="item in state.region.sales" :key="item.regionCode" class="heat-row">
               <span>{{ item.regionName }}</span>
@@ -699,7 +887,7 @@ onMounted(restoreSession)
           </div>
         </article>
         <article class="panel">
-          <div class="panel-head"><h3>用户热力</h3><p>地区用户与活跃用户</p></div>
+          <div class="panel-head"><div><h3>用户分布</h3><p>按地区查看用户与活跃用户</p></div></div>
           <div class="heat-list">
             <div v-for="item in state.region.users" :key="item.regionCode" class="heat-row">
               <span>{{ item.regionName }}</span>
@@ -711,19 +899,19 @@ onMounted(restoreSession)
       </section>
 
       <section v-if="state.active === 'profile'" class="profile-grid">
-        <article v-for="block in [
+        <article v-for="[title, list, key] in [
           ['年龄分布', state.profile.age, 'ageRange'],
           ['地区分布', state.profile.region, 'regionName'],
           ['活跃分层', state.profile.activity, 'levelName'],
           ['绑定软件', state.profile.service, 'serviceName'],
-        ]" :key="block[0]" class="panel">
-          <div class="panel-head"><h3>{{ block[0] }}</h3><p>用户画像统计</p></div>
-          <div class="pill-list">
-            <div v-for="item in block[1]" :key="item[block[2]]" class="pill-row">
-              <span>{{ item[block[2]] }}</span>
-              <strong>{{ formatNumber(item.count) }}</strong>
-            </div>
-          </div>
+        ]" :key="title" class="panel">
+          <div class="panel-head"><div><h3>{{ title }}</h3><p>饼图占比数据</p></div></div>
+          <ul class="pill-list">
+            <li v-for="item in list" :key="item[key]" class="pill-row">
+              <strong>{{ item[key] }}</strong>
+              <span>{{ formatNumber(item.count) }}</span>
+            </li>
+          </ul>
         </article>
       </section>
 
@@ -731,22 +919,59 @@ onMounted(restoreSession)
         <article class="panel hero-number">
           <span>普通用户</span>
           <strong>{{ formatNumber(state.value.normalUserCount || 0) }}</strong>
-          <p>适合做唤醒、召回与新手引导。</p>
+          <p>适合基础推荐、设备使用引导和新功能教育。</p>
         </article>
         <article class="panel hero-number">
           <span>高活跃用户</span>
           <strong>{{ formatNumber(state.value.highActiveUserCount || 0) }}</strong>
-          <p>适合做会员权益、歌单推荐与复购运营。</p>
+          <p>适合会员权益、歌单推荐和复购活动触达。</p>
+        </article>
+      </section>
+
+      <section v-if="state.active === 'segments'" class="panel full">
+        <div class="panel-head"><div><h3>用户分群</h3><p>按活跃、留存、绑定与偏好建立运营人群</p></div><button class="ghost-button" @click="exportRows('segments.csv', state.segments.list)">导出</button></div>
+        <div class="data-table">
+          <div v-for="item in state.segments.list" :key="item.name" class="table-row">
+            <strong>{{ item.name }}</strong><span>{{ item.rule }} / {{ item.action }}</span><em>{{ formatNumber(item.count) }}</em>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'insights'" class="two-column">
+        <article class="panel">
+          <div class="panel-head"><div><h3>转化漏斗</h3><p>新增、绑定、首播、留存</p></div></div>
+          <div class="heat-list">
+            <div v-for="item in state.insights.funnels" :key="item.label" class="heat-row">
+              <span>{{ item.label }}</span>
+              <div><i :style="{ width: `${Math.max(8, item.rate * 100)}%` }"></i></div>
+              <strong>{{ formatNumber(item.value) }}</strong>
+            </div>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h3>运营建议</h3><p>基于现有运营数据</p></div></div>
+          <ul class="pill-list">
+            <li v-for="item in state.insights.recommendations" :key="item" class="pill-row"><strong>{{ item }}</strong></li>
+          </ul>
         </article>
       </section>
 
       <section v-if="state.active === 'songs'" class="panel full">
-        <div class="panel-head"><div><h3>热歌排行</h3><p>市场分析管理员与超级管理员可见</p></div></div>
+        <div class="panel-head"><div><h3>热歌排行</h3><p>播放量、用户数与平台来源</p></div><button class="ghost-button" @click="exportRows('songs.csv', state.songs)">导出</button></div>
         <div class="data-table">
           <div v-for="song in state.songs" :key="`${song.rank}-${song.songName}`" class="table-row">
-            <span>#{{ song.rank }}</span>
-            <strong>{{ song.songName }} - {{ song.artist }}</strong>
-            <em>{{ formatNumber(song.playCount) }} 次播放</em>
+            <strong>#{{ song.rank }} {{ song.songName }}</strong>
+            <span>{{ song.artist }} / {{ song.platform }}</span>
+            <em>{{ formatNumber(song.playCount) }} 次</em>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'reports'" class="panel full">
+        <div class="panel-head"><div><h3>决策报表</h3><p>日报、周报、月报，支持导出</p></div><button class="ghost-button" @click="exportRows('reports.csv', state.reports.list)">导出 Excel</button></div>
+        <div class="data-table">
+          <div v-for="report in state.reports.list" :key="report.reportId" class="table-row">
+            <strong>{{ report.name }}</strong><span>{{ report.summary }}</span><em>{{ report.exportFormats?.join(' / ') }}</em>
           </div>
         </div>
       </section>
@@ -756,9 +981,7 @@ onMounted(restoreSession)
           <div class="panel-head"><div><h3>用户反馈</h3><p>共 {{ state.feedback.total }} 条</p></div></div>
           <div class="data-table">
             <div v-for="item in filteredFeedback" :key="item.feedbackId" class="table-row" @click="showFeedbackDetail(item)">
-              <span>{{ item.ratingText || item.feedbackTypeText }}</span>
-              <strong>{{ item.nickname }}：{{ item.content }}</strong>
-              <em>{{ item.statusText }}</em>
+              <strong>{{ item.nickname }}</strong><span>{{ item.content }}</span><em>{{ item.statusText }}</em>
             </div>
           </div>
         </article>
@@ -769,8 +992,9 @@ onMounted(restoreSession)
             <strong>{{ state.detail.userInfo?.nickname }}</strong>
             <span>{{ state.detail.feedbackInfo.content }}</span>
             <small>状态：{{ state.detail.processInfo?.statusText }} / 评分：{{ state.detail.processInfo?.ratingText }}</small>
+            <button class="primary-button compact" @click="handleFeedback(state.detail)">标记已处理</button>
           </template>
-          <p v-else class="muted">点击左侧反馈查看详情。</p>
+          <p v-else class="muted">选择一条反馈查看详情。</p>
         </article>
       </section>
 
@@ -780,12 +1004,12 @@ onMounted(restoreSession)
           <div class="data-table">
             <div v-for="item in filteredDevices" :key="item.deviceId" class="table-row device-row">
               <button @click="showDeviceDetail(item)">
-                <span :class="['dot', { online: item.online }]"></span>
+                <i :class="['dot', { online: item.online }]"></i>
                 <strong>{{ item.deviceName }}</strong>
-                <em>{{ item.ownerName }} / {{ item.firmwareVersion }}</em>
+                <span>{{ item.modelName }} / {{ item.firmwareVersion }}</span>
               </button>
               <div class="row-actions">
-                <button @click="renameDevice(item)">重命名</button>
+                <button @click="renameDevice(item)">改名</button>
                 <button @click="unbindDevice(item)">解绑</button>
               </div>
             </div>
@@ -797,30 +1021,65 @@ onMounted(restoreSession)
             <strong>{{ state.detail.deviceName }}</strong>
             <span>型号：{{ state.detail.modelName }} / 归属：{{ state.detail.ownerName }}</span>
             <small>音量 {{ state.detail.volume }}，电量 {{ state.detail.battery }}%，网络 {{ state.detail.currentNetwork }}</small>
+            <small>最近在线：{{ state.detail.lastOnlineAt }}</small>
           </template>
-          <p v-else class="muted">点击设备查看详情。</p>
+          <p v-else class="muted">选择设备查看基础信息、绑定用户和实时状态。</p>
         </article>
       </section>
 
-      <section v-if="state.active === 'firmware'" class="panel full firmware-panel">
-        <div>
-          <p class="eyebrow">Firmware</p>
-          <h3>{{ state.firmware?.deviceName || "设备固件" }}</h3>
-          <p>当前版本 {{ state.firmware?.currentVersion || "-" }}，最新版本 {{ state.firmware?.latestVersion || "-" }}</p>
+      <section v-if="state.active === 'groups'" class="panel full">
+        <div class="panel-head"><div><h3>设备分组</h3><p>按型号、固件和在线状态聚合</p></div></div>
+        <div class="data-table">
+          <div v-for="group in state.groups.list" :key="group.groupName" class="table-row">
+            <strong>{{ group.groupName }}</strong><span>固件：{{ group.firmwareVersions }} / 离线 {{ group.offlineCount }}</span><em>{{ group.onlineCount }}/{{ group.deviceCount }} 在线</em>
+          </div>
         </div>
-        <button class="primary-button" :disabled="!state.firmware?.needUpdate" @click="updateFirmware">
-          {{ state.firmware?.needUpdate ? "下发升级任务" : "无需更新" }}
-        </button>
+      </section>
+
+      <section v-if="state.active === 'alerts'" class="panel full">
+        <div class="panel-head"><div><h3>设备告警</h3><p>离线、低电量、固件失败、网络异常</p></div></div>
+        <div class="data-table">
+          <div v-for="item in state.alerts.list" :key="item.alertId" class="table-row">
+            <strong>{{ item.title }}</strong><span>{{ item.deviceName }} / {{ item.createdAt }}</span><em>{{ statusText(item.status) }}</em>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'firmware'" class="dashboard-grid">
+        <article class="panel">
+          <div class="panel-head"><div><h3>{{ state.firmware?.deviceName || "设备固件" }}</h3><p>当前版本 {{ state.firmware?.currentVersion || "-" }}，最新版本 {{ state.firmware?.latestVersion || "-" }}</p></div></div>
+          <button class="primary-button compact" :disabled="!state.firmware?.needUpdate" @click="createFirmwareTask">
+            {{ state.firmware?.needUpdate ? "下发灰度升级任务" : "无需更新" }}
+          </button>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h3>固件包</h3><p>稳定版、灰度版、回滚版本</p></div></div>
+          <ul class="pill-list">
+            <li v-for="item in state.firmwarePackages.list" :key="item.packageId" class="pill-row">
+              <strong>{{ item.version }} · {{ item.modelName }}</strong>
+              <span>{{ statusText(item.status) }} / {{ item.sizeMb }}MB</span>
+            </li>
+          </ul>
+        </article>
+      </section>
+
+      <section v-if="state.active === 'tasks'" class="panel full">
+        <div class="panel-head"><div><h3>固件升级任务</h3><p>查看任务状态、成功数、失败数和失败原因</p></div><button class="ghost-button" @click="createFirmwareTask">新建灰度任务</button></div>
+        <div class="data-table">
+          <div v-for="task in state.firmwareTasks.list" :key="task.taskId" class="table-row">
+            <strong>{{ task.taskId }} / {{ task.targetVersion }}</strong>
+            <span>{{ task.targetScope }} / 成功 {{ task.successCount }} / 失败 {{ task.failCount }}</span>
+            <em>{{ statusText(task.status) }}</em>
+          </div>
+        </div>
       </section>
 
       <section v-if="state.active === 'logs'" class="two-column detail-layout">
         <article class="panel">
-          <div class="panel-head"><div><h3>设备日志</h3><p>运维追踪与固件事件</p></div></div>
+          <div class="panel-head"><div><h3>设备日志</h3><p>设备上线、升级、异常事件</p></div></div>
           <div class="data-table">
             <div v-for="log in state.logs.list" :key="log.logId" class="table-row" @click="showLogDetail(log)">
-              <span>{{ log.logType }}</span>
-              <strong>{{ log.content }}</strong>
-              <em>{{ log.createdAt }}</em>
+              <strong>{{ log.deviceName }}</strong><span>{{ log.content }}</span><em>{{ log.createdAt }}</em>
             </div>
           </div>
         </article>
@@ -831,17 +1090,88 @@ onMounted(restoreSession)
             <span>{{ state.detail.content }}</span>
             <small>{{ state.detail.eventCode }} / {{ state.detail.traceId }}</small>
           </template>
-          <p v-else class="muted">点击日志查看完整追踪信息。</p>
+          <p v-else class="muted">选择日志查看事件编码和链路信息。</p>
         </article>
+      </section>
+
+      <section v-if="state.active === 'users'" class="panel full">
+        <div class="panel-head"><div><h3>管理员与绑定用户</h3><p>账号、角色、状态和最近登录</p></div><button class="ghost-button" @click="exportRows('users.csv', state.users.list)">导出</button></div>
+        <div class="data-table">
+          <div v-for="user in state.users.list" :key="user.adminId" class="table-row">
+            <strong>{{ user.realName }} · {{ user.username }}</strong>
+            <span>{{ user.roleName }} / {{ user.jobNo }} / {{ user.phone || "未配置手机号" }}</span>
+            <em>{{ statusText(user.status) }}</em>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'roles'" class="panel full">
+        <div class="panel-head"><div><h3>角色权限矩阵</h3><p>创建角色、修改权限、授权与撤权的基础视图</p></div></div>
+        <div class="data-table">
+          <div v-for="role in state.roles.list" :key="role.role" class="table-row">
+            <strong>{{ role.roleName }}</strong>
+            <span>{{ role.description }} / {{ role.permissions.join("、") }}</span>
+            <em>{{ role.userCount }} 人</em>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'system'" class="panel full">
+        <div class="panel-head"><div><h3>系统全局配置</h3><p>名称、主题、上传限制、接口超时和数据保留</p></div><button class="primary-button compact" @click="saveSystemConfig">保存配置</button></div>
+        <div class="form-grid">
+          <label class="field"><span>系统名称</span><input v-model="state.settings.systemName" /></label>
+          <label class="field"><span>Logo 文案</span><input v-model="state.settings.logoText" /></label>
+          <label class="field"><span>默认主题</span><input v-model="state.settings.defaultTheme" /></label>
+          <label class="field"><span>上传限制 MB</span><input v-model.number="state.settings.uploadLimitMb" type="number" /></label>
+          <label class="field"><span>接口超时 秒</span><input v-model.number="state.settings.apiTimeoutSeconds" type="number" /></label>
+          <label class="field"><span>数据保留 天</span><input v-model.number="state.settings.dataRetentionDays" type="number" /></label>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'monitor'" class="dashboard-grid">
+        <article class="panel">
+          <div class="panel-head"><div><h3>服务运行状态</h3><p>API、MySQL、MongoDB</p></div></div>
+          <ul class="pill-list">
+            <li v-for="service in state.monitor.services" :key="service.name" class="pill-row">
+              <strong>{{ service.name }}</strong><span>{{ service.status }} / {{ service.latencyMs }}ms</span>
+            </li>
+          </ul>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h3>最近异常</h3><p>接口错误率、存储、反馈与离线设备</p></div></div>
+          <ul class="pill-list">
+            <li v-for="item in state.monitor.exceptions" :key="item.code" class="pill-row">
+              <strong>{{ item.title }}</strong><span>{{ item.count }}</span>
+            </li>
+          </ul>
+        </article>
+      </section>
+
+      <section v-if="state.active === 'notices'" class="panel full">
+        <div class="panel-head"><div><h3>系统公告</h3><p>后台公告、维护通知、升级通知</p></div><button class="primary-button compact" @click="createNotice">新建公告</button></div>
+        <div class="data-table">
+          <div v-for="notice in state.notices.list" :key="notice.noticeId" class="table-row">
+            <strong>{{ notice.title }}</strong><span>{{ notice.type }} / {{ notice.createdAt }}</span><em>{{ statusText(notice.status) }}</em>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="state.active === 'audit'" class="panel full">
+        <div class="panel-head"><div><h3>审计与安全日志</h3><p>操作日志、登录日志、安全事件</p></div><button class="ghost-button" @click="exportRows('audit.csv', state.audit.list)">导出</button></div>
+        <div class="data-table">
+          <div v-for="log in state.audit.list" :key="log.logId" class="table-row">
+            <strong>{{ log.event }}</strong><span>{{ log.actor }} / {{ log.ip }}</span><em>{{ log.createdAt }}</em>
+          </div>
+        </div>
       </section>
 
       <section v-if="state.active === 'account'" class="panel full account-card">
         <div class="avatar big">{{ state.admin?.username?.slice(0, 1).toUpperCase() }}</div>
         <div>
-          <p class="eyebrow">{{ currentRoleName }}</p>
           <h3>{{ state.admin?.realName || state.admin?.username }}</h3>
           <p>{{ state.admin?.position || currentRoleName }} / 工号 {{ state.admin?.jobNo || "-" }}</p>
           <p>{{ state.admin?.phone || "未配置手机号" }} · {{ state.admin?.email || "未配置邮箱" }}</p>
+          <p>权限：{{ currentRoleName }}，可访问 {{ visibleMenus.length }} 个后台模块。</p>
         </div>
       </section>
     </section>
@@ -849,18 +1179,17 @@ onMounted(restoreSession)
 </template>
 
 <style scoped>
+:global(*) {
+  box-sizing: border-box;
+}
+
 :global(body) {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.8), transparent 28%),
-    linear-gradient(135deg, #f4f7f2 0%, #dfeae2 100%);
-  color: #243a31;
-  font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
-}
-
-* {
-  box-sizing: border-box;
+  min-height: 100vh;
+  color: #1f2a33;
+  background: #eef3f1;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
 }
 
 button,
@@ -883,292 +1212,106 @@ button {
   place-items: center;
 }
 
-.boot-card {
-  padding: 24px 32px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 20px 60px rgba(75, 112, 92, 0.14);
+.boot-card,
+.login-panel,
+.panel,
+.metric-card,
+.user-card {
+  border: 1px solid rgba(195, 209, 203, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 50px rgba(44, 64, 56, 0.08);
 }
 
 .login-shell {
   display: grid;
-  grid-template-columns: minmax(320px, 42vw) 1fr;
-  background: #e7f0e9;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
 }
 
 .login-brand {
   display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 72px;
-  color: #f7faf4;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: clamp(40px, 8vw, 96px);
+  color: white;
   background:
-    radial-gradient(circle at 20% 20%, rgba(132, 169, 140, 0.4), transparent 25%),
-    #253f33;
+    linear-gradient(135deg, rgba(38, 78, 88, 0.92), rgba(36, 107, 88, 0.88)),
+    url("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80") center/cover;
 }
 
 .brand-mark,
-.logo {
+.logo,
+.avatar {
   display: grid;
   place-items: center;
-  border-radius: 22px;
-  background: #7fa58a;
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  background: #2f7d62;
   color: white;
-  font-weight: 700;
-}
-
-.brand-mark {
-  width: 76px;
-  height: 76px;
+  font-weight: 800;
 }
 
 .login-brand h1 {
-  margin: 8px 0 10px;
-  font-size: clamp(34px, 5vw, 54px);
-  letter-spacing: 0.04em;
+  margin: 0;
+  font-size: clamp(42px, 7vw, 82px);
+  line-height: 1;
 }
 
-.login-copy {
-  max-width: 420px;
-  color: rgba(247, 250, 244, 0.7);
-  line-height: 1.9;
+.login-brand p {
+  max-width: 520px;
+  margin: 0;
+  line-height: 1.8;
 }
 
 .login-panel {
   align-self: center;
-  justify-self: center;
-  width: min(420px, calc(100vw - 40px));
-  padding: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 28px 90px rgba(75, 112, 92, 0.18);
-  backdrop-filter: blur(20px);
+  width: min(440px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 34px;
 }
 
 .login-panel h2 {
-  margin: 8px 0 6px;
-  font-size: 28px;
+  margin: 6px 0 28px;
+  font-size: 30px;
 }
 
 .field {
-  display: block;
-  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .field span,
-.check-row,
-.api-note,
+.search span,
 .muted,
-.eyebrow {
-  color: #73877c;
-}
-
-.field span {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
+.api-note,
+.user-card small,
+.panel-head p,
+.table-row span,
+.detail-card small,
+.detail-card span,
+.pill-row span {
+  color: #64746e;
 }
 
 .field input,
 .search input {
   width: 100%;
-  border: 1px solid rgba(127, 165, 138, 0.22);
-  outline: 0;
-  background: rgba(255, 255, 255, 0.78);
-  color: #243a31;
-}
-
-.field input {
-  height: 46px;
-  padding: 0 16px;
-  border-radius: 16px;
-}
-
-.check-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 16px 0;
-  font-size: 14px;
-}
-
-.primary-button,
-.ghost-button {
-  border: 0;
-  border-radius: 999px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-}
-
-.primary-button {
-  width: 100%;
-  padding: 13px 18px;
-  background: #6f997b;
-  color: white;
-  box-shadow: 0 16px 32px rgba(111, 153, 123, 0.25);
-}
-
-.primary-button:disabled,
-.ghost-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.primary-button:not(:disabled):hover,
-.ghost-button:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-
-.api-note {
-  margin: 16px 0 0;
-  font-size: 12px;
-  text-align: center;
-}
-
-.app-shell {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-}
-
-.sidebar {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  padding: 30px 20px;
-  border-right: 1px solid rgba(255, 255, 255, 0.7);
-  background: rgba(247, 250, 246, 0.64);
-  backdrop-filter: blur(26px);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 4px 8px 26px;
-}
-
-.logo {
-  width: 42px;
-  height: 42px;
-  border-radius: 15px;
-}
-
-.brand h2,
-.brand p {
-  margin: 0;
-}
-
-.brand h2 {
-  font-size: 18px;
-}
-
-.brand p {
-  margin-top: 4px;
-  color: #789086;
-  font-size: 12px;
-}
-
-.nav-groups {
-  display: grid;
-  gap: 18px;
-  overflow: auto;
-  padding-bottom: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(127, 165, 138, 0.34) transparent;
-}
-
-.nav-groups::-webkit-scrollbar {
-  width: 6px;
-}
-
-.nav-groups::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(127, 165, 138, 0.34);
-}
-
-.nav-group p {
-  margin: 0 0 8px 12px;
-  color: #95a99f;
-  font-size: 12px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 12px;
-  margin-bottom: 6px;
+  border: 1px solid #cfdad5;
+  border-radius: 8px;
   padding: 12px 14px;
-  border: 0;
-  border-radius: 18px;
-  background: transparent;
-  color: #657b70;
-  text-align: left;
+  background: white;
+  color: #1f2a33;
+  outline: none;
 }
 
-.nav-item span {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 10px;
-  background: rgba(127, 165, 138, 0.13);
-  color: #6f997b;
-}
-
-.nav-item.active,
-.nav-item:hover {
-  background: rgba(127, 165, 138, 0.16);
-  color: #243a31;
-}
-
-.user-card {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.64);
-}
-
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: #7fa58a;
-  color: white;
-  font-weight: 700;
-}
-
-.avatar.big {
-  width: 86px;
-  height: 86px;
-  font-size: 32px;
-}
-
-.user-card strong,
-.user-card small {
-  display: block;
-}
-
-.user-card small {
-  margin-top: 3px;
-  color: #789086;
-}
-
-.content {
-  min-width: 0;
-  padding: 36px clamp(20px, 4vw, 58px);
-}
-
+.check-row,
 .topbar,
 .top-actions,
+.brand,
+.user-card,
 .panel-head,
 .firmware-panel,
 .account-card {
@@ -1176,10 +1319,131 @@ button {
   align-items: center;
 }
 
+.check-row {
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.primary-button,
+.ghost-button,
+.user-card button {
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 16px;
+}
+
+.primary-button {
+  width: 100%;
+  background: #2f7d62;
+  color: white;
+  font-weight: 700;
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primary-button.compact,
+.ghost-button.compact {
+  width: auto;
+}
+
+.ghost-button {
+  background: #e8efec;
+  color: #285244;
+  font-weight: 700;
+}
+
+.ghost-button.wide {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.api-note {
+  margin-bottom: 0;
+  font-size: 13px;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+  padding: 24px;
+  background: #17261f;
+  color: white;
+}
+
+.brand {
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.brand small,
+.nav-groups p,
+.user-card small {
+  display: block;
+}
+
+.nav-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.nav-groups p {
+  margin: 0 0 8px;
+  color: #8db3a4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  color: #dce8e3;
+  text-align: left;
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: #2f7d62;
+  color: white;
+}
+
+.user-card {
+  gap: 10px;
+  margin-top: 24px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.user-card button {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.content {
+  min-width: 0;
+  padding: 28px;
+}
+
 .topbar {
   justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 26px;
+  gap: 18px;
+  margin-bottom: 22px;
 }
 
 .topbar h1 {
@@ -1189,10 +1453,15 @@ button {
 
 .eyebrow {
   margin: 0;
+  color: #2f7d62;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
+}
+
+.login-brand .eyebrow {
+  color: #bde9d7;
 }
 
 .muted {
@@ -1209,105 +1478,62 @@ button {
   align-items: center;
   gap: 10px;
   min-width: 260px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.62);
 }
 
-.search span {
-  color: #7e9388;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.search input {
-  border: 0;
-  background: transparent;
-}
-
-.ghost-button {
-  padding: 11px 16px;
-  background: rgba(255, 255, 255, 0.68);
-  color: #385246;
+.metrics-grid,
+.dashboard-grid,
+.two-column,
+.profile-grid,
+.mini-cards,
+.form-grid {
+  display: grid;
+  gap: 16px;
 }
 
 .metrics-grid {
-  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 22px;
-}
-
-.metric-card,
-.panel {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: 0 20px 60px rgba(75, 112, 92, 0.1);
-  backdrop-filter: blur(18px);
+  margin-bottom: 18px;
 }
 
 .metric-card {
-  min-height: 138px;
-  padding: 24px;
-  border-radius: 28px;
-}
-
-.metric-card::after {
-  content: "";
-  position: absolute;
-  top: -40px;
-  right: -34px;
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.72);
+  min-height: 128px;
+  padding: 22px;
 }
 
 .metric-card p,
 .metric-card strong,
 .metric-card span {
-  position: relative;
-  z-index: 1;
-}
-
-.metric-card p {
-  margin: 0 0 18px;
-  color: #72887d;
+  margin: 0;
 }
 
 .metric-card strong {
   display: block;
-  color: #6f997b;
-  font-size: clamp(28px, 4vw, 42px);
-  font-weight: 400;
+  margin: 16px 0 10px;
+  font-size: clamp(26px, 4vw, 40px);
   line-height: 1;
 }
 
-.metric-card.ink strong {
-  color: #253f33;
+.metric-card.green strong,
+.badge.normal {
+  color: #2f7d62;
 }
 
-.metric-card.orange strong {
-  color: #dc8e4f;
+.metric-card.blue strong,
+.badge.info {
+  color: #2563a5;
 }
 
-.metric-card span {
-  display: block;
-  margin-top: 12px;
-  color: #8ba096;
+.metric-card.orange strong,
+.badge.warning {
+  color: #bf6b2c;
 }
 
-.dashboard-grid,
-.two-column,
-.profile-grid {
-  display: grid;
-  gap: 20px;
+.metric-card.red strong {
+  color: #a74848;
 }
 
 .dashboard-grid {
-  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.9fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
 }
 
 .two-column {
@@ -1318,10 +1544,13 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .panel {
   min-width: 0;
-  padding: 26px;
-  border-radius: 30px;
+  padding: 22px;
 }
 
 .panel.full {
@@ -1331,7 +1560,7 @@ button {
 .panel-head {
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 
 .panel-head h3,
@@ -1343,18 +1572,12 @@ button {
   font-size: 20px;
 }
 
-.panel-head p {
-  margin-top: 6px;
-  color: #7f958a;
-}
-
 .bar-chart {
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-height: 220px;
-  padding: 18px 4px 0;
 }
 
 .bar-chart.large {
@@ -1365,26 +1588,26 @@ button {
   display: grid;
   flex: 1;
   justify-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 34px;
 }
 
 .bar {
-  width: min(36px, 80%);
-  border-radius: 999px 999px 10px 10px;
-  background: linear-gradient(180deg, #7fa58a, rgba(127, 165, 138, 0.36));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  width: min(34px, 82%);
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, #2f7d62, #7eb39d);
 }
 
-.bar-item span {
-  color: #89a095;
+.bar-item span,
+.bar-item small {
+  color: #64746e;
   font-size: 12px;
 }
 
 .rank-list,
 .pill-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1392,9 +1615,12 @@ button {
 
 .rank-list li,
 .pill-row,
-.table-row {
-  border: 1px solid rgba(255, 255, 255, 0.66);
-  background: rgba(255, 255, 255, 0.46);
+.table-row,
+.mini-cards div,
+.live-grid div {
+  border: 1px solid #d8e2de;
+  border-radius: 8px;
+  background: #f9fbfa;
 }
 
 .rank-list li {
@@ -1402,8 +1628,7 @@ button {
   grid-template-columns: 34px 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 13px;
-  border-radius: 18px;
+  padding: 12px;
 }
 
 .rank-list span {
@@ -1411,57 +1636,65 @@ button {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: rgba(127, 165, 138, 0.2);
-  color: #6f997b;
+  border-radius: 8px;
+  background: #e2f0eb;
+  color: #2f7d62;
+  font-weight: 800;
+}
+
+.rank-list strong,
+.table-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rank-list em,
-.table-row em {
-  color: #d49057;
+.table-row em,
+.mini-cards em {
+  color: #bf6b2c;
   font-style: normal;
 }
 
-.device-live,
-.retention-grid {
+.live-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-.device-live div,
-.retention-grid article {
-  padding: 22px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.46);
+.live-grid div,
+.mini-cards div {
+  padding: 18px;
 }
 
-.device-live small,
-.device-live span,
-.retention-grid small,
-.retention-grid span {
+.live-grid span,
+.live-grid small,
+.mini-cards span {
   display: block;
-  color: #7f958a;
+  color: #64746e;
 }
 
-.device-live strong,
-.retention-grid strong {
+.live-grid strong,
+.mini-cards strong {
   display: block;
   margin: 10px 0;
-  font-size: 28px;
-  font-weight: 500;
+  font-size: 26px;
+}
+
+.mini-cards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .heat-list {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .heat-row {
   display: grid;
-  grid-template-columns: 86px 1fr 80px;
+  grid-template-columns: 92px 1fr 86px;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .heat-row span,
@@ -1472,38 +1705,44 @@ button {
 .heat-row div {
   height: 12px;
   overflow: hidden;
-  border-radius: 999px;
-  background: rgba(127, 165, 138, 0.13);
+  border-radius: 8px;
+  background: #e7efeb;
 }
 
 .heat-row i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #9ab99f, #d99a62);
+  background: linear-gradient(90deg, #2f7d62, #d39254);
 }
 
 .pill-row {
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px;
-  border-radius: 18px;
+  padding: 13px;
+}
+
+.badge {
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: #edf3f1;
+  font-weight: 800;
 }
 
 .hero-number {
-  min-height: 240px;
+  min-height: 230px;
 }
 
 .hero-number span {
-  color: #73877c;
+  color: #64746e;
 }
 
 .hero-number strong {
   display: block;
   margin: 28px 0 18px;
-  color: #6f997b;
-  font-size: clamp(54px, 9vw, 96px);
+  color: #2f7d62;
+  font-size: clamp(52px, 9vw, 92px);
   font-weight: 300;
 }
 
@@ -1514,41 +1753,34 @@ button {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(80px, 0.22fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(100px, 0.28fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 13px 15px;
 }
 
 .table-row:not(.device-row) {
   cursor: pointer;
 }
 
-.table-row strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .segmented {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   padding: 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.56);
+  border-radius: 8px;
+  background: #edf3f1;
 }
 
 .segmented button {
   border: 0;
-  border-radius: 999px;
-  padding: 9px 14px;
+  border-radius: 8px;
+  padding: 8px 13px;
   background: transparent;
-  color: #657b70;
+  color: #466056;
 }
 
 .segmented button.active {
-  background: #6f997b;
+  background: #2f7d62;
   color: white;
 }
 
@@ -1565,13 +1797,6 @@ button {
 .detail-card h3,
 .detail-card p {
   margin: 0;
-}
-
-.detail-card span,
-.detail-card small {
-  display: block;
-  color: #6f8278;
-  line-height: 1.8;
 }
 
 .device-row {
@@ -1593,12 +1818,12 @@ button {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #c7d2cc;
+  background: #aebbb6;
 }
 
 .dot.online {
-  background: #6f997b;
-  box-shadow: 0 0 0 5px rgba(111, 153, 123, 0.14);
+  background: #2f7d62;
+  box-shadow: 0 0 0 5px rgba(47, 125, 98, 0.14);
 }
 
 .row-actions {
@@ -1608,24 +1833,21 @@ button {
 
 .row-actions button {
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 8px 12px;
-  background: rgba(127, 165, 138, 0.14);
-  color: #466354;
-}
-
-.firmware-panel,
-.account-card {
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.firmware-panel .primary-button {
-  width: auto;
+  background: #e3efea;
+  color: #285244;
 }
 
 .account-card {
   justify-content: flex-start;
+  gap: 20px;
+}
+
+.avatar.big {
+  width: 72px;
+  height: 72px;
+  font-size: 28px;
 }
 
 .account-card h3,
@@ -1635,7 +1857,9 @@ button {
 
 @media (max-width: 1180px) {
   .metrics-grid,
-  .profile-grid {
+  .profile-grid,
+  .mini-cards,
+  .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1653,7 +1877,7 @@ button {
   }
 
   .login-brand {
-    min-height: 300px;
+    min-height: 280px;
     padding: 34px;
   }
 
@@ -1666,14 +1890,8 @@ button {
     height: auto;
   }
 
-  .user-card {
-    position: static;
-    margin-top: 22px;
-  }
-
   .topbar,
   .top-actions,
-  .firmware-panel,
   .account-card {
     align-items: stretch;
     flex-direction: column;
@@ -1686,8 +1904,9 @@ button {
 
   .metrics-grid,
   .profile-grid,
-  .device-live,
-  .retention-grid {
+  .mini-cards,
+  .live-grid,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 

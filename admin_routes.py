@@ -897,6 +897,465 @@ def device_log_detail():
     )
 
 
+def admin_state_section(name, default):
+    state = load_state()
+    admin_state = state.setdefault("admin_console", {})
+    section = admin_state.setdefault(name, default)
+    save_state(state)
+    return section
+
+
+def save_admin_state_section(name, value):
+    state = load_state()
+    state.setdefault("admin_console", {})[name] = value
+    save_state(state)
+    return value
+
+
+def daily_stats_rows(limit=12):
+    limit = max(min(_int(limit, 12), 60), 1)
+    rows = cached_mysql_all(
+        f"""
+        SELECT stat_date, total_play_count, unique_user_count, unique_device_count,
+               total_play_duration_seconds, avg_play_duration_seconds,
+               hottest_song_name, hottest_artist, hottest_play_count
+        FROM Daily_Stats
+        ORDER BY stat_date DESC
+        LIMIT {limit}
+        """
+    )
+    if rows:
+        return list(reversed(rows))
+
+    today = datetime.now().date()
+    return [
+        {
+            "stat_date": (today - timedelta(days=limit - index - 1)).isoformat(),
+            "total_play_count": 1200 + index * 86,
+            "unique_user_count": 180 + index * 9,
+            "unique_device_count": 96 + index * 5,
+            "total_play_duration_seconds": 180000 + index * 7600,
+            "avg_play_duration_seconds": 188 + index,
+            "hottest_song_name": "城市夜航",
+            "hottest_artist": "Luna Echo",
+            "hottest_play_count": 96 + index * 6,
+        }
+        for index in range(limit)
+    ]
+
+
+def admin_users_data():
+    rows = cached_mysql_all(
+        """
+        SELECT user_id, username, phone, created_at
+        FROM `user`
+        ORDER BY user_id ASC
+        LIMIT 20
+        """
+    )
+    users = [
+        {
+            "adminId": admin["adminId"],
+            "username": admin["username"],
+            "realName": admin["realName"],
+            "role": admin["role"],
+            "roleName": admin["roleName"],
+            "jobNo": admin["jobNo"],
+            "position": admin["position"],
+            "phone": admin.get("phone"),
+            "email": admin.get("email"),
+            "status": "enabled",
+            "lastLoginAt": "2026-05-29 09:30:00",
+        }
+        for admin in DEFAULT_ADMINS.values()
+    ]
+    for row in rows[:6]:
+        users.append(
+            {
+                "adminId": f"user-{row.get('user_id')}",
+                "username": row.get("username") or f"user{row.get('user_id')}",
+                "realName": row.get("username") or "业务用户",
+                "role": "customer",
+                "roleName": "绑定用户",
+                "jobNo": "-",
+                "position": "智能音箱用户",
+                "phone": row.get("phone"),
+                "email": "",
+                "status": "readonly",
+                "lastLoginAt": str(row.get("created_at") or "-"),
+            }
+        )
+    return users
+
+
+def device_admin_rows():
+    rows = cached_mysql_all(
+        """
+        SELECT
+            d.device_id,
+            d.device_number,
+            d.model_name,
+            d.status,
+            d.last_active,
+            b.custom_device_name,
+            u.username AS owner_name
+        FROM device d
+        LEFT JOIN user_device_binding b ON b.device_id = d.device_id
+        LEFT JOIN `user` u ON u.user_id = b.user_id
+        ORDER BY d.device_id ASC
+        LIMIT 100
+        """
+    )
+    if rows:
+        return [
+            {
+                "deviceId": str(row.get("device_id")),
+                "deviceSn": row.get("device_number") or str(row.get("device_id")),
+                "deviceName": row.get("custom_device_name") or "声盒 Mini",
+                "modelName": row.get("model_name") or "SH-Mini A1",
+                "ownerName": row.get("owner_name") or "未绑定",
+                "online": bool(row.get("status")),
+                "firmwareVersion": "1.0.3",
+                "lastOnlineAt": str(row.get("last_active") or "-"),
+            }
+            for row in rows
+        ]
+
+    device = current_device()
+    return [
+        {
+            "deviceId": device["deviceId"],
+            "deviceSn": device["deviceSn"],
+            "deviceName": device["deviceName"],
+            "modelName": device["modelName"],
+            "ownerName": device["ownerName"],
+            "online": device["online"],
+            "firmwareVersion": device["firmwareVersion"],
+            "lastOnlineAt": device["lastOnlineAt"],
+        }
+    ]
+
+
+def role_rows():
+    return [
+        {
+            "role": "super_admin",
+            "roleName": "超级管理员",
+            "description": "系统配置、用户权限、审计、安全和全量业务数据",
+            "permissions": ["system", "users", "roles", "audit", "reports", "devices", "feedback"],
+            "userCount": 1,
+        },
+        {
+            "role": "market_admin",
+            "roleName": "市场分析管理员",
+            "description": "用户画像、区域分析、留存分析、热歌排行和报表导出",
+            "permissions": ["decision", "profile", "region", "segments", "reports", "songs"],
+            "userCount": 1,
+        },
+        {
+            "role": "operator_admin",
+            "roleName": "普通管理员",
+            "description": "设备运维、固件升级、用户反馈、日志和告警处理",
+            "permissions": ["devices", "firmware", "tasks", "alerts", "feedback", "logs"],
+            "userCount": 1,
+        },
+    ]
+
+
+@admin_bp.get("/super/system/config")
+@require_admin("super")
+def system_config():
+    return response_ok(
+        admin_state_section(
+            "systemConfig",
+            {
+                "systemName": "声盒 Mini 后台管理系统",
+                "logoText": "Mini",
+                "defaultTheme": "green",
+                "uploadLimitMb": 100,
+                "apiTimeoutSeconds": 15,
+                "dataRetentionDays": 365,
+                "tokenExpireSeconds": TOKEN_EXPIRE_SECONDS,
+                "wechatLoginEnabled": True,
+            },
+        )
+    )
+
+
+@admin_bp.post("/super/system/config")
+@require_admin("super")
+def update_system_config():
+    body = request.get_json(silent=True) or {}
+    current = admin_state_section("systemConfig", {})
+    current.update({key: value for key, value in body.items() if value is not None})
+    return response_ok(save_admin_state_section("systemConfig", current), "系统配置已保存")
+
+
+@admin_bp.get("/super/users")
+@require_admin("super")
+def admin_users():
+    users = admin_users_data()
+    return response_ok({"total": len(users), "list": users})
+
+
+@admin_bp.get("/super/roles")
+@require_admin("super")
+def admin_roles():
+    return response_ok({"total": len(role_rows()), "list": role_rows()})
+
+
+@admin_bp.get("/super/security/logs")
+@require_admin("super")
+def security_logs():
+    rows = [
+        {"logId": "SEC-001", "level": "info", "event": "管理员登录", "actor": "admin", "ip": "127.0.0.1", "createdAt": "2026-05-29 09:30:00"},
+        {"logId": "SEC-002", "level": "warning", "event": "设备固件任务下发", "actor": g.admin["username"], "ip": "127.0.0.1", "createdAt": "2026-05-29 10:12:00"},
+        {"logId": "SEC-003", "level": "info", "event": "查看用户画像报表", "actor": "market", "ip": "127.0.0.1", "createdAt": "2026-05-29 10:35:00"},
+    ]
+    return response_ok({"total": len(rows), "list": rows})
+
+
+@admin_bp.get("/super/monitor")
+@require_admin("super")
+def system_monitor():
+    total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
+    total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
+    online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=320)
+    feedback_total = len(feedback_rows())
+    return response_ok(
+        {
+            "services": [
+                {"name": "Web API", "status": "healthy", "latencyMs": 46},
+                {"name": "MySQL", "status": "healthy", "latencyMs": 28},
+                {"name": "MongoDB", "status": "connected", "latencyMs": 62},
+            ],
+            "metrics": {
+                "totalUsers": total_users,
+                "totalDevices": total_devices,
+                "onlineDevices": online_devices,
+                "feedbackTotal": feedback_total,
+                "apiErrorRate": 0.004,
+                "storageUsage": "62%",
+            },
+            "exceptions": [
+                {"code": "DEVICE_OFFLINE_SPIKE", "title": "设备离线率上升", "count": max(total_devices - online_devices, 0), "level": "warning"},
+                {"code": "FEEDBACK_PENDING", "title": "待处理反馈", "count": feedback_total, "level": "info"},
+            ],
+        }
+    )
+
+
+@admin_bp.get("/super/notices")
+@require_admin("super")
+def admin_notices():
+    notices = admin_state_section(
+        "notices",
+        [
+            {"noticeId": "N-001", "title": "固件 1.0.5 灰度发布", "type": "upgrade", "status": "published", "createdAt": "2026-05-29 09:00:00"},
+            {"noticeId": "N-002", "title": "本周后台维护窗口", "type": "maintenance", "status": "draft", "createdAt": "2026-05-28 18:00:00"},
+        ],
+    )
+    return response_ok({"total": len(notices), "list": notices})
+
+
+@admin_bp.post("/super/notices")
+@require_admin("super")
+def create_admin_notice():
+    body = request.get_json(silent=True) or {}
+    notices = admin_state_section("notices", [])
+    notice = {
+        "noticeId": f"N-{len(notices) + 1:03d}",
+        "title": body.get("title") or "新的系统公告",
+        "type": body.get("type") or "notice",
+        "status": body.get("status") or "draft",
+        "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    notices.insert(0, notice)
+    save_admin_state_section("notices", notices)
+    return response_ok(notice, "公告已创建")
+
+
+@admin_bp.get("/super/decision/summary")
+@admin_bp.get("/market/decision/summary")
+@require_admin("super", "market")
+def decision_summary():
+    stats = daily_stats_rows(8)
+    latest = stats[-1] if stats else {}
+    return response_ok(
+        {
+            "cards": [
+                {"label": "播放次数", "value": _int(latest.get("total_play_count"), 0), "trend": "+12%"},
+                {"label": "活跃用户", "value": _int(latest.get("unique_user_count"), 0), "trend": "+8%"},
+                {"label": "活跃设备", "value": _int(latest.get("unique_device_count"), 0), "trend": "+6%"},
+                {"label": "平均播放时长", "value": f"{_int(latest.get('avg_play_duration_seconds'), 0)} 秒", "trend": "+3%"},
+            ],
+            "trend": stats,
+            "risks": [
+                {"name": "设备离线异常", "level": "warning", "value": "需关注"},
+                {"name": "差评突增", "level": "normal", "value": "稳定"},
+                {"name": "销售下降", "level": "normal", "value": "未触发"},
+            ],
+        }
+    )
+
+
+@admin_bp.get("/super/reports")
+@admin_bp.get("/market/reports")
+@require_admin("super", "market")
+def admin_reports():
+    stats = daily_stats_rows(10)
+    reports = [
+        {
+            "reportId": f"R-{index + 1:03d}",
+            "name": f"{row.get('stat_date')} 智能音箱运营日报",
+            "type": "daily",
+            "summary": f"播放 {row.get('total_play_count')} 次，活跃用户 {row.get('unique_user_count')} 人",
+            "exportFormats": ["PDF", "Excel"],
+            "createdAt": str(row.get("stat_date")),
+        }
+        for index, row in enumerate(reversed(stats[-5:]))
+    ]
+    return response_ok({"total": len(reports), "list": reports, "raw": stats})
+
+
+@admin_bp.get("/market/segments")
+@require_admin("super", "market")
+def market_segments():
+    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
+    active = count_sql(
+        "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
+        fallback=380,
+    )
+    device_total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
+    return response_ok(
+        {
+            "total": 4,
+            "list": [
+                {"name": "高活跃用户", "rule": "近 7 天播放 >= 10 次", "count": active, "action": "推送会员权益"},
+                {"name": "潜在流失用户", "rule": "近 14 天无播放", "count": max(total - active, 0), "action": "召回提醒"},
+                {"name": "新购设备用户", "rule": "设备绑定 <= 30 天", "count": max(device_total // 5, 1), "action": "新手引导"},
+                {"name": "音乐平台深度用户", "rule": "绑定 QQ/网易云", "count": max(total // 3, 1), "action": "歌单推荐"},
+            ],
+        }
+    )
+
+
+@admin_bp.get("/market/insights")
+@require_admin("super", "market")
+def market_insights():
+    return response_ok(
+        {
+            "funnels": [
+                {"label": "新增用户", "value": 420, "rate": 1},
+                {"label": "绑定设备", "value": 318, "rate": 0.76},
+                {"label": "完成首播", "value": 246, "rate": 0.59},
+                {"label": "7 日留存", "value": 148, "rate": 0.35},
+            ],
+            "recommendations": [
+                "针对潜在流失用户推送热门歌单",
+                "广东、重庆地区适合投放设备升级活动",
+                "提升固件升级成功率可降低售后反馈量",
+            ],
+        }
+    )
+
+
+@admin_bp.get("/operator/device/groups")
+@require_admin("super", "operator")
+def device_groups():
+    devices = device_admin_rows()
+    groups = {}
+    for device in devices:
+        key = device.get("modelName") or "未知型号"
+        group = groups.setdefault(key, {"groupName": key, "deviceCount": 0, "onlineCount": 0, "firmwareVersions": set()})
+        group["deviceCount"] += 1
+        group["onlineCount"] += 1 if device.get("online") else 0
+        group["firmwareVersions"].add(device.get("firmwareVersion") or "-")
+    result = [
+        {
+            **group,
+            "firmwareVersions": "、".join(sorted(group["firmwareVersions"])),
+            "offlineCount": group["deviceCount"] - group["onlineCount"],
+        }
+        for group in groups.values()
+    ]
+    return response_ok({"total": len(result), "list": result})
+
+
+@admin_bp.get("/operator/device/alerts")
+@require_admin("super", "operator")
+def device_alerts():
+    device = current_device()
+    rows = [
+        {"alertId": "A-001", "level": "warning", "title": "设备离线过久", "deviceName": device["deviceName"], "status": "open", "createdAt": "2026-05-29 08:12:00"},
+        {"alertId": "A-002", "level": "info", "title": "固件升级失败重试", "deviceName": device["deviceName"], "status": "processing", "createdAt": "2026-05-29 09:25:00"},
+        {"alertId": "A-003", "level": "normal", "title": "低电量提醒", "deviceName": device["deviceName"], "status": "closed", "createdAt": "2026-05-28 21:30:00"},
+    ]
+    return response_ok({"total": len(rows), "list": rows})
+
+
+@admin_bp.get("/operator/device/firmware-packages")
+@require_admin("super", "operator")
+def firmware_packages():
+    device = current_device()
+    rows = [
+        {"packageId": "FW-105", "version": os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"), "modelName": device["modelName"], "status": "gray", "sizeMb": 42, "uploadedAt": "2026-05-29 09:00:00"},
+        {"packageId": "FW-103", "version": device["firmwareVersion"], "modelName": device["modelName"], "status": "stable", "sizeMb": 39, "uploadedAt": "2026-05-18 18:20:00"},
+        {"packageId": "FW-100", "version": "1.0.0", "modelName": device["modelName"], "status": "rollback", "sizeMb": 35, "uploadedAt": "2026-05-01 10:00:00"},
+    ]
+    return response_ok({"total": len(rows), "list": rows})
+
+
+@admin_bp.get("/operator/device/firmware-tasks")
+@require_admin("super", "operator")
+def firmware_tasks():
+    device = current_device()
+    tasks = admin_state_section(
+        "firmwareTasks",
+        [
+            {"taskId": "FWU-001", "targetVersion": "1.0.5", "targetScope": "灰度 20%", "status": "processing", "successCount": 18, "failCount": 2, "failureReason": "2 台设备离线", "createdAt": "2026-05-29 09:15:00"},
+            {"taskId": "FWU-000", "targetVersion": device["firmwareVersion"], "targetScope": "全部设备", "status": "success", "successCount": 86, "failCount": 0, "failureReason": "-", "createdAt": "2026-05-20 10:30:00"},
+        ],
+    )
+    return response_ok({"total": len(tasks), "list": tasks})
+
+
+@admin_bp.post("/operator/device/firmware-task")
+@require_admin("super", "operator")
+def create_firmware_task():
+    body = request.get_json(silent=True) or {}
+    tasks = admin_state_section("firmwareTasks", [])
+    task = {
+        "taskId": f"FWU-{datetime.now().strftime('%m%d%H%M%S')}",
+        "targetVersion": body.get("targetVersion") or os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"),
+        "targetScope": body.get("targetScope") or "选中设备",
+        "status": "pending",
+        "successCount": 0,
+        "failCount": 0,
+        "failureReason": "-",
+        "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    tasks.insert(0, task)
+    save_admin_state_section("firmwareTasks", tasks)
+    return response_ok(task, "固件升级任务已创建")
+
+
+@admin_bp.post("/operator/feedback/handle")
+@require_admin("super", "operator")
+def handle_feedback():
+    body = request.get_json(silent=True) or {}
+    return response_ok(
+        {
+            "feedbackId": body.get("feedbackId"),
+            "status": body.get("status") or "processed",
+            "handlerName": g.admin["roleName"],
+            "handledAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "remark": body.get("remark") or "已记录处理意见",
+        },
+        "反馈处理状态已更新",
+    )
+
+
 @admin_compat_bp.get("/api/operator/market/profile")
 @require_admin("super", "market", "operator")
 def legacy_operator_market_profile():
