@@ -224,6 +224,27 @@ const trendAxis = computed(() => {
   return { niceMax, ticks }
 })
 
+// 用户价值环状图：普通用户 vs 高活跃用户 占比
+const valueDonut = computed(() => {
+  const normal = Number(state.value.normalUserCount || 0)
+  const high = Number(state.value.highActiveUserCount || 0)
+  const total = normal + high
+  const segments = [
+    { label: "普通用户", value: normal, color: "var(--accent-green)" },
+    { label: "高活跃用户", value: high, color: "var(--accent-orange)" },
+  ]
+  const circumference = 2 * Math.PI * 52
+  let offset = 0
+  const arcs = segments.map((seg) => {
+    const ratio = total ? seg.value / total : 0
+    const dash = ratio * circumference
+    const arc = { ...seg, ratio, dash, gap: circumference - dash, dashOffset: -offset }
+    offset += dash
+    return arc
+  })
+  return { total, segments: arcs, circumference }
+})
+
 function statusText(status) {
   return {
     enabled: "启用",
@@ -988,17 +1009,52 @@ onMounted(restoreSession)
         </article>
       </section>
 
-      <section v-if="state.active === 'value'" class="two-column">
-        <article class="panel hero-number">
-          <span>普通用户</span>
-          <strong>{{ formatNumber(state.value.normalUserCount || 0) }}</strong>
-          <p>适合基础推荐、设备使用引导和新功能教育。</p>
+      <section v-if="state.active === 'value'" class="value-layout">
+        <article class="panel donut-panel">
+          <div class="panel-head"><div><h3>用户价值构成</h3><p>普通用户与高活跃用户占比</p></div></div>
+          <div class="donut-body">
+            <div class="donut-chart">
+              <svg viewBox="0 0 120 120">
+                <circle class="donut-track" cx="60" cy="60" r="52" />
+                <circle
+                  v-for="seg in valueDonut.segments"
+                  :key="seg.label"
+                  class="donut-arc"
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  :stroke="seg.color"
+                  :stroke-dasharray="`${seg.dash} ${seg.gap}`"
+                  :stroke-dashoffset="seg.dashOffset"
+                />
+              </svg>
+              <div class="donut-center">
+                <small>用户总量</small>
+                <strong>{{ formatNumber(valueDonut.total) }}</strong>
+              </div>
+            </div>
+            <ul class="donut-legend">
+              <li v-for="seg in valueDonut.segments" :key="seg.label">
+                <span class="legend-dot" :style="{ background: seg.color }"></span>
+                <span class="legend-label">{{ seg.label }}</span>
+                <em>{{ formatNumber(seg.value) }}</em>
+                <b>{{ percent(seg.ratio) }}</b>
+              </li>
+            </ul>
+          </div>
         </article>
-        <article class="panel hero-number">
-          <span>高活跃用户</span>
-          <strong>{{ formatNumber(state.value.highActiveUserCount || 0) }}</strong>
-          <p>适合会员权益、歌单推荐和复购活动触达。</p>
-        </article>
+        <div class="two-column">
+          <article class="panel hero-number">
+            <span>普通用户</span>
+            <strong>{{ formatNumber(state.value.normalUserCount || 0) }}</strong>
+            <p>适合基础推荐、设备使用引导和新功能教育。</p>
+          </article>
+          <article class="panel hero-number">
+            <span>高活跃用户</span>
+            <strong>{{ formatNumber(state.value.highActiveUserCount || 0) }}</strong>
+            <p>适合会员权益、歌单推荐和复购活动触达。</p>
+          </article>
+        </div>
       </section>
 
       <section v-if="state.active === 'segments'" class="panel full">
@@ -2165,6 +2221,110 @@ button {
   color: var(--accent-green);
   font-size: clamp(52px, 9vw, 92px);
   font-weight: 300;
+}
+
+/* 用户价值环状图 */
+.value-layout {
+  display: grid;
+  gap: 24px;
+}
+
+.donut-body {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.donut-chart {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.donut-chart svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.donut-track {
+  fill: none;
+  stroke: var(--accent-green-light);
+  stroke-width: 14;
+}
+
+.donut-arc {
+  fill: none;
+  stroke-width: 14;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.donut-center small {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.donut-center strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 34px;
+  font-weight: 300;
+  color: var(--accent-green-deep);
+}
+
+.donut-legend {
+  flex: 1;
+  min-width: 240px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.donut-legend li {
+  display: grid;
+  grid-template-columns: 16px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.legend-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.legend-label {
+  font-weight: 500;
+}
+
+.donut-legend em {
+  color: var(--text-secondary);
+  font-style: normal;
+  font-size: 14px;
+}
+
+.donut-legend b {
+  min-width: 52px;
+  text-align: right;
+  font-weight: 500;
+  color: var(--accent-green-deep);
 }
 
 .data-table {
