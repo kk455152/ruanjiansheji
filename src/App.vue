@@ -245,6 +245,38 @@ const valueDonut = computed(() => {
   return { total, segments: arcs, circumference }
 })
 
+// 用户分群饼图：各运营人群的规模占比
+const segmentColors = ["#84a98c", "#f4a261", "#a4c3b2", "#cb997e", "#6f9a82", "#e9c46a"]
+const segmentPie = computed(() => {
+  const list = state.segments.list || []
+  const total = list.reduce((sum, item) => sum + Number(item.count || 0), 0)
+  let angle = -90 // 从正上方开始
+  const cx = 60
+  const cy = 60
+  const r = 54
+  const slices = list.map((item, index) => {
+    const ratio = total ? Number(item.count || 0) / total : 0
+    const sweep = ratio * 360
+    const start = angle
+    const end = angle + sweep
+    angle = end
+    const startRad = (start * Math.PI) / 180
+    const endRad = (end * Math.PI) / 180
+    const x1 = cx + r * Math.cos(startRad)
+    const y1 = cy + r * Math.sin(startRad)
+    const x2 = cx + r * Math.cos(endRad)
+    const y2 = cy + r * Math.sin(endRad)
+    const largeArc = sweep > 180 ? 1 : 0
+    // 单个切片占满整圆时画成完整圆，避免 path 起止点重合不渲染
+    const d =
+      ratio >= 0.999
+        ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
+        : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+    return { ...item, ratio, color: segmentColors[index % segmentColors.length], d }
+  })
+  return { total, slices }
+})
+
 function statusText(status) {
   return {
     enabled: "启用",
@@ -1057,13 +1089,40 @@ onMounted(restoreSession)
         </div>
       </section>
 
-      <section v-if="state.active === 'segments'" class="panel full">
-        <div class="panel-head"><div><h3>用户分群</h3><p>按活跃、留存、绑定与偏好建立运营人群</p></div><button class="ghost-button" @click="exportRows('segments.csv', state.segments.list)">导出</button></div>
-        <div class="data-table">
-          <div v-for="item in state.segments.list" :key="item.name" class="table-row">
-            <strong>{{ item.name }}</strong><span>{{ item.rule }} / {{ item.action }}</span><em>{{ formatNumber(item.count) }}</em>
+      <section v-if="state.active === 'segments'" class="value-layout">
+        <article class="panel">
+          <div class="panel-head"><div><h3>分群规模占比</h3><p>各运营人群在总量中的分布</p></div></div>
+          <div class="donut-body">
+            <div class="pie-chart">
+              <svg viewBox="0 0 120 120">
+                <path
+                  v-for="slice in segmentPie.slices"
+                  :key="slice.name"
+                  :d="slice.d"
+                  :fill="slice.color"
+                  stroke="rgba(255,255,255,0.85)"
+                  stroke-width="1"
+                />
+              </svg>
+            </div>
+            <ul class="donut-legend">
+              <li v-for="slice in segmentPie.slices" :key="`l-${slice.name}`">
+                <span class="legend-dot" :style="{ background: slice.color }"></span>
+                <span class="legend-label">{{ slice.name }}</span>
+                <em>{{ formatNumber(slice.count) }}</em>
+                <b>{{ percent(slice.ratio) }}</b>
+              </li>
+            </ul>
           </div>
-        </div>
+        </article>
+        <article class="panel full">
+          <div class="panel-head"><div><h3>用户分群</h3><p>按活跃、留存、绑定与偏好建立运营人群</p></div><button class="ghost-button" @click="exportRows('segments.csv', state.segments.list)">导出</button></div>
+          <div class="data-table">
+            <div v-for="item in state.segments.list" :key="item.name" class="table-row">
+              <strong>{{ item.name }}</strong><span>{{ item.rule }} / {{ item.action }}</span><em>{{ formatNumber(item.count) }}</em>
+            </div>
+          </div>
+        </article>
       </section>
 
       <section v-if="state.active === 'insights'" class="two-column">
@@ -2247,6 +2306,31 @@ button {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
+}
+
+.pie-chart {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 8px 18px rgba(132, 169, 140, 0.2));
+}
+
+.pie-chart svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pie-chart path {
+  transition: opacity 0.2s ease;
+}
+
+.pie-chart:hover path {
+  opacity: 0.85;
+}
+
+.pie-chart path:hover {
+  opacity: 1;
 }
 
 .donut-track {
