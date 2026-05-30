@@ -68,6 +68,7 @@ const state = reactive({
   firmware: null,
   firmwarePackages: { total: 0, list: [] },
   firmwareTasks: { total: 0, list: [] },
+  firmwareUpload: { open: false, options: [], selected: "", uploading: false },
   logs: { total: 0, list: [] },
   users: { total: 0, list: [] },
   roles: { total: 0, list: [], catalog: [] },
@@ -650,6 +651,43 @@ async function loadFirmware() {
 
 async function loadTasks() {
   state.firmwareTasks = await api("/api/admin/operator/device/firmware-tasks")
+}
+
+async function openFirmwareUpload() {
+  state.firmwareUpload = { open: true, options: [], selected: "", uploading: false }
+  try {
+    const data = await api("/api/admin/operator/device/firmware-upload-options")
+    state.firmwareUpload.options = data.list || []
+    const firstAvailable = state.firmwareUpload.options.find((item) => !item.uploaded)
+    state.firmwareUpload.selected = firstAvailable?.packageId || ""
+  } catch (error) {
+    ElMessage.error(error.message || "加载固件包列表失败")
+  }
+}
+
+function closeFirmwareUpload() {
+  state.firmwareUpload.open = false
+}
+
+async function confirmFirmwareUpload() {
+  if (!state.firmwareUpload.selected) {
+    ElMessage.warning("请选择要上传的固件包")
+    return
+  }
+  state.firmwareUpload.uploading = true
+  try {
+    await api("/api/admin/operator/device/firmware-upload", {
+      method: "POST",
+      body: { packageId: state.firmwareUpload.selected },
+    })
+    ElMessage.success("固件包上传成功")
+    state.firmwareUpload.open = false
+    await loadFirmware()
+  } catch (error) {
+    ElMessage.error(error.message || "上传失败")
+  } finally {
+    state.firmwareUpload.uploading = false
+  }
 }
 
 async function loadLogs() {
@@ -1333,7 +1371,12 @@ onMounted(restoreSession)
           </button>
         </article>
         <article class="panel">
-          <div class="panel-head"><div><h3>固件包</h3><p>稳定版、灰度版、回滚版本</p></div></div>
+          <div class="panel-head">
+            <div><h3>固件包</h3><p>稳定版、灰度版、回滚版本</p></div>
+            <button class="ghost-button compact" @click="openFirmwareUpload">
+              <i class="fa-solid fa-cloud-arrow-up"></i> 上传固件包
+            </button>
+          </div>
           <ul class="pill-list">
             <li v-for="item in state.firmwarePackages.list" :key="item.packageId" class="pill-row">
               <strong>{{ item.version }} · {{ item.modelName }}</strong>
@@ -1496,6 +1539,54 @@ onMounted(restoreSession)
             <button class="ghost-button compact" @click="closeRoleEditor">取消</button>
             <button class="primary-button compact" :disabled="state.roleEditor.saving" @click="saveRolePermissions">
               {{ state.roleEditor.saving ? "保存中..." : "保存权限" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="state.firmwareUpload.open" class="modal-mask" @click.self="closeFirmwareUpload">
+      <div class="modal-card">
+        <div class="panel-head">
+          <div>
+            <h3>上传固件包</h3>
+            <p>从系统预置的固件包中选择上传入库</p>
+          </div>
+          <button class="icon-close" @click="closeFirmwareUpload"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="fw-options">
+          <label
+            v-for="item in state.firmwareUpload.options"
+            :key="item.packageId"
+            :class="['fw-option', { checked: state.firmwareUpload.selected === item.packageId, disabled: item.uploaded }]"
+          >
+            <input
+              type="radio"
+              name="fw-pkg"
+              :value="item.packageId"
+              :disabled="item.uploaded"
+              v-model="state.firmwareUpload.selected"
+            />
+            <span class="fw-radio"><i class="fa-solid fa-circle-check"></i></span>
+            <span class="fw-meta">
+              <strong>{{ item.version }} · {{ item.modelName }}</strong>
+              <small>{{ item.releaseNote }}</small>
+              <span class="fw-sub">{{ statusText(item.channel) }} / {{ item.sizeMb }}MB / 校验 {{ item.checksum }}</span>
+            </span>
+            <span v-if="item.uploaded" class="fw-flag">已上传</span>
+          </label>
+          <p v-if="!state.firmwareUpload.options.length" class="muted">暂无可上传的固件包</p>
+        </div>
+        <div class="modal-foot">
+          <span class="muted"><i class="fa-solid fa-shield-halved"></i> 仅支持系统预置固件包</span>
+          <div class="modal-buttons">
+            <button class="ghost-button compact" @click="closeFirmwareUpload">取消</button>
+            <button
+              class="primary-button compact"
+              :disabled="state.firmwareUpload.uploading || !state.firmwareUpload.selected"
+              @click="confirmFirmwareUpload"
+            >
+              {{ state.firmwareUpload.uploading ? "上传中..." : "确认上传" }}
             </button>
           </div>
         </div>
@@ -2896,6 +2987,93 @@ button {
 .modal-buttons {
   display: flex;
   gap: 10px;
+}
+
+/* 固件包上传选项 */
+.fw-options {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 24px;
+}
+
+.fw-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(132, 169, 140, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fw-option:hover:not(.disabled) {
+  border-color: var(--accent-green);
+}
+
+.fw-option.checked {
+  background: var(--accent-green-light);
+  border-color: var(--accent-green);
+}
+
+.fw-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.fw-option input {
+  display: none;
+}
+
+.fw-radio {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--accent-green);
+  font-size: 18px;
+}
+
+.fw-radio i {
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+
+.fw-option.checked .fw-radio i {
+  opacity: 1;
+}
+
+.fw-meta {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-meta strong {
+  font-weight: 500;
+}
+
+.fw-meta small {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.fw-sub {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.fw-flag {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--accent-green-light);
+  color: var(--accent-green-deep);
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {

@@ -1375,7 +1375,64 @@ def firmware_packages():
         {"packageId": "FW-103", "version": device["firmwareVersion"], "modelName": device["modelName"], "status": "stable", "sizeMb": 39, "uploadedAt": "2026-05-18 18:20:00"},
         {"packageId": "FW-100", "version": "1.0.0", "modelName": device["modelName"], "status": "rollback", "sizeMb": 35, "uploadedAt": "2026-05-01 10:00:00"},
     ]
+    # 合并管理员后续「上传」入库的固件包
+    uploaded = admin_state_section("firmwarePackages", [])
+    existing_ids = {row["packageId"] for row in rows}
+    for pkg in uploaded:
+        if pkg.get("packageId") not in existing_ids:
+            rows.insert(0, pkg)
     return response_ok({"total": len(rows), "list": rows})
+
+
+# 固定生成的、允许上传入库的固件包候选（不接受任意文件，只能从此列表上传）
+def firmware_upload_catalog():
+    device = current_device()
+    model = device["modelName"]
+    return [
+        {"packageId": "FW-106", "version": "1.0.6", "modelName": model, "channel": "gray", "sizeMb": 44, "checksum": "a1b2c3d4", "releaseNote": "优化语音唤醒灵敏度"},
+        {"packageId": "FW-110", "version": "1.1.0", "modelName": model, "channel": "stable", "sizeMb": 47, "checksum": "e5f6a7b8", "releaseNote": "新增多设备组网与音效均衡"},
+        {"packageId": "FW-201", "version": "2.0.1-beta", "modelName": model, "channel": "gray", "sizeMb": 51, "checksum": "c9d0e1f2", "releaseNote": "实验版：本地大模型语音助手"},
+    ]
+
+
+@admin_bp.get("/operator/device/firmware-upload-options")
+@require_admin("super", "operator")
+def firmware_upload_options():
+    catalog = firmware_upload_catalog()
+    uploaded_ids = {pkg.get("packageId") for pkg in admin_state_section("firmwarePackages", [])}
+    options = [{**item, "uploaded": item["packageId"] in uploaded_ids} for item in catalog]
+    return response_ok({"total": len(options), "list": options})
+
+
+@admin_bp.post("/operator/device/firmware-upload")
+@require_admin("super", "operator")
+def upload_firmware_package():
+    body = request.get_json(silent=True) or {}
+    package_id = body.get("packageId")
+
+    catalog = {item["packageId"]: item for item in firmware_upload_catalog()}
+    if package_id not in catalog:
+        return response_error(400, "只能上传系统预置的固件包")
+
+    chosen = catalog[package_id]
+    uploaded = list(admin_state_section("firmwarePackages", []))
+    if any(pkg.get("packageId") == package_id for pkg in uploaded):
+        return response_error(409, f"固件包 {chosen['version']} 已上传，请勿重复上传")
+
+    package = {
+        "packageId": chosen["packageId"],
+        "version": chosen["version"],
+        "modelName": chosen["modelName"],
+        "status": chosen["channel"],
+        "sizeMb": chosen["sizeMb"],
+        "checksum": chosen["checksum"],
+        "releaseNote": chosen["releaseNote"],
+        "uploadedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "uploadedBy": g.admin["roleName"],
+    }
+    uploaded.insert(0, package)
+    save_admin_state_section("firmwarePackages", uploaded)
+    return response_ok(package, f"固件包 {chosen['version']} 上传成功")
 
 
 @admin_bp.get("/operator/device/firmware-tasks")
