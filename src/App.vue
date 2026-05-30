@@ -186,6 +186,44 @@ function barHeight(value, max, min = 16, scale = 160) {
   return `${Math.max(min, Math.round((Number(value || 0) / Math.max(max, 1)) * scale))}px`
 }
 
+// 把一个数向上取整到「好看」的刻度值（1/2/5 × 10^n）
+function niceNum(n) {
+  if (n <= 0) return 1
+  const exp = Math.floor(Math.log10(n))
+  const base = Math.pow(10, exp)
+  const frac = n / base
+  let nice
+  if (frac <= 1) nice = 1
+  else if (frac <= 2) nice = 2
+  else if (frac <= 5) nice = 5
+  else nice = 10
+  return nice * base
+}
+
+// 格式化 Y 轴刻度标签，大数转「万」
+function formatAxis(value) {
+  const n = Number(value || 0)
+  if (n >= 10000) return `${Number((n / 10000).toFixed(1))}万`
+  return n.toLocaleString("zh-CN")
+}
+
+// 趋势图 Y 轴单位（按当前查看的指标类型变化）
+const trendUnit = computed(
+  () => ({ user: "人", device: "台", sales: "元", retention: "%" }[state.trend.type] || "次"),
+)
+
+// 趋势图 Y 轴刻度：根据数据最大值生成好看的等距刻度
+const trendAxis = computed(() => {
+  const values = (state.trend.list || []).map((item) => Number(item.value || 0))
+  const rawMax = Math.max(1, ...values)
+  const step = niceNum(rawMax / 4)
+  const tickCount = Math.max(1, Math.ceil(rawMax / step))
+  const niceMax = step * tickCount
+  const ticks = []
+  for (let i = tickCount; i >= 0; i--) ticks.push(step * i)
+  return { niceMax, ticks }
+})
+
 function statusText(status) {
   return {
     enabled: "启用",
@@ -877,11 +915,35 @@ onMounted(restoreSession)
             <strong>{{ log.deviceName }}</strong><span>{{ log.content }}</span><em>{{ log.createdAt }}</em>
           </div>
         </div>
-        <div v-else class="bar-chart large">
-          <div v-for="item in state.trend.list" :key="item.date" class="bar-item">
-            <div class="bar" :style="{ height: barHeight(item.value, maxOf(state.trend.list), 20, 260) }"></div>
-            <span>{{ labelDate(item.date) }}</span>
-            <small>{{ item.value }}</small>
+        <div v-else class="chart-with-axis">
+          <p class="axis-unit">单位：{{ trendUnit }}</p>
+          <div class="chart-row">
+            <div class="y-ticks">
+              <span v-for="tick in trendAxis.ticks" :key="tick" class="y-tick">{{ formatAxis(tick) }}</span>
+            </div>
+            <div class="plot">
+              <div class="plot-area">
+                <span
+                  v-for="tick in trendAxis.ticks"
+                  :key="`g-${tick}`"
+                  class="gridline"
+                  :style="{ bottom: `${(tick / trendAxis.niceMax) * 100}%` }"
+                ></span>
+                <div v-for="item in state.trend.list" :key="item.date" class="bar-col">
+                  <div
+                    class="bar"
+                    :style="{ height: `${(Number(item.value || 0) / trendAxis.niceMax) * 100}%` }"
+                    :title="`${item.value} ${trendUnit}`"
+                  ></div>
+                </div>
+              </div>
+              <div class="x-labels">
+                <div v-for="item in state.trend.list" :key="`x-${item.date}`" class="x-label">
+                  <span>{{ labelDate(item.date) }}</span>
+                  <small>{{ item.value }}</small>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1801,6 +1863,128 @@ button {
 .bar-item small {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+/* 带坐标轴的趋势图 */
+.chart-with-axis {
+  display: block;
+}
+
+.axis-unit {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-green-deep);
+}
+
+.chart-row {
+  display: flex;
+  gap: 12px;
+}
+
+.y-ticks {
+  flex-shrink: 0;
+  width: 48px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.y-tick {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.y-tick:first-child {
+  transform: translateY(-50%);
+}
+
+.y-tick:last-child {
+  transform: translateY(50%);
+}
+
+.plot {
+  flex: 1;
+  min-width: 0;
+}
+
+.plot-area {
+  position: relative;
+  height: 300px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 10px;
+  border-left: 1px solid rgba(132, 169, 140, 0.35);
+  border-bottom: 1px solid rgba(132, 169, 140, 0.35);
+  padding: 0 4px;
+}
+
+.gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed rgba(132, 169, 140, 0.22);
+  pointer-events: none;
+}
+
+.bar-col {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 24px;
+  height: 100%;
+}
+
+.bar-col .bar {
+  width: min(34px, 82%);
+  min-height: 4px;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(180deg, var(--accent-green) 0%, rgba(132, 169, 140, 0.35) 100%);
+  transition: all 0.3s ease;
+}
+
+.bar-col .bar:hover {
+  transform: scaleY(1.02);
+  transform-origin: bottom;
+  background: linear-gradient(180deg, #a4c3b2 0%, var(--accent-green) 100%);
+  box-shadow: 0 10px 20px rgba(132, 169, 140, 0.25);
+}
+
+.x-labels {
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 0 4px;
+}
+
+.x-label {
+  flex: 1;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 24px;
+}
+
+.x-label span,
+.x-label small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.x-label small {
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .rank-list,
