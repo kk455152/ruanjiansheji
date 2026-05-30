@@ -277,6 +277,41 @@ const segmentPie = computed(() => {
   return { total, slices }
 })
 
+// 通用饼图切片生成：给定数据列表和标签字段，返回带 SVG path 的扇区
+function pieSlices(list, labelKey) {
+  const items = list || []
+  const total = items.reduce((sum, item) => sum + Number(item.count || 0), 0)
+  let angle = -90
+  const cx = 60
+  const cy = 60
+  const r = 54
+  return items.map((item, index) => {
+    const ratio = total ? Number(item.count || 0) / total : 0
+    const sweep = ratio * 360
+    const start = angle
+    const end = angle + sweep
+    angle = end
+    const a1 = (start * Math.PI) / 180
+    const a2 = (end * Math.PI) / 180
+    const x1 = cx + r * Math.cos(a1)
+    const y1 = cy + r * Math.sin(a1)
+    const x2 = cx + r * Math.cos(a2)
+    const y2 = cy + r * Math.sin(a2)
+    const largeArc = sweep > 180 ? 1 : 0
+    const d =
+      ratio >= 0.999
+        ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
+        : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+    return {
+      label: item[labelKey],
+      count: Number(item.count || 0),
+      ratio,
+      color: segmentColors[index % segmentColors.length],
+      d,
+    }
+  })
+}
+
 function statusText(status) {
   return {
     enabled: "启用",
@@ -1032,10 +1067,24 @@ onMounted(restoreSession)
           ['绑定软件', state.profile.service, 'serviceName'],
         ]" :key="title" class="panel">
           <div class="panel-head"><div><h3>{{ title }}</h3><p>饼图占比数据</p></div></div>
+          <div class="profile-pie">
+            <svg viewBox="0 0 120 120">
+              <path
+                v-for="slice in pieSlices(list, key)"
+                :key="slice.label"
+                :d="slice.d"
+                :fill="slice.color"
+                stroke="rgba(255,255,255,0.85)"
+                stroke-width="1"
+              />
+            </svg>
+          </div>
           <ul class="pill-list">
-            <li v-for="item in list" :key="item[key]" class="pill-row">
-              <strong>{{ item[key] }}</strong>
-              <span>{{ formatNumber(item.count) }}</span>
+            <li v-for="slice in pieSlices(list, key)" :key="slice.label" class="pill-row">
+              <span class="legend-dot" :style="{ background: slice.color }"></span>
+              <strong>{{ slice.label }}</strong>
+              <span>{{ formatNumber(slice.count) }}</span>
+              <b>{{ percent(slice.ratio) }}</b>
             </li>
           </ul>
         </article>
@@ -2331,6 +2380,45 @@ button {
 
 .pie-chart path:hover {
   opacity: 1;
+}
+
+/* 用户画像四宫格小饼图 */
+.profile-pie {
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 20px;
+  filter: drop-shadow(0 6px 14px rgba(132, 169, 140, 0.2));
+}
+
+.profile-pie svg {
+  width: 100%;
+  height: 100%;
+}
+
+.profile-pie path {
+  transition: opacity 0.2s ease;
+}
+
+.profile-pie:hover path {
+  opacity: 0.85;
+}
+
+.profile-pie path:hover {
+  opacity: 1;
+}
+
+.profile-grid .pill-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-grid .pill-row b {
+  min-width: 42px;
+  text-align: right;
+  font-weight: 500;
+  color: var(--accent-green-deep);
 }
 
 .donut-track {
