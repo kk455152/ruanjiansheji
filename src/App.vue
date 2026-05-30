@@ -10,30 +10,30 @@ const roleNames = {
 }
 
 const menus = [
-  { key: "overview", label: "数据总览", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
-  { key: "decision", label: "决策驾驶舱", section: "核心看板", roles: ["super_admin", "market_admin"] },
-  { key: "trend", label: "趋势分析", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
-  { key: "region", label: "区域热力图", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "profile", label: "用户画像", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "value", label: "用户价值", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "segments", label: "用户分群", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "insights", label: "营销洞察", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "songs", label: "热歌排行", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "reports", label: "决策报表", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "feedback", label: "用户反馈", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "devices", label: "设备管理", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "groups", label: "设备分组", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "alerts", label: "告警中心", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "firmware", label: "设备固件", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "tasks", label: "任务中心", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "logs", label: "设备日志", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "users", label: "用户管理", section: "系统管理", roles: ["super_admin"] },
-  { key: "roles", label: "角色权限", section: "系统管理", roles: ["super_admin"] },
-  { key: "system", label: "系统配置", section: "系统管理", roles: ["super_admin"] },
-  { key: "monitor", label: "系统监控", section: "系统管理", roles: ["super_admin"] },
-  { key: "notices", label: "系统公告", section: "系统管理", roles: ["super_admin"] },
-  { key: "audit", label: "审计日志", section: "系统管理", roles: ["super_admin"] },
-  { key: "account", label: "个人信息", section: "账户", roles: ["super_admin", "market_admin", "operator_admin"] },
+  { key: "overview", label: "数据总览", icon: "fa-chart-pie", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
+  { key: "decision", label: "决策驾驶舱", icon: "fa-gauge-high", section: "核心看板", roles: ["super_admin", "market_admin"] },
+  { key: "trend", label: "趋势分析", icon: "fa-arrow-trend-up", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
+  { key: "region", label: "区域热力图", icon: "fa-map-location-dot", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "profile", label: "用户画像", icon: "fa-user-tag", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "value", label: "用户价值", icon: "fa-star", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "segments", label: "用户分群", icon: "fa-users-rays", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "insights", label: "营销洞察", icon: "fa-lightbulb", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "songs", label: "热歌排行", icon: "fa-music", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "reports", label: "决策报表", icon: "fa-file-lines", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "feedback", label: "用户反馈", icon: "fa-comment-dots", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "devices", label: "设备管理", icon: "fa-sliders", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "groups", label: "设备分组", icon: "fa-layer-group", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "alerts", label: "告警中心", icon: "fa-triangle-exclamation", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "firmware", label: "设备固件", icon: "fa-microchip", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "tasks", label: "任务中心", icon: "fa-list-check", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "logs", label: "设备日志", icon: "fa-clipboard-list", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "users", label: "用户管理", icon: "fa-user-gear", section: "系统管理", roles: ["super_admin"] },
+  { key: "roles", label: "角色权限", icon: "fa-user-shield", section: "系统管理", roles: ["super_admin"] },
+  { key: "system", label: "系统配置", icon: "fa-gear", section: "系统管理", roles: ["super_admin"] },
+  { key: "monitor", label: "系统监控", icon: "fa-wave-square", section: "系统管理", roles: ["super_admin"] },
+  { key: "notices", label: "系统公告", icon: "fa-bullhorn", section: "系统管理", roles: ["super_admin"] },
+  { key: "audit", label: "审计日志", icon: "fa-shield-halved", section: "系统管理", roles: ["super_admin"] },
+  { key: "account", label: "个人信息", icon: "fa-circle-user", section: "账户", roles: ["super_admin", "market_admin", "operator_admin"] },
 ]
 
 const state = reactive({
@@ -105,10 +105,10 @@ const metricCards = computed(() => {
     const online = devices.filter((item) => item.online).length
     const pending = (state.feedback.list || []).filter((item) => item.status === "pending").length
     return [
-      { label: "设备总数", value: formatNumber(state.devices.total || devices.length), hint: `${online} 台在线`, tone: "green" },
-      { label: "在线率", value: percent(devices.length ? online / devices.length : 0), hint: "来自设备列表", tone: "blue" },
-      { label: "固件版本", value: state.firmware?.currentVersion || "-", hint: state.firmware?.needUpdate ? "可更新" : "已是最新", tone: "orange" },
-      { label: "待处理反馈", value: formatNumber(pending), hint: `共 ${state.feedback.total || 0} 条`, tone: "red" },
+      { label: "设备总数", value: formatNumber(state.devices.total || devices.length), hint: `${online} 台在线`, tone: "green", icon: "fa-speaker-deck" },
+      { label: "在线率", value: percent(devices.length ? online / devices.length : 0), hint: "来自设备列表", tone: "blue", icon: "fa-wifi" },
+      { label: "固件版本", value: state.firmware?.currentVersion || "-", hint: state.firmware?.needUpdate ? "可更新" : "已是最新", tone: "orange", icon: "fa-microchip" },
+      { label: "待处理反馈", value: formatNumber(pending), hint: `共 ${state.feedback.total || 0} 条`, tone: "red", icon: "fa-comment-dots" },
     ]
   }
 
@@ -116,20 +116,20 @@ const metricCards = computed(() => {
     const totalPlays = state.songs.reduce((sum, item) => sum + Number(item.playCount || 0), 0)
     const avgRetention = average(state.retention.map((item) => item.day7RetentionRate))
     return [
-      { label: "热歌播放", value: formatNumber(totalPlays), hint: `${state.songs.length} 首上榜歌曲`, tone: "green" },
-      { label: "高活用户", value: formatNumber(state.value.highActiveUserCount || 0), hint: "近周期活跃", tone: "blue" },
-      { label: "普通用户", value: formatNumber(state.value.normalUserCount || 0), hint: "用户价值分层", tone: "orange" },
-      { label: "7 日留存", value: percent(avgRetention), hint: "购买设备后持续使用", tone: "red" },
+      { label: "热歌播放", value: formatNumber(totalPlays), hint: `${state.songs.length} 首上榜歌曲`, tone: "green", icon: "fa-music" },
+      { label: "高活用户", value: formatNumber(state.value.highActiveUserCount || 0), hint: "近周期活跃", tone: "blue", icon: "fa-bolt" },
+      { label: "普通用户", value: formatNumber(state.value.normalUserCount || 0), hint: "用户价值分层", tone: "orange", icon: "fa-users" },
+      { label: "7 日留存", value: percent(avgRetention), hint: "购买设备后持续使用", tone: "red", icon: "fa-clock-rotate-left" },
     ]
   }
 
   const deviceTotal = state.overview.device?.deviceCount || 0
   const onlineRate = deviceTotal ? (state.overview.device?.onlineDeviceCount || 0) / deviceTotal : 0
   return [
-    { label: "总用户", value: formatNumber(state.overview.user?.userCount || 0), hint: `新增 ${formatNumber(state.overview.user?.newUserCount || 0)}`, tone: "green" },
-    { label: "设备数", value: formatNumber(deviceTotal), hint: `在线率 ${percent(onlineRate)}`, tone: "blue" },
-    { label: "销售额", value: money(state.overview.sales?.salesAmount || 0), hint: `${formatNumber(state.overview.sales?.orderCount || 0)} 笔订单`, tone: "orange" },
-    { label: "活跃度", value: percent(state.overview.activity?.activityRate || 0), hint: `${formatNumber(state.overview.activity?.activeUserCount || 0)} 活跃用户`, tone: "red" },
+    { label: "总用户", value: formatNumber(state.overview.user?.userCount || 0), hint: `新增 ${formatNumber(state.overview.user?.newUserCount || 0)}`, tone: "green", icon: "fa-users" },
+    { label: "设备数", value: formatNumber(deviceTotal), hint: `在线率 ${percent(onlineRate)}`, tone: "blue", icon: "fa-speaker-deck" },
+    { label: "销售额", value: money(state.overview.sales?.salesAmount || 0), hint: `${formatNumber(state.overview.sales?.orderCount || 0)} 笔订单`, tone: "orange", icon: "fa-wallet" },
+    { label: "活跃度", value: percent(state.overview.activity?.activityRate || 0), hint: `${formatNumber(state.overview.activity?.activeUserCount || 0)} 活跃用户`, tone: "red", icon: "fa-bolt" },
   ]
 })
 
@@ -691,7 +691,7 @@ onMounted(restoreSession)
 
   <main v-else-if="!isLoggedIn" class="login-shell">
     <section class="login-brand">
-      <div class="brand-mark">Mini</div>
+      <div class="brand-mark"><i class="fa-solid fa-leaf"></i></div>
       <p class="eyebrow">Smart Speaker Console</p>
       <h1>声盒 Mini</h1>
       <p>智能音箱设备、音乐运营、用户反馈与系统配置的统一后台。</p>
@@ -702,30 +702,38 @@ onMounted(restoreSession)
       <h2>登录后台</h2>
       <label class="field">
         <span>用户名</span>
-        <input v-model="state.loginForm.username" autocomplete="username" placeholder="admin / market / operator" />
+        <span class="field-input">
+          <i class="fa-solid fa-user"></i>
+          <input v-model="state.loginForm.username" autocomplete="username" placeholder="admin / market / operator" />
+        </span>
       </label>
       <label class="field">
         <span>密码</span>
-        <input v-model="state.loginForm.password" autocomplete="current-password" type="password" placeholder="请输入密码" />
+        <span class="field-input">
+          <i class="fa-solid fa-lock"></i>
+          <input v-model="state.loginForm.password" autocomplete="current-password" type="password" placeholder="请输入密码" />
+        </span>
       </label>
       <label class="check-row">
         <input v-model="state.loginForm.remember" type="checkbox" />
         <span>记住用户名</span>
       </label>
       <button class="primary-button" :disabled="state.loading" @click="handleLogin">
+        <i class="fa-solid fa-right-to-bracket"></i>
         {{ state.loading ? "登录中..." : "账号登录" }}
       </button>
       <button class="ghost-button wide" :disabled="state.loading" @click="handleWechatLogin">
+        <i class="fa-brands fa-weixin"></i>
         微信快捷登录
       </button>
-      <p class="api-note">API：{{ apiLabel }}</p>
+      <p class="api-note"><i class="fa-solid fa-link"></i> API：{{ apiLabel }}</p>
     </section>
   </main>
 
   <main v-else class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="logo">声</div>
+        <div class="logo"><i class="fa-solid fa-leaf"></i></div>
         <div>
           <strong>声盒 Mini</strong>
           <small>后台管理系统</small>
@@ -741,7 +749,8 @@ onMounted(restoreSession)
             :class="['nav-item', { active: state.active === item.key }]"
             @click="selectPage(item.key)"
           >
-            {{ item.label }}
+            <i :class="['fa-solid', item.icon]"></i>
+            <span>{{ item.label }}</span>
           </button>
         </section>
       </nav>
@@ -752,7 +761,7 @@ onMounted(restoreSession)
           <strong>{{ state.admin?.realName || state.admin?.username }}</strong>
           <small>{{ currentRoleName }}</small>
         </div>
-        <button @click="handleLogout">退出</button>
+        <button @click="handleLogout"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
       </div>
     </aside>
 
@@ -760,23 +769,25 @@ onMounted(restoreSession)
       <header class="topbar">
         <div>
           <p class="eyebrow">{{ currentRoleName }}</p>
-          <h1>{{ activeMenu.label }}</h1>
-          <p class="muted">最近同步：{{ state.lastUpdated || "等待刷新" }}</p>
+          <h1><i :class="['fa-solid', activeMenu.icon]"></i> {{ activeMenu.label }}</h1>
+          <p class="muted"><i class="fa-solid fa-clock-rotate-left"></i> 最近同步：{{ state.lastUpdated || "等待刷新" }}</p>
         </div>
         <div class="top-actions">
           <label class="search">
-            <span>搜索</span>
+            <i class="fa-solid fa-magnifying-glass"></i>
             <input v-model="state.keyword" placeholder="设备、反馈、用户..." />
           </label>
-          <button class="ghost-button" :disabled="state.loading" @click="loadPage()">刷新</button>
+          <button class="ghost-button" :disabled="state.loading" @click="loadPage()">
+            <i :class="['fa-solid fa-rotate', { spin: state.loading }]"></i> 刷新
+          </button>
         </div>
       </header>
 
       <section class="metrics-grid">
         <article v-for="card in metricCards" :key="card.label" :class="['metric-card', card.tone]">
-          <p>{{ card.label }}</p>
+          <p class="metric-title">{{ card.label }} <i :class="['fa-solid', card.icon]"></i></p>
           <strong>{{ card.value }}</strong>
-          <span>{{ card.hint }}</span>
+          <span class="metric-trend">{{ card.hint }}</span>
         </article>
       </section>
 
@@ -1179,6 +1190,25 @@ onMounted(restoreSession)
 </template>
 
 <style scoped>
+:global(:root) {
+  --bg-gradient: linear-gradient(135deg, #f4f7f6 0%, #d4e1da 100%);
+  --bg-glass: rgba(255, 255, 255, 0.65);
+  --bg-glass-2: rgba(255, 255, 255, 0.42);
+  --text-primary: #2c3e35;
+  --text-secondary: #7b8f84;
+  --text-muted: #a4c3b2;
+  --accent-green: #84a98c;
+  --accent-green-deep: #5f7d68;
+  --accent-green-light: rgba(132, 169, 140, 0.2);
+  --accent-orange: #f4a261;
+  --border-light: rgba(255, 255, 255, 0.6);
+  --shadow-soft: 0 12px 32px rgba(132, 169, 140, 0.14);
+  --shadow-inner: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+}
+
 :global(*) {
   box-sizing: border-box;
 }
@@ -1187,9 +1217,10 @@ onMounted(restoreSession)
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  color: #1f2a33;
-  background: #eef3f1;
-  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 button,
@@ -1217,10 +1248,12 @@ button {
 .panel,
 .metric-card,
 .user-card {
-  border: 1px solid rgba(195, 209, 203, 0.9);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 18px 50px rgba(44, 64, 56, 0.08);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-soft), var(--shadow-inner);
 }
 
 .login-shell {
@@ -1236,7 +1269,7 @@ button {
   padding: clamp(40px, 8vw, 96px);
   color: white;
   background:
-    linear-gradient(135deg, rgba(38, 78, 88, 0.92), rgba(36, 107, 88, 0.88)),
+    linear-gradient(135deg, rgba(95, 125, 104, 0.92), rgba(132, 169, 140, 0.82)),
     url("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=80") center/cover;
 }
 
@@ -1245,36 +1278,41 @@ button {
 .avatar {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
-  background: #2f7d62;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.22);
   color: white;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 500;
 }
 
 .login-brand h1 {
   margin: 0;
-  font-size: clamp(42px, 7vw, 82px);
+  font-size: clamp(42px, 7vw, 78px);
+  font-weight: 300;
   line-height: 1;
+  letter-spacing: 2px;
 }
 
 .login-brand p {
   max-width: 520px;
   margin: 0;
-  line-height: 1.8;
+  line-height: 1.9;
+  font-weight: 300;
 }
 
 .login-panel {
   align-self: center;
   width: min(440px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 34px;
+  padding: 40px;
 }
 
 .login-panel h2 {
   margin: 6px 0 28px;
   font-size: 30px;
+  font-weight: 500;
 }
 
 .field {
@@ -1293,17 +1331,35 @@ button {
 .detail-card small,
 .detail-card span,
 .pill-row span {
-  color: #64746e;
+  color: var(--text-secondary);
 }
 
-.field input,
+.field-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 99px;
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.7);
+  transition: box-shadow 0.3s ease;
+}
+
+.field-input:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-green-light);
+}
+
+.field-input i {
+  color: var(--text-muted);
+}
+
+.field-input input,
 .search input {
+  flex: 1;
   width: 100%;
-  border: 1px solid #cfdad5;
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: white;
-  color: #1f2a33;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
   outline: none;
 }
 
@@ -1327,16 +1383,27 @@ button {
 .primary-button,
 .ghost-button,
 .user-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 0;
-  border-radius: 8px;
-  padding: 11px 16px;
+  border-radius: 99px;
+  padding: 12px 20px;
+  transition: all 0.3s ease;
 }
 
 .primary-button {
   width: 100%;
-  background: #2f7d62;
+  background: var(--accent-green);
   color: white;
-  font-weight: 700;
+  font-weight: 500;
+  box-shadow: 0 8px 20px rgba(132, 169, 140, 0.35);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--accent-green-deep);
+  transform: translateY(-2px);
 }
 
 .primary-button:disabled {
@@ -1350,9 +1417,14 @@ button {
 }
 
 .ghost-button {
-  background: #e8efec;
-  color: #285244;
-  font-weight: 700;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-light);
+  color: var(--accent-green-deep);
+  font-weight: 500;
+}
+
+.ghost-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .ghost-button.wide {
@@ -1361,7 +1433,10 @@ button {
 }
 
 .api-note {
-  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 0;
   font-size: 13px;
 }
 
@@ -1375,14 +1450,32 @@ button {
   top: 0;
   height: 100vh;
   overflow: auto;
-  padding: 24px;
-  background: #17261f;
-  color: white;
+  padding: 36px 22px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border-light);
+  box-shadow: 10px 0 30px rgba(132, 169, 140, 0.05);
+  color: var(--text-primary);
 }
 
 .brand {
-  gap: 12px;
-  margin-bottom: 26px;
+  gap: 14px;
+  margin-bottom: 34px;
+  padding-left: 6px;
+}
+
+.brand .logo {
+  background: var(--accent-green-light);
+  color: var(--accent-green);
+}
+
+.brand strong {
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: 1px;
 }
 
 .brand small,
@@ -1391,93 +1484,152 @@ button {
   display: block;
 }
 
+.brand small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .nav-groups {
   display: grid;
   gap: 18px;
+  flex: 1;
 }
 
 .nav-groups p {
   margin: 0 0 8px;
-  color: #8db3a4;
+  padding-left: 12px;
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
+  letter-spacing: 0.5px;
 }
 
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   width: 100%;
   margin-bottom: 6px;
   border: 0;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  padding: 13px 16px;
   background: transparent;
-  color: #dce8e3;
+  color: var(--text-secondary);
   text-align: left;
+  font-size: 15px;
+  transition: all 0.3s ease;
 }
 
-.nav-item.active,
+.nav-item i {
+  width: 22px;
+  font-size: 16px;
+  text-align: center;
+}
+
 .nav-item:hover {
-  background: #2f7d62;
-  color: white;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: var(--accent-green-light);
+  color: var(--accent-green-deep);
+  font-weight: 500;
+  box-shadow: var(--shadow-inner);
 }
 
 .user-card {
-  gap: 10px;
+  gap: 12px;
   margin-top: 24px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.5);
+  border-color: var(--border-light);
+}
+
+.user-card .avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+  background: var(--accent-green);
 }
 
 .user-card button {
   margin-left: auto;
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--accent-green-deep);
 }
 
 .content {
   min-width: 0;
-  padding: 28px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .topbar {
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 22px;
+  margin-bottom: 0;
 }
 
 .topbar h1 {
-  margin: 4px 0;
-  font-size: clamp(28px, 4vw, 42px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 6px 0;
+  font-size: clamp(26px, 4vw, 34px);
+  font-weight: 500;
+}
+
+.topbar h1 i {
+  color: var(--accent-green);
+  font-size: 0.8em;
 }
 
 .eyebrow {
   margin: 0;
-  color: #2f7d62;
+  color: var(--accent-green);
   text-transform: uppercase;
-  letter-spacing: 0;
+  letter-spacing: 1px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .login-brand .eyebrow {
-  color: #bde9d7;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .muted {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   line-height: 1.7;
+  font-size: 13px;
 }
 
 .top-actions {
-  gap: 10px;
+  gap: 12px;
 }
 
 .search {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 260px;
+  min-width: 280px;
+  padding: 11px 20px;
+  border: 1px solid var(--border-light);
+  border-radius: 99px;
+  background: var(--bg-glass);
+  box-shadow: var(--shadow-soft);
+}
+
+.search i {
+  color: var(--text-secondary);
 }
 
 .metrics-grid,
@@ -1487,49 +1639,81 @@ button {
 .mini-cards,
 .form-grid {
   display: grid;
-  gap: 16px;
+  gap: 24px;
 }
 
 .metrics-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 18px;
+  margin-bottom: 0;
 }
 
 .metric-card {
-  min-height: 128px;
-  padding: 22px;
+  position: relative;
+  overflow: hidden;
+  min-height: 138px;
+  padding: 28px 24px;
+}
+
+.metric-card::before {
+  content: "";
+  position: absolute;
+  top: -24px;
+  right: -24px;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 70%);
+  border-radius: 50%;
 }
 
 .metric-card p,
 .metric-card strong,
 .metric-card span {
   margin: 0;
+  position: relative;
+}
+
+.metric-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: 15px;
 }
 
 .metric-card strong {
   display: block;
   margin: 16px 0 10px;
-  font-size: clamp(26px, 4vw, 40px);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 300;
   line-height: 1;
 }
 
+.metric-trend {
+  display: inline-block;
+  font-size: 13px;
+}
+
 .metric-card.green strong,
+.metric-card.green .metric-title i,
 .badge.normal {
-  color: #2f7d62;
+  color: var(--accent-green);
 }
 
 .metric-card.blue strong,
+.metric-card.blue .metric-title i,
 .badge.info {
-  color: #2563a5;
+  color: #5b8fb0;
 }
 
 .metric-card.orange strong,
+.metric-card.orange .metric-title i,
 .badge.warning {
-  color: #bf6b2c;
+  color: var(--accent-orange);
 }
 
-.metric-card.red strong {
-  color: #a74848;
+.metric-card.red strong,
+.metric-card.red .metric-title i {
+  color: #d98a73;
 }
 
 .dashboard-grid {
@@ -1550,7 +1734,7 @@ button {
 
 .panel {
   min-width: 0;
-  padding: 22px;
+  padding: 32px;
 }
 
 .panel.full {
@@ -1560,7 +1744,7 @@ button {
 .panel-head {
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
 }
 
 .panel-head h3,
@@ -1569,15 +1753,23 @@ button {
 }
 
 .panel-head h3 {
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.panel-head p {
+  margin-top: 4px;
+  font-size: 13px;
 }
 
 .bar-chart {
   display: flex;
   align-items: end;
-  justify-content: space-between;
+  justify-content: space-around;
   gap: 10px;
   min-height: 220px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.85);
 }
 
 .bar-chart.large {
@@ -1594,13 +1786,20 @@ button {
 
 .bar {
   width: min(34px, 82%);
-  border-radius: 8px 8px 4px 4px;
-  background: linear-gradient(180deg, #2f7d62, #7eb39d);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--accent-green) 0%, rgba(132, 169, 140, 0.35) 100%);
+  transition: all 0.3s ease;
+}
+
+.bar:hover {
+  transform: translateY(-5px);
+  background: linear-gradient(180deg, #a4c3b2 0%, var(--accent-green) 100%);
+  box-shadow: 0 10px 20px rgba(132, 169, 140, 0.25);
 }
 
 .bar-item span,
 .bar-item small {
-  color: #64746e;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -1618,9 +1817,18 @@ button {
 .table-row,
 .mini-cards div,
 .live-grid div {
-  border: 1px solid #d8e2de;
-  border-radius: 8px;
-  background: #f9fbfa;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.42);
+  transition: all 0.2s ease;
+}
+
+.rank-list li:hover,
+.table-row:hover,
+.mini-cards div:hover,
+.live-grid div:hover {
+  background: rgba(255, 255, 255, 0.78);
+  transform: translateX(2px);
 }
 
 .rank-list li {
@@ -1628,7 +1836,7 @@ button {
   grid-template-columns: 34px 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 14px;
 }
 
 .rank-list span {
@@ -1636,10 +1844,26 @@ button {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
-  background: #e2f0eb;
-  color: #2f7d62;
-  font-weight: 800;
+  border-radius: 50%;
+  background: #eaefea;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rank-list li:nth-child(1) span {
+  background: var(--accent-orange);
+  color: white;
+}
+
+.rank-list li:nth-child(2) span {
+  background: var(--accent-green);
+  color: white;
+}
+
+.rank-list li:nth-child(3) span {
+  background: var(--text-muted);
+  color: white;
 }
 
 .rank-list strong,
@@ -1647,12 +1871,13 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .rank-list em,
 .table-row em,
 .mini-cards em {
-  color: #bf6b2c;
+  color: var(--accent-orange);
   font-style: normal;
 }
 
@@ -1671,7 +1896,7 @@ button {
 .live-grid small,
 .mini-cards span {
   display: block;
-  color: #64746e;
+  color: var(--text-secondary);
 }
 
 .live-grid strong,
@@ -1679,6 +1904,8 @@ button {
   display: block;
   margin: 10px 0;
   font-size: 26px;
+  font-weight: 300;
+  color: var(--accent-green-deep);
 }
 
 .mini-cards {
@@ -1687,7 +1914,7 @@ button {
 
 .heat-list {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .heat-row {
@@ -1702,32 +1929,42 @@ button {
   font-size: 14px;
 }
 
+.heat-row strong {
+  font-weight: 500;
+}
+
 .heat-row div {
   height: 12px;
   overflow: hidden;
-  border-radius: 8px;
-  background: #e7efeb;
+  border-radius: 99px;
+  background: var(--accent-green-light);
 }
 
 .heat-row i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2f7d62, #d39254);
+  background: linear-gradient(90deg, var(--accent-green), var(--accent-orange));
 }
 
 .pill-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 14px;
-  padding: 13px;
+  padding: 14px 16px;
+}
+
+.pill-row strong {
+  font-weight: 500;
 }
 
 .badge {
-  border-radius: 8px;
-  padding: 4px 8px;
-  background: #edf3f1;
-  font-weight: 800;
+  border-radius: 99px;
+  padding: 4px 12px;
+  background: var(--accent-green-light);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .hero-number {
@@ -1735,13 +1972,13 @@ button {
 }
 
 .hero-number span {
-  color: #64746e;
+  color: var(--text-secondary);
 }
 
 .hero-number strong {
   display: block;
   margin: 28px 0 18px;
-  color: #2f7d62;
+  color: var(--accent-green);
   font-size: clamp(52px, 9vw, 92px);
   font-weight: 300;
 }
@@ -1756,7 +1993,7 @@ button {
   grid-template-columns: minmax(100px, 0.28fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
-  padding: 13px 15px;
+  padding: 15px 18px;
 }
 
 .table-row:not(.device-row) {
@@ -1767,20 +2004,21 @@ button {
   display: flex;
   gap: 6px;
   padding: 5px;
-  border-radius: 8px;
-  background: #edf3f1;
+  border-radius: 99px;
+  background: var(--accent-green-light);
 }
 
 .segmented button {
   border: 0;
-  border-radius: 8px;
-  padding: 8px 13px;
+  border-radius: 99px;
+  padding: 8px 16px;
   background: transparent;
-  color: #466056;
+  color: var(--accent-green-deep);
+  transition: all 0.3s ease;
 }
 
 .segmented button.active {
-  background: #2f7d62;
+  background: var(--accent-green);
   color: white;
 }
 
@@ -1818,12 +2056,12 @@ button {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #aebbb6;
+  background: var(--text-muted);
 }
 
 .dot.online {
-  background: #2f7d62;
-  box-shadow: 0 0 0 5px rgba(47, 125, 98, 0.14);
+  background: var(--accent-green);
+  box-shadow: 0 0 0 5px var(--accent-green-light);
 }
 
 .row-actions {
@@ -1833,26 +2071,50 @@ button {
 
 .row-actions button {
   border: 0;
-  border-radius: 8px;
-  padding: 8px 12px;
-  background: #e3efea;
-  color: #285244;
+  border-radius: 99px;
+  padding: 8px 14px;
+  background: var(--accent-green-light);
+  color: var(--accent-green-deep);
+  transition: all 0.2s ease;
+}
+
+.row-actions button:hover {
+  background: var(--accent-green);
+  color: white;
 }
 
 .account-card {
   justify-content: flex-start;
-  gap: 20px;
+  gap: 24px;
 }
 
 .avatar.big {
-  width: 72px;
-  height: 72px;
-  font-size: 28px;
+  width: 80px;
+  height: 80px;
+  font-size: 30px;
+  border-radius: 26px;
+  background: var(--accent-green);
 }
 
 .account-card h3,
 .account-card p {
   margin: 4px 0;
+}
+
+.boot-card {
+  padding: 28px 40px;
+  font-weight: 500;
+  color: var(--accent-green-deep);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fa-rotate.spin {
+  animation: spin 0.8s linear infinite;
 }
 
 @media (max-width: 1180px) {
