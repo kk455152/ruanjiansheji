@@ -70,7 +70,8 @@ const state = reactive({
   firmwareTasks: { total: 0, list: [] },
   logs: { total: 0, list: [] },
   users: { total: 0, list: [] },
-  roles: { total: 0, list: [] },
+  roles: { total: 0, list: [], catalog: [] },
+  roleEditor: { open: false, role: "", roleName: "", selected: [], saving: false },
   settings: {},
   monitor: { services: [], metrics: {}, exceptions: [] },
   notices: { total: 0, list: [] },
@@ -661,6 +662,48 @@ async function loadUsers() {
 
 async function loadRoles() {
   state.roles = await api("/api/admin/super/roles")
+}
+
+function openRoleEditor(role) {
+  state.roleEditor = {
+    open: true,
+    role: role.role,
+    roleName: role.roleName,
+    selected: [...(role.permissions || [])],
+    saving: false,
+  }
+}
+
+function closeRoleEditor() {
+  state.roleEditor.open = false
+}
+
+function toggleRolePermission(key) {
+  const selected = state.roleEditor.selected
+  const index = selected.indexOf(key)
+  if (index >= 0) selected.splice(index, 1)
+  else selected.push(key)
+}
+
+async function saveRolePermissions() {
+  state.roleEditor.saving = true
+  try {
+    const data = await api("/api/admin/super/roles/permissions", {
+      method: "POST",
+      body: { role: state.roleEditor.role, permissions: state.roleEditor.selected },
+    })
+    if (data?.list) state.roles.list = data.list
+    ElMessage.success("角色权限已更新")
+    state.roleEditor.open = false
+  } catch (error) {
+    ElMessage.error(error.message || "保存失败")
+  } finally {
+    state.roleEditor.saving = false
+  }
+}
+
+function permissionLabel(key) {
+  return state.roles.catalog?.find((item) => item.key === key)?.label || key
 }
 
 async function loadSettings() {
@@ -1345,10 +1388,20 @@ onMounted(restoreSession)
       <section v-if="state.active === 'roles'" class="panel full">
         <div class="panel-head"><div><h3>角色权限矩阵</h3><p>创建角色、修改权限、授权与撤权的基础视图</p></div></div>
         <div class="data-table">
-          <div v-for="role in state.roles.list" :key="role.role" class="table-row">
-            <strong>{{ role.roleName }}</strong>
-            <span>{{ role.description }} / {{ role.permissions.join("、") }}</span>
-            <em>{{ role.userCount }} 人</em>
+          <div v-for="role in state.roles.list" :key="role.role" class="role-row">
+            <div class="role-info">
+              <strong>{{ role.roleName }}</strong>
+              <span>{{ role.description }}</span>
+              <div class="perm-tags">
+                <span v-for="key in role.permissions" :key="key" class="perm-tag">{{ permissionLabel(key) }}</span>
+              </div>
+            </div>
+            <div class="role-actions">
+              <em>{{ role.userCount }} 人</em>
+              <button class="ghost-button compact" @click="openRoleEditor(role)">
+                <i class="fa-solid fa-user-pen"></i> 编辑权限
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -1412,6 +1465,42 @@ onMounted(restoreSession)
         </div>
       </section>
     </section>
+
+    <div v-if="state.roleEditor.open" class="modal-mask" @click.self="closeRoleEditor">
+      <div class="modal-card">
+        <div class="panel-head">
+          <div>
+            <h3>编辑权限 · {{ state.roleEditor.roleName }}</h3>
+            <p>勾选该角色可访问的后台功能模块</p>
+          </div>
+          <button class="icon-close" @click="closeRoleEditor"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="perm-grid">
+          <label
+            v-for="item in state.roles.catalog"
+            :key="item.key"
+            :class="['perm-option', { checked: state.roleEditor.selected.includes(item.key) }]"
+          >
+            <input
+              type="checkbox"
+              :checked="state.roleEditor.selected.includes(item.key)"
+              @change="toggleRolePermission(item.key)"
+            />
+            <span class="check-box"><i class="fa-solid fa-check"></i></span>
+            <span>{{ item.label }}</span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <span class="muted">已选 {{ state.roleEditor.selected.length }} / {{ state.roles.catalog.length }} 项</span>
+          <div class="modal-buttons">
+            <button class="ghost-button compact" @click="closeRoleEditor">取消</button>
+            <button class="primary-button compact" :disabled="state.roleEditor.saving" @click="saveRolePermissions">
+              {{ state.roleEditor.saving ? "保存中..." : "保存权限" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -2631,6 +2720,182 @@ button {
 
 .fa-rotate.spin {
   animation: spin 0.8s linear infinite;
+}
+
+/* 角色权限行 */
+.role-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.42);
+  transition: all 0.2s ease;
+}
+
+.role-row:hover {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.role-info {
+  min-width: 0;
+}
+
+.role-info strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.role-info > span {
+  display: block;
+  margin: 4px 0 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.perm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.perm-tag {
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--accent-green-light);
+  color: var(--accent-green-deep);
+  font-size: 12px;
+}
+
+.role-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.role-actions em {
+  color: var(--accent-orange);
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* 权限编辑弹窗 */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(44, 62, 53, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.modal-card {
+  width: min(640px, 100%);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 24px 60px rgba(44, 64, 56, 0.22);
+}
+
+.icon-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(132, 169, 140, 0.14);
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.icon-close:hover {
+  background: var(--accent-green-light);
+  color: var(--accent-green-deep);
+}
+
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 8px 0 24px;
+}
+
+.perm-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(132, 169, 140, 0.25);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.perm-option:hover {
+  border-color: var(--accent-green);
+}
+
+.perm-option.checked {
+  background: var(--accent-green-light);
+  border-color: var(--accent-green);
+  color: var(--accent-green-deep);
+  font-weight: 500;
+}
+
+.perm-option input {
+  display: none;
+}
+
+.check-box {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 1px solid var(--accent-green);
+  border-radius: 6px;
+  background: white;
+  color: white;
+  font-size: 11px;
+}
+
+.perm-option.checked .check-box {
+  background: var(--accent-green);
+}
+
+.check-box i {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.perm-option.checked .check-box i {
+  opacity: 1;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 @media (max-width: 1180px) {

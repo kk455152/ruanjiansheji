@@ -1062,6 +1062,48 @@ def role_rows():
     ]
 
 
+# 后台所有可授权的功能模块（key 与前端菜单 key 一一对应）
+PERMISSION_CATALOG = {
+    "overview": "数据总览",
+    "decision": "决策驾驶舱",
+    "trend": "趋势分析",
+    "region": "区域热力图",
+    "profile": "用户画像",
+    "value": "用户价值",
+    "segments": "用户分群",
+    "insights": "营销洞察",
+    "songs": "热歌排行",
+    "reports": "决策报表",
+    "feedback": "用户反馈",
+    "devices": "设备管理",
+    "groups": "设备分组",
+    "alerts": "告警中心",
+    "firmware": "设备固件",
+    "tasks": "任务中心",
+    "logs": "设备日志",
+    "users": "用户管理",
+    "roles": "角色权限",
+    "system": "系统配置",
+    "monitor": "系统监控",
+    "notices": "系统公告",
+    "audit": "审计日志",
+    "account": "个人信息",
+}
+
+
+def merged_role_rows():
+    """基础角色 + 已保存的权限覆盖。"""
+    overrides = admin_state_section("rolePermissions", {})
+    rows = []
+    for base in role_rows():
+        row = dict(base)
+        saved = overrides.get(base["role"])
+        if isinstance(saved, list):
+            row["permissions"] = [p for p in saved if p in PERMISSION_CATALOG]
+        rows.append(row)
+    return rows
+
+
 @admin_bp.get("/super/system/config")
 @require_admin("super")
 def system_config():
@@ -1101,7 +1143,37 @@ def admin_users():
 @admin_bp.get("/super/roles")
 @require_admin("super")
 def admin_roles():
-    return response_ok({"total": len(role_rows()), "list": role_rows()})
+    rows = merged_role_rows()
+    catalog = [{"key": key, "label": label} for key, label in PERMISSION_CATALOG.items()]
+    return response_ok({"total": len(rows), "list": rows, "catalog": catalog})
+
+
+@admin_bp.post("/super/roles/permissions")
+@require_admin("super")
+def update_role_permissions():
+    body = request.get_json(silent=True) or {}
+    role = body.get("role")
+    permissions = body.get("permissions")
+
+    valid_roles = {row["role"] for row in role_rows()}
+    if role not in valid_roles:
+        return response_error(400, "无效的角色")
+    if not isinstance(permissions, list):
+        return response_error(400, "权限格式不正确")
+
+    invalid = [p for p in permissions if p not in PERMISSION_CATALOG]
+    if invalid:
+        return response_error(400, f"包含未知权限：{'、'.join(invalid)}")
+
+    # 去重并按目录顺序归一化
+    cleaned = [key for key in PERMISSION_CATALOG if key in set(permissions)]
+
+    overrides = dict(admin_state_section("rolePermissions", {}))
+    overrides[role] = cleaned
+    save_admin_state_section("rolePermissions", overrides)
+
+    rows = merged_role_rows()
+    return response_ok({"list": rows}, "角色权限已更新")
 
 
 @admin_bp.get("/super/security/logs")
