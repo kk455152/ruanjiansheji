@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import random
 import secrets
 import threading
 from datetime import datetime, timedelta
@@ -379,57 +380,73 @@ def feedback_rows():
             })
         return result
 
-    return [
-        {
-            "feedbackId": "FB202501310001",
-            "userId": 10086,
-            "nickname": "张三",
-            "avatar": "https://example.com/avatar/10086.png",
-            "phone": "138****8888",
-            "feedbackType": "bug",
-            "feedbackTypeText": "问题反馈",
-            "content": "登录时偶尔提示网络异常，但网络是正常的。",
-            "images": [
-                "https://example.com/feedback/FB202501310001_1.png",
-                "https://example.com/feedback/FB202501310001_2.png",
-            ],
-            "contact": "13888888888",
-            "status": "pending",
-            "statusText": "待处理",
-            "priority": "normal",
-            "priorityText": "普通",
-            "rating": 4,
-            "ratingText": "4星",
-            "handlerId": None,
-            "handlerName": None,
-            "replyContent": None,
-            "handledAt": None,
-            "createdAt": "2025-01-31 10:20:30",
-        },
-        {
-            "feedbackId": "FB202501310002",
-            "userId": 10087,
-            "nickname": "李雷",
-            "avatar": "https://example.com/avatar/10087.png",
-            "phone": "139****6666",
-            "feedbackType": "suggestion",
-            "feedbackTypeText": "意见建议",
-            "content": "希望数据分析页面增加更多图表。",
+    return _fallback_feedback_rows()
+
+
+_FEEDBACK_SEEDS = [
+    ("张三", 10086, "138****8888", "bug", "问题反馈",
+     "登录时偶尔提示网络异常，但网络是正常的。", "pending", "待处理", "normal", "普通", 4),
+    ("李雷", 10087, "139****6666", "suggestion", "意见建议",
+     "希望数据分析页面增加更多图表。", "processing", "处理中", "high", "高", 5),
+    ("韩梅梅", 10088, "137****1234", "suggestion", "意见建议",
+     "音箱能不能支持自定义唤醒词？现在的唤醒词太长了。", "pending", "待处理", "normal", "普通", 4),
+    ("王芳", 10089, "135****5678", "bug", "问题反馈",
+     "升级到最新固件后，蓝牙连接经常自动断开。", "pending", "待处理", "high", "高", 2),
+    ("赵磊", 10090, "136****4321", "suggestion", "意见建议",
+     "建议增加儿童模式，能限制播放内容和使用时长。", "processing", "处理中", "normal", "普通", 5),
+    ("陈静", 10091, "133****8765", "praise", "表扬建议",
+     "音质很棒，语音识别也很准，整体体验非常满意！", "processed", "已处理", "low", "低", 5),
+    ("刘洋", 10092, "188****2468", "bug", "问题反馈",
+     "多设备组网后，客厅和卧室的音箱播放不同步，有回声。", "pending", "待处理", "high", "高", 3),
+    ("孙悦", 10093, "189****1357", "suggestion", "意见建议",
+     "希望 App 能查看历史播放记录，方便找回喜欢的歌。", "pending", "待处理", "normal", "普通", 4),
+    ("周杰", 10094, "150****9090", "bug", "问题反馈",
+     "闹钟设置后偶尔不响，错过了好几次上班时间。", "processing", "处理中", "high", "高", 2),
+    ("吴敏", 10095, "151****3030", "suggestion", "意见建议",
+     "能不能接入更多音乐平台？现在曲库里有些歌找不到。", "pending", "待处理", "normal", "普通", 4),
+    ("郑爽", 10096, "152****6060", "praise", "表扬建议",
+     "客服响应很快，上次反馈的问题第二天就修复了，点赞。", "processed", "已处理", "low", "低", 5),
+    ("冯刚", 10097, "153****7070", "bug", "问题反馈",
+     "语音助手有时会无故被触发，半夜突然说话吓人一跳。", "pending", "待处理", "high", "高", 2),
+]
+
+
+def _fallback_feedback_rows():
+    seeds = list(_FEEDBACK_SEEDS)
+    # 没有真实数据时，每次刷新随机抽取并打乱顺序，使刷新可见地更新反馈列表
+    random.shuffle(seeds)
+    count = random.randint(5, len(seeds))
+    seeds = seeds[:count]
+    rows = []
+    base = datetime.now()
+    for index, (nickname, user_id, phone, ftype, ftype_text, content,
+                status, status_text, priority, priority_text, rating) in enumerate(seeds):
+        created = base - timedelta(hours=index * 6 + random.randint(0, 5),
+                                   minutes=random.randint(0, 59))
+        rows.append({
+            "feedbackId": f"FB{created.strftime('%Y%m%d')}{user_id}{index:02d}",
+            "userId": user_id,
+            "nickname": nickname,
+            "avatar": f"https://example.com/avatar/{user_id}.png",
+            "phone": phone,
+            "feedbackType": ftype,
+            "feedbackTypeText": ftype_text,
+            "content": content,
             "images": [],
-            "contact": "13966666666",
-            "status": "processing",
-            "statusText": "处理中",
-            "priority": "high",
-            "priorityText": "高",
-            "rating": 5,
-            "ratingText": "5星",
-            "handlerId": 3,
-            "handlerName": "普通管理员",
-            "replyContent": None,
-            "handledAt": None,
-            "createdAt": "2025-02-01 14:08:10",
-        },
-    ]
+            "contact": phone.replace("****", "0000"),
+            "status": status,
+            "statusText": status_text,
+            "priority": priority,
+            "priorityText": priority_text,
+            "rating": rating,
+            "ratingText": f"{rating}星",
+            "handlerId": 3 if status != "pending" else None,
+            "handlerName": "普通管理员" if status != "pending" else None,
+            "replyContent": "已记录，将在下个版本优化" if status == "processed" else None,
+            "handledAt": created.strftime("%Y-%m-%d %H:%M:%S") if status != "pending" else None,
+            "createdAt": created.strftime("%Y-%m-%d %H:%M:%S"),
+        })
+    return rows
 
 
 def feedback_detail(feedback_id):

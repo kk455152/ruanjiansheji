@@ -61,6 +61,7 @@ const state = reactive({
   segments: { total: 0, list: [] },
   reports: { total: 0, list: [], raw: [] },
   feedback: { total: 0, list: [] },
+  feedbackLoading: false,
   devices: { total: 0, list: [] },
   groups: { total: 0, list: [] },
   alerts: { total: 0, list: [] },
@@ -617,6 +618,19 @@ async function loadReports() {
 async function loadFeedback() {
   const prefix = currentRole.value === "operator_admin" ? "/api/admin/operator" : "/api/admin/super"
   state.feedback = await api(`${prefix}/feedback/list`, { params: { page: 1, pageSize: 20 } })
+}
+
+async function refreshFeedback() {
+  if (state.feedbackLoading) return
+  state.feedbackLoading = true
+  try {
+    await loadFeedback()
+    ElMessage.success(`已刷新，共 ${state.feedback.total || 0} 条反馈`)
+  } catch (error) {
+    ElMessage.error("刷新失败，请稍后重试")
+  } finally {
+    state.feedbackLoading = false
+  }
 }
 
 async function loadDevices() {
@@ -1296,7 +1310,13 @@ onMounted(restoreSession)
 
       <section v-if="state.active === 'feedback'" class="two-column detail-layout">
         <article class="panel">
-          <div class="panel-head"><div><h3>用户反馈</h3><p>共 {{ state.feedback.total }} 条</p></div></div>
+          <div class="panel-head">
+            <div><h3>用户反馈</h3><p>共 {{ state.feedback.total }} 条</p></div>
+            <button class="ghost-button compact" :disabled="state.feedbackLoading" @click="refreshFeedback">
+              <i :class="['fa-solid fa-rotate-right', { spinning: state.feedbackLoading }]"></i>
+              {{ state.feedbackLoading ? '刷新中' : '刷新' }}
+            </button>
+          </div>
           <div class="data-table">
             <div v-for="item in filteredFeedback" :key="item.feedbackId" class="table-row" @click="showFeedbackDetail(item)">
               <strong>{{ item.nickname }}</strong><span>{{ item.content }}</span><em>{{ item.statusText }}</em>
@@ -2801,6 +2821,10 @@ button {
   padding: 28px 40px;
   font-weight: 500;
   color: var(--accent-green-deep);
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
