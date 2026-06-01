@@ -62,12 +62,26 @@ DEFAULT_ADMINS = {
         "phone": "13800000002",
         "email": "operator@example.com",
     },
+    "boss": {
+        "adminId": 4,
+        "username": "boss",
+        "password": os.environ.get("BOSS_PASSWORD", "123456"),
+        "role": "boss",
+        "roleName": "老板",
+        "realName": "老板",
+        "jobNo": "B001",
+        "position": "老板",
+        "phone": "13800000004",
+        "email": "boss@example.com",
+    },
 }
 
 ROLE_SCOPES = {
     "super_admin": {"super", "market", "operator"},
     "market_admin": {"market"},
     "operator_admin": {"operator"},
+    # 老板：只读经营分析视角，授予分析类只读接口的访问范围
+    "boss": {"boss"},
 }
 
 def response_ok(data=None, message=None, code=200):
@@ -529,19 +543,19 @@ def wechat_login():
 
 
 @admin_bp.get("/profile")
-@require_admin("super", "market", "operator")
+@require_admin("super", "market", "operator", "boss")
 def profile():
     return response_ok(public_admin_info(g.admin, include_private=True))
 
 
 @admin_bp.post("/logout")
-@require_admin("super", "market", "operator")
+@require_admin("super", "market", "operator", "boss")
 def logout():
     return response_ok(None, "退出登录成功")
 
 
 @admin_bp.get("/super/overview/user-count")
-@require_admin("super")
+@require_admin("super", "boss")
 def user_count():
     total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
     new_count = count_sql("SELECT COUNT(*) AS c FROM `user` WHERE created_at >= CURDATE()", fallback=35)
@@ -549,7 +563,7 @@ def user_count():
 
 
 @admin_bp.get("/super/overview/device-count")
-@require_admin("super")
+@require_admin("super", "boss")
 def device_count():
     total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
     online = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=320)
@@ -557,13 +571,13 @@ def device_count():
 
 
 @admin_bp.get("/super/overview/sales-amount")
-@require_admin("super")
+@require_admin("super", "boss")
 def sales_amount():
     return response_ok({"salesAmount": 325000.5, "orderCount": 240})
 
 
 @admin_bp.get("/super/overview/activity-rate")
-@require_admin("super")
+@require_admin("super", "boss")
 def activity_rate():
     total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
     active = count_sql(
@@ -574,7 +588,7 @@ def activity_rate():
 
 
 @admin_bp.get("/super/trend/growth")
-@require_admin("super")
+@require_admin("super", "boss")
 def growth_trend():
     metric_type = request.args.get("type", "user")
     dimension = request.args.get("dimension", "day")
@@ -583,21 +597,21 @@ def growth_trend():
 
 @admin_bp.get("/super/region/sales-heatmap")
 @admin_bp.get("/market/region/sales-heatmap")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def sales_heatmap():
     return response_ok({"list": heatmap("sales")})
 
 
 @admin_bp.get("/super/region/user-heatmap")
 @admin_bp.get("/market/region/user-heatmap")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def user_heatmap():
     return response_ok({"list": heatmap("user")})
 
 
 @admin_bp.get("/super/user-value/normal-users")
 @admin_bp.get("/market/user-value/normal-users")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def normal_users():
     total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
     high_active = count_sql(
@@ -609,7 +623,7 @@ def normal_users():
 
 @admin_bp.get("/super/user-value/high-active-users")
 @admin_bp.get("/market/user-value/high-active-users")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def high_active_users():
     count = count_sql(
         "SELECT COUNT(*) AS c FROM (SELECT user_id FROM play_history GROUP BY user_id HAVING COUNT(*) >= 10) t",
@@ -620,35 +634,35 @@ def high_active_users():
 
 @admin_bp.get("/super/user-profile/age-distribution")
 @admin_bp.get("/market/user-profile/age-distribution")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def age_distribution():
     return response_ok({"list": distribution_data("age")})
 
 
 @admin_bp.get("/super/user-profile/region-distribution")
 @admin_bp.get("/market/user-profile/region-distribution")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def region_distribution():
     return response_ok({"list": distribution_data("region")})
 
 
 @admin_bp.get("/super/user-profile/activity-distribution")
 @admin_bp.get("/market/user-profile/activity-distribution")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def activity_distribution():
     return response_ok({"list": distribution_data("activity")})
 
 
 @admin_bp.get("/super/user-profile/music-service-distribution")
 @admin_bp.get("/market/user-profile/music-service-distribution")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def music_service_distribution():
     return response_ok({"list": distribution_data("service")})
 
 
 @admin_bp.get("/super/feedback/list")
 @admin_bp.get("/operator/feedback/list")
-@require_admin("super", "operator")
+@require_admin("super", "operator", "boss")
 def feedback_list():
     rows = feedback_rows()
     page = max(_int(request.args.get("page"), 1), 1)
@@ -668,14 +682,14 @@ def feedback_list():
 
 @admin_bp.get("/super/feedback/detail")
 @admin_bp.get("/operator/feedback/detail")
-@require_admin("super", "operator")
+@require_admin("super", "operator", "boss")
 def feedback_detail_route():
     feedback_id = request.args.get("feedbackId", "FB202501310001")
     return response_ok(feedback_detail(feedback_id), "获取成功")
 
 
 @admin_bp.get("/market/top-songs")
-@require_admin("super", "market")
+@require_admin("super", "market", "boss")
 def top_songs():
     rows = cached_mysql_all(
         """
@@ -1205,7 +1219,7 @@ def security_logs():
 
 
 @admin_bp.get("/super/monitor")
-@require_admin("super")
+@require_admin("super", "boss")
 def system_monitor():
     total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
     total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)

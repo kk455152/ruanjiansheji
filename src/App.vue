@@ -7,20 +7,21 @@ const roleNames = {
   super_admin: "超级管理员",
   market_admin: "市场分析管理员",
   operator_admin: "普通管理员",
+  boss: "老板",
 }
 
 const menus = [
-  { key: "overview", label: "数据总览", icon: "fa-chart-pie", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
+  { key: "overview", label: "数据总览", icon: "fa-chart-pie", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin", "boss"] },
   { key: "decision", label: "决策驾驶舱", icon: "fa-gauge-high", section: "核心看板", roles: ["super_admin", "market_admin"] },
-  { key: "trend", label: "趋势分析", icon: "fa-arrow-trend-up", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin"] },
-  { key: "region", label: "区域热力图", icon: "fa-map-location-dot", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "profile", label: "用户画像", icon: "fa-user-tag", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "value", label: "用户价值", icon: "fa-star", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "trend", label: "趋势分析", icon: "fa-arrow-trend-up", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin", "boss"] },
+  { key: "region", label: "区域热力图", icon: "fa-map-location-dot", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
+  { key: "profile", label: "用户画像", icon: "fa-user-tag", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
+  { key: "value", label: "用户价值", icon: "fa-star", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
   { key: "segments", label: "用户分群", icon: "fa-users-rays", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "insights", label: "营销洞察", icon: "fa-lightbulb", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "songs", label: "热歌排行", icon: "fa-music", section: "分析洞察", roles: ["super_admin", "market_admin"] },
+  { key: "songs", label: "热歌排行", icon: "fa-music", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
   { key: "reports", label: "决策报表", icon: "fa-file-lines", section: "分析洞察", roles: ["super_admin", "market_admin"] },
-  { key: "feedback", label: "用户反馈", icon: "fa-comment-dots", section: "运营管理", roles: ["super_admin", "operator_admin"] },
+  { key: "feedback", label: "用户反馈", icon: "fa-comment-dots", section: "运营管理", roles: ["super_admin", "operator_admin", "boss"] },
   { key: "devices", label: "设备管理", icon: "fa-sliders", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "groups", label: "设备分组", icon: "fa-layer-group", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "alerts", label: "告警中心", icon: "fa-triangle-exclamation", section: "运营管理", roles: ["super_admin", "operator_admin"] },
@@ -33,7 +34,7 @@ const menus = [
   { key: "monitor", label: "系统监控", icon: "fa-wave-square", section: "系统管理", roles: ["super_admin"] },
   { key: "notices", label: "系统公告", icon: "fa-bullhorn", section: "系统管理", roles: ["super_admin"] },
   { key: "audit", label: "审计日志", icon: "fa-shield-halved", section: "系统管理", roles: ["super_admin"] },
-  { key: "account", label: "个人信息", icon: "fa-circle-user", section: "账户", roles: ["super_admin", "market_admin", "operator_admin"] },
+  { key: "account", label: "个人信息", icon: "fa-circle-user", section: "账户", roles: ["super_admin", "market_admin", "operator_admin", "boss"] },
 ]
 
 const state = reactive({
@@ -500,7 +501,7 @@ async function loadPage(initial = false) {
 }
 
 async function loadOverview() {
-  if (currentRole.value === "super_admin") {
+  if (currentRole.value === "super_admin" || currentRole.value === "boss") {
     const [user, device, sales, activity, trend, songs, feedback, salesRegion, monitor] = await Promise.all([
       silent(() => api("/api/admin/super/overview/user-count"), {}),
       silent(() => api("/api/admin/super/overview/device-count"), {}),
@@ -543,7 +544,7 @@ async function loadDecision() {
 }
 
 async function loadTrend() {
-  if (currentRole.value === "super_admin") {
+  if (currentRole.value === "super_admin" || currentRole.value === "boss") {
     state.trend = await api("/api/admin/super/trend/growth", {
       params: { type: state.trend.type || "user", dimension: state.trend.dimension || "day" },
     })
@@ -1087,7 +1088,7 @@ onMounted(restoreSession)
       <section v-if="state.active === 'trend'" class="panel full">
         <div class="panel-head">
           <div><h3>{{ currentRole === 'operator_admin' ? '设备日志趋势' : '增长趋势分析' }}</h3><p>按用户、设备、销售或留存查看趋势</p></div>
-          <div v-if="currentRole === 'super_admin'" class="segmented">
+          <div v-if="currentRole === 'super_admin' || currentRole === 'boss'" class="segmented">
             <button :class="{ active: state.trend.type === 'user' }" @click="state.trend.type = 'user'; loadTrend()">用户</button>
             <button :class="{ active: state.trend.type === 'device' }" @click="state.trend.type = 'device'; loadTrend()">设备</button>
             <button :class="{ active: state.trend.type === 'sales' }" @click="state.trend.type = 'sales'; loadTrend()">销售</button>
