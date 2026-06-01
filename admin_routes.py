@@ -110,6 +110,15 @@ def _b64_decode(text):
     return base64.urlsafe_b64decode((text + padding).encode("ascii"))
 
 
+def mask_phone(phone):
+    text = str(phone or "").strip()
+    if len(text) >= 11:
+        return text[:3] + "****" + text[-4:]
+    if len(text) >= 7:
+        return text[:3] + "****" + text[-2:]
+    return text or "—"
+
+
 def public_admin_info(admin, include_private=False):
     keys = [
         "adminId",
@@ -788,9 +797,11 @@ def operator_device_list():
         """
         SELECT
             d.device_id,
+            d.device_number,
             d.model_name,
             d.status,
             d.last_active,
+            b.user_id,
             b.custom_device_name,
             u.username AS owner_name
         FROM device d
@@ -804,9 +815,11 @@ def operator_device_list():
         devices = [
             {
                 "deviceId": str(row.get("device_id")),
+                "deviceSn": row.get("device_number") or "SHMINI-A1-0001",
                 "deviceName": row.get("custom_device_name") or "客厅音箱",
                 "modelName": row.get("model_name") or "SH-Mini A1",
                 "ownerName": row.get("owner_name") or "张三",
+                "userId": str(row.get("user_id")) if row.get("user_id") is not None else "",
                 "online": bool(row.get("status")),
                 "firmwareVersion": "1.0.3",
                 "lastOnlineAt": str(row.get("last_active") or "2026-05-20 10:00:00"),
@@ -817,9 +830,11 @@ def operator_device_list():
         d = current_device()
         devices = [{
             "deviceId": d["deviceId"],
+            "deviceSn": d["deviceSn"],
             "deviceName": d["deviceName"],
             "modelName": d["modelName"],
             "ownerName": d["ownerName"],
+            "userId": "",
             "online": d["online"],
             "firmwareVersion": d["firmwareVersion"],
             "lastOnlineAt": d["lastOnlineAt"],
@@ -831,6 +846,99 @@ def operator_device_list():
 @require_admin("super", "operator")
 def operator_device_detail():
     return response_ok(current_device())
+
+
+@admin_bp.get("/operator/device/bound-user")
+@require_admin("super", "operator")
+def operator_device_bound_user():
+    device_id = str(request.args.get("deviceId") or "").strip()
+    row = None
+    if device_id.isdigit():
+        row = mysql_one(
+            """
+            SELECT
+                u.user_id,
+                u.username,
+                u.phone,
+                u.email,
+                u.status,
+                u.created_at AS register_time,
+                u.last_login_at,
+                COALESCE(p.nickname, u.nickname) AS nickname,
+                p.gender,
+                p.age,
+                p.age_range,
+                p.province_name,
+                p.city_name,
+                p.active_level,
+                p.value_level,
+                d.device_number,
+                b.custom_device_name,
+                b.default_room,
+                b.bind_time
+            FROM user_device_binding b
+            JOIN `user` u ON u.user_id = b.user_id
+            LEFT JOIN user_profile p ON p.user_id = u.user_id
+            LEFT JOIN device d ON d.device_id = b.device_id
+            WHERE b.device_id = %s
+            ORDER BY b.is_primary DESC, b.bind_time ASC
+            LIMIT 1
+            """,
+            (device_id,),
+        )
+
+    if row:
+        active_map = {"high": "高活跃", "medium": "中活跃", "low": "低活跃"}
+        value_map = {"high": "高价值", "normal": "普通", "low": "低价值"}
+        status_map = {"active": "正常", "frozen": "已冻结", "disabled": "已禁用"}
+        gender_map = {"male": "男", "female": "女", "unknown": "未知"}
+        active = str(row.get("active_level") or "")
+        value = str(row.get("value_level") or "")
+        gender = str(row.get("gender") or "")
+        status = str(row.get("status") or "")
+        data = {
+            "userId": str(row.get("user_id")),
+            "nickname": row.get("nickname") or row.get("username") or "智能音箱用户",
+            "username": row.get("username") or "—",
+            "phone": mask_phone(row.get("phone")),
+            "email": row.get("email") or "—",
+            "gender": gender_map.get(gender, gender or "未知"),
+            "age": row.get("age") if row.get("age") is not None else "—",
+            "ageRange": row.get("age_range") or "—",
+            "region": " · ".join([p for p in [row.get("province_name"), row.get("city_name")] if p]) or "—",
+            "activeLevel": active_map.get(active, active or "—"),
+            "valueLevel": value_map.get(value, value or "—"),
+            "status": status_map.get(status, status or "正常"),
+            "registerTime": str(row.get("register_time") or "—"),
+            "lastLoginAt": str(row.get("last_login_at") or "—"),
+            "deviceSn": row.get("device_number") or "—",
+            "deviceName": row.get("custom_device_name") or "客厅音箱",
+            "defaultRoom": row.get("default_room") or "—",
+            "bindTime": str(row.get("bind_time") or "—"),
+        }
+        return response_ok(data)
+
+    # 兜底：无绑定记录或未连库时返回演示用户
+    return response_ok({
+        "userId": "1001",
+        "nickname": "张三",
+        "username": "zhangsan",
+        "phone": "138****8888",
+        "email": "zhangsan@example.com",
+        "gender": "男",
+        "age": 29,
+        "ageRange": "26-35",
+        "region": "广东省 · 深圳市",
+        "activeLevel": "高活跃",
+        "valueLevel": "高价值",
+        "status": "正常",
+        "registerTime": "2024-08-12 09:30:20",
+        "lastLoginAt": "2026-06-02 04:10:52",
+        "deviceSn": "SHMINI-A1-0001",
+        "deviceName": "客厅音箱",
+        "defaultRoom": "客厅",
+        "bindTime": "2024-08-12 10:05:00",
+    })
 
 
 @admin_bp.get("/operator/device/runtime-status")

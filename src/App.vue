@@ -80,6 +80,7 @@ const state = reactive({
   notices: { total: 0, list: [] },
   audit: { total: 0, list: [] },
   detail: null,
+  deviceUser: { open: false, loading: false, info: null, deviceName: "" },
 })
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"])
@@ -806,6 +807,19 @@ async function showDeviceDetail(item) {
   state.detail = await api("/api/admin/operator/device/detail", { params: { deviceId: item.deviceId } })
 }
 
+async function showDeviceUser(item) {
+  state.deviceUser = { open: true, loading: true, info: null, deviceName: item.deviceName }
+  state.deviceUser.info = await silent(
+    () => api("/api/admin/operator/device/bound-user", { params: { deviceId: item.deviceId } }),
+    null,
+  )
+  state.deviceUser.loading = false
+}
+
+function closeDeviceUser() {
+  state.deviceUser = { open: false, loading: false, info: null, deviceName: "" }
+}
+
 async function showLogDetail(item) {
   state.detail = await api("/api/admin/operator/device/log-detail", { params: { logId: item.logId } })
 }
@@ -1026,13 +1040,25 @@ onMounted(restoreSession)
           <div class="panel-head">
             <div>
               <h3>{{ currentRole === 'operator_admin' ? '设备运行概览' : '增长趋势' }}</h3>
-              <p>{{ currentRole === 'operator_admin' ? '当前播放、音量、电量与在线状态' : `当前指标：${trendMetricName}` }}</p>
+              <p>{{ currentRole === 'operator_admin' ? '点击设备名称查看绑定用户详情' : `当前指标：${trendMetricName}` }}</p>
             </div>
           </div>
-          <div v-if="currentRole === 'operator_admin'" class="live-grid">
-            <div><span>当前歌曲</span><strong>{{ state.runtime?.currentSong || "暂无播放" }}</strong><small>{{ state.runtime?.currentArtist || "未知艺术家" }}</small></div>
-            <div><span>音量</span><strong>{{ state.runtime?.volume ?? "-" }}</strong><small>电量 {{ state.runtime?.battery ?? "-" }}%</small></div>
-            <div><span>在线状态</span><strong>{{ state.runtime?.online ? "在线" : "离线" }}</strong><small>{{ state.runtime?.lastHeartbeat || "-" }}</small></div>
+          <div v-if="currentRole === 'operator_admin'" class="device-overview">
+            <div
+              v-for="item in (state.devices.list || [])"
+              :key="item.deviceId"
+              class="device-overview-row"
+            >
+              <button class="device-name-btn" :title="`查看「${item.deviceName}」绑定用户详情`" @click="showDeviceUser(item)">
+                <i :class="['dot', { online: item.online }]"></i>
+                <span class="device-name-text">
+                  <strong>{{ item.deviceName }}</strong>
+                  <small>编号：{{ item.deviceSn || item.deviceId }}</small>
+                </span>
+              </button>
+              <span :class="['device-status', { online: item.online }]">{{ item.online ? "在线" : "离线" }}</span>
+            </div>
+            <p v-if="!(state.devices.list || []).length" class="muted">暂无设备数据。</p>
           </div>
           <div v-else class="chart-with-axis">
             <p class="axis-unit">{{ trendMetricName }}（单位：{{ trendUnit }}）</p>
@@ -1643,6 +1669,44 @@ onMounted(restoreSession)
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div v-if="state.deviceUser.open" class="modal-mask" @click.self="closeDeviceUser">
+      <div class="modal-card user-detail-card">
+        <div class="panel-head">
+          <div>
+            <h3>用户详细情况</h3>
+            <p>「{{ state.deviceUser.deviceName }}」当前绑定用户</p>
+          </div>
+          <button class="icon-close" @click="closeDeviceUser"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p v-if="state.deviceUser.loading" class="muted">加载中...</p>
+        <template v-else-if="state.deviceUser.info">
+          <div class="user-detail-head">
+            <span class="user-avatar">{{ (state.deviceUser.info.nickname || '用户').slice(0, 1) }}</span>
+            <div>
+              <strong>{{ state.deviceUser.info.nickname }}</strong>
+              <small>账号 {{ state.deviceUser.info.username }} · ID {{ state.deviceUser.info.userId }}</small>
+            </div>
+            <span :class="['user-status-tag', { warn: state.deviceUser.info.status !== '正常' }]">{{ state.deviceUser.info.status }}</span>
+          </div>
+          <div class="user-detail-grid">
+            <div><span>手机号</span><strong>{{ state.deviceUser.info.phone }}</strong></div>
+            <div><span>邮箱</span><strong>{{ state.deviceUser.info.email }}</strong></div>
+            <div><span>性别</span><strong>{{ state.deviceUser.info.gender }}</strong></div>
+            <div><span>年龄</span><strong>{{ state.deviceUser.info.age }}（{{ state.deviceUser.info.ageRange }}）</strong></div>
+            <div><span>所在地区</span><strong>{{ state.deviceUser.info.region }}</strong></div>
+            <div><span>活跃等级</span><strong>{{ state.deviceUser.info.activeLevel }}</strong></div>
+            <div><span>价值分层</span><strong>{{ state.deviceUser.info.valueLevel }}</strong></div>
+            <div><span>注册时间</span><strong>{{ state.deviceUser.info.registerTime }}</strong></div>
+            <div><span>最近登录</span><strong>{{ state.deviceUser.info.lastLoginAt }}</strong></div>
+            <div><span>设备编号</span><strong>{{ state.deviceUser.info.deviceSn }}</strong></div>
+            <div><span>默认房间</span><strong>{{ state.deviceUser.info.defaultRoom }}</strong></div>
+            <div><span>绑定时间</span><strong>{{ state.deviceUser.info.bindTime }}</strong></div>
+          </div>
+        </template>
+        <p v-else class="muted">该设备暂无绑定用户信息。</p>
       </div>
     </div>
   </main>
@@ -2487,6 +2551,147 @@ button {
   font-size: 26px;
   font-weight: 300;
   color: var(--accent-green-deep);
+}
+
+.device-overview {
+  display: grid;
+  gap: 10px;
+}
+
+.device-overview-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.42);
+  transition: all 0.2s ease;
+}
+
+.device-overview-row:hover {
+  background: rgba(255, 255, 255, 0.78);
+  transform: translateX(2px);
+}
+
+.device-name-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.device-name-text {
+  display: grid;
+  min-width: 0;
+}
+
+.device-name-text strong {
+  font-weight: 500;
+  color: var(--accent-green-deep);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-name-btn:hover .device-name-text strong {
+  text-decoration: underline;
+}
+
+.device-name-text small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.device-status {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.device-status.online {
+  color: var(--accent-green-deep);
+  background: rgba(76, 145, 95, 0.14);
+}
+
+.user-detail-card {
+  max-width: 560px;
+}
+
+.user-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 18px;
+}
+
+.user-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.user-detail-head strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.user-detail-head small {
+  color: var(--text-secondary);
+}
+
+.user-status-tag {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(76, 145, 95, 0.14);
+  color: var(--accent-green-deep);
+}
+
+.user-status-tag.warn {
+  background: rgba(214, 122, 60, 0.16);
+  color: var(--accent-orange);
+}
+
+.user-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.user-detail-grid div {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.user-detail-grid span {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.user-detail-grid strong {
+  font-weight: 500;
+  word-break: break-all;
 }
 
 .mini-cards {
