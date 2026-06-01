@@ -216,6 +216,14 @@ const trendUnit = computed(
   () => ({ user: "人", device: "台", sales: "元", retention: "%" }[state.trend.type] || "次"),
 )
 
+// 趋势图指标名称（按当前查看的指标类型变化）
+const trendMetricName = computed(
+  () =>
+    ({ user: "用户增长数", device: "设备增长数", sales: "销售额", retention: "用户留存率" }[
+      state.trend.type
+    ] || "核心指标"),
+)
+
 // 趋势图 Y 轴刻度：根据数据最大值生成好看的等距刻度
 const trendAxis = computed(() => {
   const values = (state.trend.list || []).map((item) => Number(item.value || 0))
@@ -1018,7 +1026,7 @@ onMounted(restoreSession)
           <div class="panel-head">
             <div>
               <h3>{{ currentRole === 'operator_admin' ? '设备运行概览' : '增长趋势' }}</h3>
-              <p>{{ currentRole === 'operator_admin' ? '当前播放、音量、电量与在线状态' : '按角色展示核心业务指标' }}</p>
+              <p>{{ currentRole === 'operator_admin' ? '当前播放、音量、电量与在线状态' : `当前指标：${trendMetricName}` }}</p>
             </div>
           </div>
           <div v-if="currentRole === 'operator_admin'" class="live-grid">
@@ -1027,7 +1035,7 @@ onMounted(restoreSession)
             <div><span>在线状态</span><strong>{{ state.runtime?.online ? "在线" : "离线" }}</strong><small>{{ state.runtime?.lastHeartbeat || "-" }}</small></div>
           </div>
           <div v-else class="chart-with-axis">
-            <p class="axis-unit">单位：{{ trendUnit }}</p>
+            <p class="axis-unit">{{ trendMetricName }}（单位：{{ trendUnit }}）</p>
             <div class="chart-row">
               <div class="y-ticks">
                 <span v-for="tick in trendAxis.ticks" :key="tick" class="y-tick">{{ formatAxis(tick) }}</span>
@@ -1124,7 +1132,7 @@ onMounted(restoreSession)
           </div>
         </div>
         <div v-else class="chart-with-axis">
-          <p class="axis-unit">单位：{{ trendUnit }}</p>
+          <p class="axis-unit">{{ trendMetricName }}（单位：{{ trendUnit }}）</p>
           <div class="chart-row">
             <div class="y-ticks">
               <span v-for="tick in trendAxis.ticks" :key="tick" class="y-tick">{{ formatAxis(tick) }}</span>
