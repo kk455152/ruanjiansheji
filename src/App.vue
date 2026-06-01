@@ -1026,11 +1026,35 @@ onMounted(restoreSession)
             <div><span>音量</span><strong>{{ state.runtime?.volume ?? "-" }}</strong><small>电量 {{ state.runtime?.battery ?? "-" }}%</small></div>
             <div><span>在线状态</span><strong>{{ state.runtime?.online ? "在线" : "离线" }}</strong><small>{{ state.runtime?.lastHeartbeat || "-" }}</small></div>
           </div>
-          <div v-else class="bar-chart">
-            <div v-for="item in state.trend.list" :key="item.date" class="bar-item">
-              <div class="bar" :style="{ height: barHeight(item.value, maxOf(state.trend.list)) }"></div>
-              <span>{{ labelDate(item.date) }}</span>
-              <small>{{ item.value }}</small>
+          <div v-else class="chart-with-axis">
+            <p class="axis-unit">单位：{{ trendUnit }}</p>
+            <div class="chart-row">
+              <div class="y-ticks">
+                <span v-for="tick in trendAxis.ticks" :key="tick" class="y-tick">{{ formatAxis(tick) }}</span>
+              </div>
+              <div class="plot">
+                <div class="plot-area">
+                  <span
+                    v-for="tick in trendAxis.ticks"
+                    :key="`g-${tick}`"
+                    class="gridline"
+                    :style="{ bottom: `${(tick / trendAxis.niceMax) * 100}%` }"
+                  ></span>
+                  <div v-for="item in state.trend.list" :key="item.date" class="bar-col">
+                    <div
+                      class="bar"
+                      :style="{ height: `${(Number(item.value || 0) / trendAxis.niceMax) * 100}%` }"
+                      :title="`${item.value} ${trendUnit}`"
+                    ></div>
+                  </div>
+                </div>
+                <div class="x-labels">
+                  <div v-for="item in state.trend.list" :key="`x-${item.date}`" class="x-label">
+                    <span>{{ labelDate(item.date) }}</span>
+                    <small>{{ item.value }}</small>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </article>
