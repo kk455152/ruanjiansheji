@@ -790,6 +790,35 @@ def update_firmware():
     )
 
 
+DEMO_DEVICE_NAMES = [
+    "客厅音箱", "卧室音箱", "书房音箱", "厨房音箱", "儿童房音箱",
+    "主卧音箱", "客房音箱", "阳台音箱", "茶室音箱", "玄关音箱", "办公室音箱",
+]
+DEMO_DEVICE_OWNERS = [
+    "张三", "李娜", "王强", "刘芳", "陈杰", "赵敏",
+    "孙磊", "周婷", "吴昊", "郑爽", "钱伟",
+]
+
+
+def pad_operator_devices(devices, target=11):
+    """补足设备列表到 target 台（演示用），保持已有真实设备在前。"""
+    result = list(devices or [])
+    existing = len(result)
+    for i in range(existing, target):
+        result.append({
+            "deviceId": f"demo_{i + 1:03d}",
+            "deviceSn": f"SHMINI-A1-{i + 1:04d}",
+            "deviceName": DEMO_DEVICE_NAMES[i % len(DEMO_DEVICE_NAMES)],
+            "modelName": "SH-Mini A1",
+            "ownerName": DEMO_DEVICE_OWNERS[i % len(DEMO_DEVICE_OWNERS)],
+            "userId": "",
+            "online": True,
+            "firmwareVersion": "1.0.3",
+            "lastOnlineAt": "2026-06-02 05:28:00",
+        })
+    return result[:target] if target else result
+
+
 @admin_bp.get("/operator/device/list")
 @require_admin("super", "operator")
 def operator_device_list():
@@ -827,18 +856,10 @@ def operator_device_list():
             for row in rows
         ]
     else:
-        d = current_device()
-        devices = [{
-            "deviceId": d["deviceId"],
-            "deviceSn": d["deviceSn"],
-            "deviceName": d["deviceName"],
-            "modelName": d["modelName"],
-            "ownerName": d["ownerName"],
-            "userId": "",
-            "online": d["online"],
-            "firmwareVersion": d["firmwareVersion"],
-            "lastOnlineAt": d["lastOnlineAt"],
-        }]
+        devices = []
+
+    # 演示数据：补足到 11 台设备，使设备总数/在线率/设备运行概览保持一致
+    devices = pad_operator_devices(devices, target=11)
     return response_ok({"total": len(devices), "list": devices})
 
 
