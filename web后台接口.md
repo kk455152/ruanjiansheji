@@ -1,14 +1,10 @@
 ---
-title: 默认模块
+title: Web后台接口文档
 language_tabs:
   - shell: Shell
   - http: HTTP
   - javascript: JavaScript
-  - ruby: Ruby
   - python: Python
-  - php: PHP
-  - java: Java
-  - go: Go
 toc_footers: []
 includes: []
 search: true
@@ -19,21 +15,36 @@ generator: "@tarslib/widdershins v4.0.30"
 
 ---
 
-# 默认模块
+# Web后台接口文档
 
 Base URLs:
 
+- 线上服务器：`http://8.137.165.220`
+- 本地或部署环境可通过 `VITE_API_BASE_URL` 覆盖；未配置时，本地域名默认访问线上服务器，部署后默认走当前站点同源接口。
+
 # Authentication
 
-# web管理后台/登录界面
+除登录接口外，前端请求会携带后台登录 token：
 
-## POST 管理员登录
+`Authorization: Bearer <admin_token>`
 
+通用返回结构：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+# web后台登录/认证
+## POST 账号密码登录
 POST /api/admin/login
 
-管理员登录
+后台管理员使用用户名和密码登录，成功后返回 token 和管理员信息。
 
-> Body 请求参数
+> Body 请求示例
 
 ```json
 {
@@ -45,11 +56,11 @@ POST /api/admin/login
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|body|body|object| 是 |none|
-|» username|body|string| 是 |none|
-|» password|body|string| 是 |none|
+|username|body|string|是|登录用户名|
+|password|body|string|是|登录密码|
+|loginType|body|string|否|登录方式，前端固定传 password|
 
 > 返回示例
 
@@ -58,29 +69,16 @@ POST /api/admin/login
 ```json
 {
   "code": 200,
-  "message": "登录成功",
+  "message": "success",
   "data": {
-    "token": "xxxxxx",
+    "token": "admin-token",
     "adminInfo": {
       "adminId": 1,
       "username": "admin",
       "role": "super_admin",
-      "roleName": "超级管理员",
-      "realName": "张三",
-      "jobNo": "A001",
-      "position": "超级管理员"
+      "roleName": "超级管理员"
     }
   }
-}
-```
-
-> 400 Response
-
-```json
-{
-  "code": 400,
-  "msg": "登录失败",
-  "error_details": "请求参数不完整，密码不能为空。"
 }
 ```
 
@@ -89,68 +87,51 @@ POST /api/admin/login
 ```json
 {
   "code": 401,
-  "msg": "认证失败",
-  "error_details": "用户名或密码错误，请重新输入。"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» token|string|true|none||none|
-|» adminInfo|object|true|none||none|
-|»» adminId|integer|true|none||none|
-|»» username|string|true|none||none|
-
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» msg|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» msg|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
 ## POST 微信快捷登录
-
 POST /api/admin/wechat-login
 
-微信快捷登录
+后台微信快捷登录，前端传入微信登录 code。
 
-> Body 请求参数
+> Body 请求示例
 
 ```json
 {
-  "code": "wx_code_xxx",
-  "state": "login_state_xxx"
+  "code": "demo-wechat-code"
 }
 ```
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|body|body|object| 是 |none|
-|» code|body|string| 是 |none|
-|» state|body|string| 是 |none|
+|c|o|d|e||
+|b|o|d|y||
+|s|t|r|i|n|
+|是|||||
+|微|信|登|录|临|
 
 > 返回示例
 
@@ -159,102 +140,57 @@ POST /api/admin/wechat-login
 ```json
 {
   "code": 200,
-  "message": "微信登录成功",
+  "message": "success",
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIs...",
-    "token_type": "Bearer",
-    "expires_in": 7200,
+    "token": "admin-token",
     "adminInfo": {
-      "adminId": 2,
-      "username": "market",
-      "role": "market_admin",
-      "roleName": "市场分析管理员",
-      "realName": "李四",
-      "jobNo": "M001",
-      "position": "市场分析管理员",
-      "wechatOpenId": "oXxx123456789"
+      "adminId": 1,
+      "username": "admin",
+      "role": "super_admin",
+      "roleName": "超级管理员"
     }
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "code 不能为空"
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "账号不存在",
-  "error_details": "当前微信账号未绑定任何后台管理员账号"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» access_token|string|true|none||none|
-|»» token_type|string|true|none||none|
-|»» expires_in|integer|true|none||none|
-|»» adminInfo|object|true|none||none|
-|»»» adminId|integer|true|none||none|
-|»»» username|string|true|none||none|
-|»»» role|string|true|none||none|
-|»»» roleName|string|true|none||none|
-|»»» realName|string|true|none||none|
-|»»» jobNo|string|true|none||none|
-|»»» position|string|true|none||none|
-|»»» wechatOpenId|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **404**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 获取当前登录管理员信息
-
+## GET 获取当前管理员信息
 GET /api/admin/profile
 
-获取当前登录管理员信息
+根据 Authorization token 获取当前登录管理员资料。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -263,14 +199,10 @@ GET /api/admin/profile
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "adminId": 1,
-    "username": "admin",
-    "role": "super_admin",
-    "roleName": "超级管理员",
-    "realName": "张三",
-    "jobNo": "A001",
-    "position": "超级管理员"
+    "id": "示例ID",
+    "name": "示例数据"
   }
 }
 ```
@@ -280,72 +212,45 @@ GET /api/admin/profile
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "管理员账号不存在",
-  "error_details": "当前登录账号不存在或已被删除"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» adminId|integer|true|none||none|
-|»» username|string|true|none||none|
-|»» role|string|true|none||none|
-|»» roleName|string|true|none||none|
-|»» realName|string|true|none||none|
-|»» jobNo|string|true|none||none|
-|»» position|string|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **404**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
 ## POST 退出登录
-
 POST /api/admin/logout
 
-退出登录
+清理后台登录态，前端调用后会移除本地 token。
+
+> Body 请求示例
+
+```json
+{}
+```
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -354,8 +259,10 @@ POST /api/admin/logout
 ```json
 {
   "code": 200,
-  "message": "退出登录成功",
-  "data": null
+  "message": "success",
+  "data": {
+    "result": true
+  }
 }
 ```
 
@@ -364,69 +271,40 @@ POST /api/admin/logout
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "账号已被禁用",
-  "error_details": "请联系系统管理员"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|null|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/超级管理员/数据总览
-
-## GET 获取用户总数
-
+# 超级管理员数据总览
+## GET 用户数量概览
 GET /api/admin/super/overview/user-count
 
-获取用户总数
+获取总用户数、新增用户数等用户指标。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|range|query|string| 否 |today / 7d / 30d / month / all|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -435,60 +313,51 @@ GET /api/admin/super/overview/user-count
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "userCount": 1280,
-    "newUserCount": 35
+    "result": true
   }
 }
 ```
 
-> 403 Response
+> 401 Response
 
 ```json
 {
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看用户统计数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» userCount|integer|true|none||none|
-|»» newUserCount|integer|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 获取设备总数
-
+## GET 设备数量概览
 GET /api/admin/super/overview/device-count
 
-获取设备总数
+获取设备总数、在线设备数等设备指标。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -497,64 +366,51 @@ GET /api/admin/super/overview/device-count
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "deviceCount": 860,
-    "onlineDeviceCount": 320,
-    "offlineDeviceCount": 540
+    "result": true
   }
 }
 ```
 
-> 403 Response
+> 401 Response
 
 ```json
 {
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看设备统计数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» deviceCount|integer|true|none||none|
-|»» onlineDeviceCount|integer|true|none||none|
-|»» offlineDeviceCount|integer|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 获取销售额
-
+## GET 销售金额概览
 GET /api/admin/super/overview/sales-amount
 
-获取销售额
+获取销售额和订单数量统计。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|startDate|query|string| 否 |none|
-|endDate|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -563,80 +419,51 @@ GET /api/admin/super/overview/sales-amount
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "salesAmount": 325000.5,
-    "orderCount": 240
+    "result": true
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "startDate 或 endDate 格式错误，应为 YYYY-MM-DD"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看销售额统计数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» salesAmount|number|true|none||none|
-|»» orderCount|integer|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 获取活跃度
-
+## GET 活跃度概览
 GET /api/admin/super/overview/activity-rate
 
-获取活跃度
+获取活跃用户数和活跃率。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|type|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -645,87 +472,106 @@ GET /api/admin/super/overview/activity-rate
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "activeUserCount": 380,
-    "totalUserCount": 1280,
-    "activityRate": 0.2968
+    "result": true
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "type 只能为 total、today、week、month"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看活跃度统计数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» activeUserCount|integer|true|none||none|
-|»» totalUserCount|integer|true|none||none|
-|»» activityRate|number|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
+## GET 系统监控
+GET /api/admin/super/monitor
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+获取 Web API、MySQL、MongoDB 等服务健康状态和异常信息。
 
-状态码 **403**
+### 请求参数
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
 
-# web管理后台/超级管理员/趋势分析
+> 返回示例
 
-## GET 查看增长趋势
+> 200 Response
 
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 趋势与决策分析
+## GET 增长趋势
 GET /api/admin/super/trend/growth
 
-查看增长趋势
+获取用户、设备、销售或留存趋势。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|type|query|string| 否 |none|
-|startDate|query|string| 否 |none|
-|endDate|query|string| 否 |none|
-|granularity|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|type|query|string|否|指标类型：user/device/sales/retention|
+|dimension|query|string|否|统计维度：day/week/month/year|
 
 > 返回示例
 
@@ -734,98 +580,158 @@ GET /api/admin/super/trend/growth
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "type": "user",
-    "dimension": "day",
-    "list": [
-      {
-        "date": "2026-05-01",
-        "value": 120
-      },
-      {
-        "date": "2026-05-02",
-        "value": 150
-      }
-    ]
+    "result": true
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "type 只能为 user、device、sales"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看增长趋势数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» type|string|true|none||none|
-|»» dimension|string|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» date|string|true|none||none|
-|»»» value|integer|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
+## GET 超级管理员决策汇总
+GET /api/admin/super/decision/summary
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+获取超级管理员视角的决策卡片、趋势和风险提示。
 
-状态码 **403**
+### 请求参数
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
 
-# web管理后台/超级管理员/区域热力图
+> 返回示例
 
-## GET 查看地区销售额分布
+> 200 Response
 
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员决策汇总
+GET /api/admin/market/decision/summary
+
+获取市场分析管理员视角的决策卡片、趋势和风险提示。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 区域热力图
+## GET 超级管理员销售热力图
 GET /api/admin/super/region/sales-heatmap
 
-查看地区销售额分布
+获取各地区销售金额和订单数量。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|level|query|string| 否 |	province / city|
-|startDate|query|string| 否 |开始日期|
-|endDate|query|string| 否 |结束日期|
-|type|query|string| 否 |统计类型：today、week、month、year、total|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -834,92 +740,56 @@ GET /api/admin/super/region/sales-heatmap
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
     "list": [
       {
-        "regionCode": "440000",
-        "regionName": "广东省",
-        "salesAmount": 65000,
-        "orderCount": 50
+        "name": "示例数据",
+        "value": 100
       }
     ]
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "type 只能为 today、week、month、year、total"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看地区销售额分布数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» regionCode|string|false|none||none|
-|»»» regionName|string|false|none||none|
-|»»» salesAmount|integer|false|none||none|
-|»»» orderCount|integer|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 查看地区用户分布
-
+## GET 超级管理员用户热力图
 GET /api/admin/super/region/user-heatmap
 
-查看地区用户分布
+获取各地区用户数和活跃用户数。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|type|query|string| 否 |统计类型：today、week、month、year、total|
-|startDate|query|string| 否 |开始日期，格式：YYYY-MM-DD|
-|endDate|query|string| 否 |结束日期，格式：YYYY-MM-DD|
-|level|query|string| 否 |地区层级：country、province、city|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -928,270 +798,12 @@ GET /api/admin/super/region/user-heatmap
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
     "list": [
       {
-        "regionCode": "440000",
-        "regionName": "广东省",
-        "userCount": 520,
-        "activeUserCount": 180
-      }
-    ]
-  }
-}
-```
-
-> 400 Response
-
-```json
-{
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "type 只能为 today、week、month、year、total"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看地区用户分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» regionCode|string|false|none||none|
-|»»» regionName|string|false|none||none|
-|»»» userCount|integer|false|none||none|
-|»»» activeUserCount|integer|false|none||none|
-
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/超级管理员/用户价值分析
-
-## GET 获取普通用户数量
-
-GET /api/admin/super/user-value/normal-users
-
-获取普通用户数量
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "normalUserCount": 900
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看普通用户数量"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» normalUserCount|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 获取高活跃用户数量
-
-GET /api/admin/super/user-value/high-active-users
-
-获取高活跃用户数量
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|period|query|string| 否 |none|
-|metric|query|string| 否 |none|
-|threshold|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "highActiveUserCount": 260
-  }
-}
-```
-
-> 400 Response
-
-```json
-{
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "period 只能为 7d、30d、90d"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看高活跃用户数量"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» highActiveUserCount|integer|true|none||none|
-
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/超级管理员/用户画像概览
-
-## GET 年龄分布
-
-GET /api/admin/super/user-profile/age-distribution
-
-年龄分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "ageRange": "18-25",
-        "count": 320
-      },
-      {
-        "ageRange": "26-35",
-        "count": 460
+        "name": "示例数据",
+        "value": 100
       }
     ]
   }
@@ -1203,1175 +815,39 @@ GET /api/admin/super/user-profile/age-distribution
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看年龄分布数据"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» ageRange|string|true|none||none|
-|»»» count|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 地区分布
-
-GET /api/admin/super/user-profile/region-distribution
-
-地区分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "regionName": "广东省",
-        "count": 500
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看地区分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
+|名称|类型|必选|说明|
 |---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» regionName|string|false|none||none|
-|»»» count|integer|false|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 活跃度分布
-
-GET /api/admin/super/user-profile/activity-distribution
-
-活跃度分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "level": "high",
-        "levelName": "高活跃",
-        "count": 260
-      },
-      {
-        "level": "normal",
-        "levelName": "普通用户",
-        "count": 900
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看活跃分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» level|string|true|none||none|
-|»»» levelName|string|true|none||none|
-|»»» count|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 绑定软件分布
-
-GET /api/admin/super/user-profile/music-service-distribution
-
-绑定软件分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "service": "qq",
-        "serviceName": "QQ音乐",
-        "count": 300
-      },
-      {
-        "service": "netease",
-        "serviceName": "网易云音乐",
-        "count": 260
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看绑定软件分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» service|string|true|none||none|
-|»»» serviceName|string|true|none||none|
-|»»» count|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/超级管理员/用户反馈/评价
-
-## GET 用户反馈列表
-
-GET /api/admin/super/feedback/list
-
-用户反馈列表
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|page|query|string| 否 |页码|
-|pageSize|query|string| 否 |每页数量|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "message": "获取成功",
-  "data": {
-    "page": 1,
-    "pageSize": 10,
-    "total": 3,
-    "totalPages": 1,
-    "list": [
-      {
-        "feedbackId": "FB202501310001",
-        "userId": 10086,
-        "nickname": "张三",
-        "avatar": "https://example.com/avatar/10086.png",
-        "phone": "138****8888",
-        "feedbackType": "bug",
-        "feedbackTypeText": "问题反馈",
-        "content": "登录时偶尔提示网络异常，但网络是正常的。",
-        "images": [
-          "https://example.com/feedback/FB202501310001_1.png",
-          "https://example.com/feedback/FB202501310001_2.png"
-        ],
-        "contact": "13888888888",
-        "status": "pending",
-        "statusText": "待处理",
-        "priority": "normal",
-        "priorityText": "普通",
-        "handlerId": null,
-        "handlerName": null,
-        "replyContent": null,
-        "handledAt": null,
-        "createdAt": "2025-01-31 10:20:30",
-        "updatedAt": "2025-01-31 10:20:30"
-      },
-      {
-        "feedbackId": "FB202501300002",
-        "userId": 10087,
-        "nickname": "李四",
-        "avatar": "https://example.com/avatar/10087.png",
-        "phone": "139****6666",
-        "feedbackType": "suggestion",
-        "feedbackTypeText": "功能建议",
-        "content": "建议增加订单导出功能，方便核对数据。",
-        "images": [],
-        "contact": "lisi@example.com",
-        "status": "processing",
-        "statusText": "处理中",
-        "priority": "high",
-        "priorityText": "高",
-        "handlerId": 1,
-        "handlerName": "超级管理员",
-        "replyContent": null,
-        "handledAt": null,
-        "createdAt": "2025-01-30 16:45:10",
-        "updatedAt": "2025-01-31 09:10:00"
-      },
-      {
-        "feedbackId": "FB202501280003",
-        "userId": 10088,
-        "nickname": "王五",
-        "avatar": "https://example.com/avatar/10088.png",
-        "phone": "137****1234",
-        "feedbackType": "complaint",
-        "feedbackTypeText": "投诉",
-        "content": "客服回复速度较慢，希望能尽快处理。",
-        "images": [],
-        "contact": "13712341234",
-        "status": "resolved",
-        "statusText": "已解决",
-        "priority": "high",
-        "priorityText": "高",
-        "handlerId": 2,
-        "handlerName": "管理员A",
-        "replyContent": "您好，已为您反馈给客服主管，我们会优化处理流程。",
-        "handledAt": "2025-01-29 11:30:00",
-        "createdAt": "2025-01-28 14:05:20",
-        "updatedAt": "2025-01-29 11:30:00"
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看用户反馈列表"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» page|integer|true|none||none|
-|»» pageSize|integer|true|none||none|
-|»» total|integer|true|none||none|
-|»» totalPages|integer|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» feedbackId|string|true|none||none|
-|»»» userId|integer|true|none||none|
-|»»» nickname|string|true|none||none|
-|»»» avatar|string|true|none||none|
-|»»» phone|string|true|none||none|
-|»»» feedbackType|string|true|none||none|
-|»»» feedbackTypeText|string|true|none||none|
-|»»» content|string|true|none||none|
-|»»» images|[string]|true|none||none|
-|»»» contact|string|true|none||none|
-|»»» status|string|true|none||none|
-|»»» statusText|string|true|none||none|
-|»»» priority|string|true|none||none|
-|»»» priorityText|string|true|none||none|
-|»»» handlerId|integer¦null|true|none||none|
-|»»» handlerName|string¦null|true|none||none|
-|»»» replyContent|string¦null|true|none||none|
-|»»» handledAt|string¦null|true|none||none|
-|»»» createdAt|string|true|none||none|
-|»»» updatedAt|string|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 用户反馈详情
-
-GET /api/admin/super/feedback/detail
-
-用户反馈详情
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|feedbackId|query|string| 否 |反馈 ID|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "message": "获取成功",
-  "data": {
-    "feedbackId": "FB202501310001",
-    "userInfo": {
-      "userId": 10086,
-      "nickname": "张三",
-      "avatar": "https://example.com/avatar/10086.png",
-      "phone": "138****8888",
-      "email": "zhangsan@example.com",
-      "registerTime": "2024-08-12 09:30:20",
-      "userStatus": "normal",
-      "userStatusText": "正常"
-    },
-    "feedbackInfo": {
-      "feedbackType": "bug",
-      "feedbackTypeText": "问题反馈",
-      "title": "登录时提示网络异常",
-      "content": "登录时偶尔提示网络异常，但我的网络是正常的，希望尽快排查。",
-      "images": [
-        "https://example.com/feedback/FB202501310001_1.png",
-        "https://example.com/feedback/FB202501310001_2.png"
-      ],
-      "contact": "13888888888",
-      "source": "app",
-      "sourceText": "移动端 App",
-      "appVersion": "1.2.5",
-      "deviceInfo": {
-        "deviceType": "iOS",
-        "deviceModel": "iPhone 14",
-        "systemVersion": "iOS 17.2",
-        "networkType": "WiFi"
-      },
-      "createdAt": "2025-01-31 10:20:30",
-      "updatedAt": "2025-01-31 10:20:30"
-    },
-    "processInfo": {
-      "status": "pending",
-      "statusText": "待处理",
-      "priority": "normal",
-      "priorityText": "普通",
-      "handlerId": null,
-      "handlerName": null,
-      "replyContent": null,
-      "handledAt": null,
-      "closedAt": null
-    },
-    "processLogs": [
-      {
-        "logId": 1,
-        "action": "submit",
-        "actionText": "用户提交反馈",
-        "operatorId": 10086,
-        "operatorName": "张三",
-        "operatorType": "user",
-        "remark": "用户提交反馈",
-        "createdAt": "2025-01-31 10:20:30"
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看用户反馈详情"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» feedbackId|string|true|none||none|
-|»» userInfo|object|true|none||none|
-|»»» userId|integer|true|none||none|
-|»»» nickname|string|true|none||none|
-|»»» avatar|string|true|none||none|
-|»»» phone|string|true|none||none|
-|»»» email|string|true|none||none|
-|»»» registerTime|string|true|none||none|
-|»»» userStatus|string|true|none||none|
-|»»» userStatusText|string|true|none||none|
-|»» feedbackInfo|object|true|none||none|
-|»»» feedbackType|string|true|none||none|
-|»»» feedbackTypeText|string|true|none||none|
-|»»» title|string|true|none||none|
-|»»» content|string|true|none||none|
-|»»» images|[string]|true|none||none|
-|»»» contact|string|true|none||none|
-|»»» source|string|true|none||none|
-|»»» sourceText|string|true|none||none|
-|»»» appVersion|string|true|none||none|
-|»»» deviceInfo|object|true|none||none|
-|»»»» deviceType|string|true|none||none|
-|»»»» deviceModel|string|true|none||none|
-|»»»» systemVersion|string|true|none||none|
-|»»»» networkType|string|true|none||none|
-|»»» createdAt|string|true|none||none|
-|»»» updatedAt|string|true|none||none|
-|»» processInfo|object|true|none||none|
-|»»» status|string|true|none||none|
-|»»» statusText|string|true|none||none|
-|»»» priority|string|true|none||none|
-|»»» priorityText|string|true|none||none|
-|»»» handlerId|null|true|none||none|
-|»»» handlerName|null|true|none||none|
-|»»» replyContent|null|true|none||none|
-|»»» handledAt|null|true|none||none|
-|»»» closedAt|null|true|none||none|
-|»» processLogs|[object]|true|none||none|
-|»»» logId|integer|false|none||none|
-|»»» action|string|false|none||none|
-|»»» actionText|string|false|none||none|
-|»»» operatorId|integer|false|none||none|
-|»»» operatorName|string|false|none||none|
-|»»» operatorType|string|false|none||none|
-|»»» remark|string|false|none||none|
-|»»» createdAt|string|false|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/市场分析管理员/获取热歌排行
-
-## GET 获取热歌排行
-
-GET /api/admin/market/top-songs
-
-获取热歌排行
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|rankType|query|string| 否 |none|
-|rangeType|query|string| 否 |none|
-|page|query|string| 否 |none|
-|pageSize|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "rank": 1,
-        "songName": "城市夜航",
-        "artist": "Luna Echo",
-        "platform": "qq",
-        "playCount": 128,
-        "userCount": 60
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看热歌排行"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» rank|integer|false|none||none|
-|»»» songName|string|false|none||none|
-|»»» artist|string|false|none||none|
-|»»» platform|string|false|none||none|
-|»»» playCount|integer|false|none||none|
-|»»» userCount|integer|false|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/市场分析管理员/用户画像概览 
-
-## GET 年龄分布
-
-GET /api/admin/market/user-profile/age-distribution
-
-年龄分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "ageRange": "18-25",
-        "count": 320
-      },
-      {
-        "ageRange": "26-35",
-        "count": 460
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看年龄分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» ageRange|string|true|none||none|
-|»»» count|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 地区分布
-
-GET /api/admin/market/user-profile/region-distribution
-
-地区分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "regionName": "广东省",
-        "count": 500
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看地区分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» regionName|string|false|none||none|
-|»»» count|integer|false|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 活跃度分布
-
-GET /api/admin/market/user-profile/activity-distribution
-
-活跃度分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "level": "high",
-        "levelName": "高活跃",
-        "count": 260
-      },
-      {
-        "level": "normal",
-        "levelName": "普通用户",
-        "count": 900
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看活跃分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» level|string|true|none||none|
-|»»» levelName|string|true|none||none|
-|»»» count|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 绑定软件分布
-
-GET /api/admin/market/user-profile/music-service-distribution
-
-绑定软件分布
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "list": [
-      {
-        "service": "qq",
-        "serviceName": "QQ音乐",
-        "count": 300
-      },
-      {
-        "service": "netease",
-        "serviceName": "网易云音乐",
-        "count": 260
-      }
-    ]
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看绑定软件分布数据"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» service|string|true|none||none|
-|»»» serviceName|string|true|none||none|
-|»»» count|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/市场分析管理员/区域热力图 
-
-## GET 查看地区销售额分布
-
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员销售热力图
 GET /api/admin/market/region/sales-heatmap
 
-查看地区销售额分布
+获取市场视角各地区销售金额和订单数量。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|level|query|string| 否 |	province / city|
-|startDate|query|string| 否 |开始日期|
-|endDate|query|string| 否 |结束日期|
-|type|query|string| 否 |统计类型：today、week、month、year、total|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -2380,92 +856,56 @@ GET /api/admin/market/region/sales-heatmap
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
     "list": [
       {
-        "regionCode": "440000",
-        "regionName": "广东省",
-        "salesAmount": 65000,
-        "orderCount": 50
+        "name": "示例数据",
+        "value": 100
       }
     ]
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "type 只能为 today、week、month、year、total"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看地区销售额分布数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» regionCode|string|false|none||none|
-|»»» regionName|string|false|none||none|
-|»»» salesAmount|integer|false|none||none|
-|»»» orderCount|integer|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 查看地区用户分布
-
+## GET 市场管理员用户热力图
 GET /api/admin/market/region/user-heatmap
 
-查看地区用户分布
+获取市场视角各地区用户数和活跃用户数。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|type|query|string| 否 |统计类型：today、week、month、year、total|
-|startDate|query|string| 否 |开始日期，格式：YYYY-MM-DD|
-|endDate|query|string| 否 |结束日期，格式：YYYY-MM-DD|
-|level|query|string| 否 |地区层级：country、province、city|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -2474,90 +914,628 @@ GET /api/admin/market/region/user-heatmap
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
     "list": [
       {
-        "regionCode": "440000",
-        "regionName": "广东省",
-        "userCount": 520,
-        "activeUserCount": 180
+        "name": "示例数据",
+        "value": 100
       }
     ]
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "type 只能为 today、week、month、year、total"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看地区用户分布数据"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» regionCode|string|false|none||none|
-|»»» regionName|string|false|none||none|
-|»»» userCount|integer|false|none||none|
-|»»» activeUserCount|integer|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
+# 用户画像
+## GET 超级管理员年龄分布
+GET /api/admin/super/user-profile/age-distribution
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+获取用户年龄段分布。
 
-状态码 **403**
+### 请求参数
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
 
-# web管理后台/市场分析管理员/用户价值分析 
+> 返回示例
 
-## GET 获取普通用户数量
+> 200 Response
 
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 超级管理员地区分布
+GET /api/admin/super/user-profile/region-distribution
+
+获取用户地区分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 超级管理员活跃分布
+GET /api/admin/super/user-profile/activity-distribution
+
+获取用户活跃层级分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 超级管理员音乐服务分布
+GET /api/admin/super/user-profile/music-service-distribution
+
+获取用户绑定音乐平台分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员年龄分布
+GET /api/admin/market/user-profile/age-distribution
+
+获取市场视角用户年龄段分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员地区分布
+GET /api/admin/market/user-profile/region-distribution
+
+获取市场视角用户地区分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员活跃分布
+GET /api/admin/market/user-profile/activity-distribution
+
+获取市场视角用户活跃层级分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员音乐服务分布
+GET /api/admin/market/user-profile/music-service-distribution
+
+获取市场视角用户绑定音乐平台分布。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 用户价值
+## GET 超级管理员普通用户统计
+GET /api/admin/super/user-value/normal-users
+
+获取普通用户数量及占比。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 超级管理员高活跃用户统计
+GET /api/admin/super/user-value/high-active-users
+
+获取高活跃用户数量及占比。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场管理员普通用户统计
 GET /api/admin/market/user-value/normal-users
 
-获取普通用户数量
+获取市场视角普通用户数量及占比。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -2566,8 +1544,9 @@ GET /api/admin/market/user-value/normal-users
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "normalUserCount": 900
+    "result": true
   }
 }
 ```
@@ -2577,69 +1556,39 @@ GET /api/admin/market/user-value/normal-users
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看普通用户数量"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» normalUserCount|integer|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 获取高活跃用户数量
-
+## GET 市场管理员高活跃用户统计
 GET /api/admin/market/user-value/high-active-users
 
-获取高活跃用户数量
+获取市场视角高活跃用户数量及占比。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|period|query|string| 否 |none|
-|metric|query|string| 否 |none|
-|threshold|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -2648,83 +1597,110 @@ GET /api/admin/market/user-value/high-active-users
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "highActiveUserCount": 260
+    "result": true
   }
 }
 ```
 
-> 400 Response
+> 401 Response
 
 ```json
 {
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "period 只能为 7d、30d、90d"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看高活跃用户数量"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» highActiveUserCount|integer|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
+# 市场分析
+## GET 热歌排行
+GET /api/admin/market/top-songs
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+获取播放量、用户数和平台来源排行榜。
 
-状态码 **403**
+### 请求参数
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
 
-# web管理后台/市场分析管理员/留存分析
+> 返回示例
 
-## GET 购买设备后是否持续使用
+> 200 Response
 
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 设备购买留存
 GET /api/admin/market/retention/device-purchase
 
-购买设备后是否持续使用
+获取购买设备后的用户留存数据。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|startDate|query|string| 否 |开始日期|
-|endDate|query|string| 否 |结束日期|
-|rangeType|query|string| 否 |none|
-|groupBy|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -2733,117 +1709,56 @@ GET /api/admin/market/retention/device-purchase
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
     "list": [
       {
-        "date": "2026-05-01",
-        "purchaseUserCount": 100,
-        "day1RetainedCount": 62,
-        "day7RetainedCount": 35,
-        "day30RetainedCount": 18,
-        "day1RetentionRate": 0.62,
-        "day7RetentionRate": 0.35,
-        "day30RetentionRate": 0.18
+        "name": "示例数据",
+        "value": 100
       }
     ]
   }
 }
 ```
 
-> 400 Response
-
-```json
-{
-  "code": 400,
-  "message": "请求参数错误",
-  "error_details": "rangeType=custom 时，startDate 和 endDate 不能为空"
-}
-```
-
 > 401 Response
 
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看设备购买留存数据"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|400|[Bad Request](https://tools.ietf.org/html/rfc7231#section-6.5.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» date|string|false|none||none|
-|»»» purchaseUserCount|integer|false|none||none|
-|»»» day1RetainedCount|integer|false|none||none|
-|»»» day7RetainedCount|integer|false|none||none|
-|»»» day30RetainedCount|integer|false|none||none|
-|»»» day1RetentionRate|number|false|none||none|
-|»»» day7RetentionRate|number|false|none||none|
-|»»» day30RetentionRate|number|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **400**
+## GET 用户分群
+GET /api/admin/market/segments
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/市场分析管理员/个人信息
-
-## GET 查看个人信息
-
-GET /api/admin/market/profile
-
-查看个人信息
+获取按活跃、留存、绑定和偏好建立的运营人群。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -2852,15 +1767,15 @@ GET /api/admin/market/profile
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "adminId": 2,
-    "username": "market",
-    "realName": "李四",
-    "jobNo": "M001",
-    "position": "市场分析管理员",
-    "role": "market_admin",
-    "phone": "13800000000",
-    "email": "market@example.com"
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
   }
 }
 ```
@@ -2870,77 +1785,330 @@ GET /api/admin/market/profile
 ```json
 {
   "code": 401,
-  "message": "认证失败",
-  "error_details": "Authorization 格式错误，应为 Bearer access_token"
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "账号不存在",
-  "error_details": "当前登录账号不存在或已被删除"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» adminId|integer|true|none||none|
-|»» username|string|true|none||none|
-|»» realName|string|true|none||none|
-|»» jobNo|string|true|none||none|
-|»» position|string|true|none||none|
-|»» role|string|true|none||none|
-|»» phone|string|true|none||none|
-|»» email|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## GET 营销洞察
+GET /api/admin/market/insights
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+获取转化漏斗和运营建议。
 
-状态码 **404**
+### 请求参数
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
 
-# web管理后台/普通管理员/用户反馈/评价 
+> 返回示例
 
-## GET 用户反馈列表
+> 200 Response
 
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 市场决策报表
+GET /api/admin/market/reports
+
+获取市场日报、周报或月报列表。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 超级管理员决策报表
+GET /api/admin/super/reports
+
+获取超级管理员视角的决策报表列表。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 用户反馈
+## GET 超级管理员反馈列表
+GET /api/admin/super/feedback/list
+
+分页获取用户反馈列表。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|page|query|integer|否|页码，默认 1|
+|pageSize|query|integer|否|每页数量，默认 20|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 超级管理员反馈详情
+GET /api/admin/super/feedback/detail
+
+根据反馈 ID 获取反馈、用户和处理信息。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|f|e|e|d|b|
+|q|u|e|r|y|
+|s|t|r|i|n|
+|是|||||
+|反|馈| |I|D|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "示例ID",
+    "name": "示例数据"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 运营管理员反馈列表
 GET /api/admin/operator/feedback/list
 
-用户反馈列表
+分页获取运营管理员可处理的用户反馈列表。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|page|query|string| 否 |页码|
-|pageSize|query|string| 否 |每页数量|
-|Authorization|header|string| 否 |none|
+|page|query|integer|否|页码，默认 1|
+|pageSize|query|integer|否|每页数量，默认 20|
 
 > 返回示例
 
@@ -2949,81 +2117,13 @@ GET /api/admin/operator/feedback/list
 ```json
 {
   "code": 200,
-  "message": "获取成功",
+  "message": "success",
   "data": {
-    "page": 1,
-    "pageSize": 10,
-    "total": 3,
-    "totalPages": 1,
+    "total": 1,
     "list": [
       {
-        "feedbackId": "FB202501310001",
-        "userId": 10086,
-        "nickname": "张三",
-        "avatar": "https://example.com/avatar/10086.png",
-        "phone": "138****8888",
-        "feedbackType": "bug",
-        "feedbackTypeText": "问题反馈",
-        "content": "登录时偶尔提示网络异常，但网络是正常的。",
-        "images": [
-          "https://example.com/feedback/FB202501310001_1.png",
-          "https://example.com/feedback/FB202501310001_2.png"
-        ],
-        "contact": "13888888888",
-        "status": "pending",
-        "statusText": "待处理",
-        "priority": "normal",
-        "priorityText": "普通",
-        "handlerId": null,
-        "handlerName": null,
-        "replyContent": null,
-        "handledAt": null,
-        "createdAt": "2025-01-31 10:20:30",
-        "updatedAt": "2025-01-31 10:20:30"
-      },
-      {
-        "feedbackId": "FB202501300002",
-        "userId": 10087,
-        "nickname": "李四",
-        "avatar": "https://example.com/avatar/10087.png",
-        "phone": "139****6666",
-        "feedbackType": "suggestion",
-        "feedbackTypeText": "功能建议",
-        "content": "建议增加订单导出功能，方便核对数据。",
-        "images": [],
-        "contact": "lisi@example.com",
-        "status": "processing",
-        "statusText": "处理中",
-        "priority": "high",
-        "priorityText": "高",
-        "handlerId": 1,
-        "handlerName": "超级管理员",
-        "replyContent": null,
-        "handledAt": null,
-        "createdAt": "2025-01-30 16:45:10",
-        "updatedAt": "2025-01-31 09:10:00"
-      },
-      {
-        "feedbackId": "FB202501280003",
-        "userId": 10088,
-        "nickname": "王五",
-        "avatar": "https://example.com/avatar/10088.png",
-        "phone": "137****1234",
-        "feedbackType": "complaint",
-        "feedbackTypeText": "投诉",
-        "content": "客服回复速度较慢，希望能尽快处理。",
-        "images": [],
-        "contact": "13712341234",
-        "status": "resolved",
-        "statusText": "已解决",
-        "priority": "high",
-        "priorityText": "高",
-        "handlerId": 2,
-        "handlerName": "管理员A",
-        "replyContent": "您好，已为您反馈给客服主管，我们会优化处理流程。",
-        "handledAt": "2025-01-29 11:30:00",
-        "createdAt": "2025-01-28 14:05:20",
-        "updatedAt": "2025-01-29 11:30:00"
+        "id": "示例ID",
+        "name": "示例数据"
       }
     ]
   }
@@ -3035,92 +2135,43 @@ GET /api/admin/operator/feedback/list
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看用户反馈列表"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» page|integer|true|none||none|
-|»» pageSize|integer|true|none||none|
-|»» total|integer|true|none||none|
-|»» totalPages|integer|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» feedbackId|string|true|none||none|
-|»»» userId|integer|true|none||none|
-|»»» nickname|string|true|none||none|
-|»»» avatar|string|true|none||none|
-|»»» phone|string|true|none||none|
-|»»» feedbackType|string|true|none||none|
-|»»» feedbackTypeText|string|true|none||none|
-|»»» content|string|true|none||none|
-|»»» images|[string]|true|none||none|
-|»»» contact|string|true|none||none|
-|»»» status|string|true|none||none|
-|»»» statusText|string|true|none||none|
-|»»» priority|string|true|none||none|
-|»»» priorityText|string|true|none||none|
-|»»» handlerId|integer¦null|true|none||none|
-|»»» handlerName|string¦null|true|none||none|
-|»»» replyContent|string¦null|true|none||none|
-|»»» handledAt|string¦null|true|none||none|
-|»»» createdAt|string|true|none||none|
-|»»» updatedAt|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 用户反馈详情
-
+## GET 运营管理员反馈详情
 GET /api/admin/operator/feedback/detail
 
-用户反馈详情
+根据反馈 ID 获取反馈详情。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|feedbackId|query|string| 否 |反馈 ID|
-|Authorization|header|string| 否 |none|
+|f|e|e|d|b|
+|q|u|e|r|y|
+|s|t|r|i|n|
+|是|||||
+|反|馈| |I|D|
 
 > 返回示例
 
@@ -3129,64 +2180,10 @@ GET /api/admin/operator/feedback/detail
 ```json
 {
   "code": 200,
-  "message": "获取成功",
+  "message": "success",
   "data": {
-    "feedbackId": "FB202501310001",
-    "userInfo": {
-      "userId": 10086,
-      "nickname": "张三",
-      "avatar": "https://example.com/avatar/10086.png",
-      "phone": "138****8888",
-      "email": "zhangsan@example.com",
-      "registerTime": "2024-08-12 09:30:20",
-      "userStatus": "normal",
-      "userStatusText": "正常"
-    },
-    "feedbackInfo": {
-      "feedbackType": "bug",
-      "feedbackTypeText": "问题反馈",
-      "title": "登录时提示网络异常",
-      "content": "登录时偶尔提示网络异常，但我的网络是正常的，希望尽快排查。",
-      "images": [
-        "https://example.com/feedback/FB202501310001_1.png",
-        "https://example.com/feedback/FB202501310001_2.png"
-      ],
-      "contact": "13888888888",
-      "source": "app",
-      "sourceText": "移动端 App",
-      "appVersion": "1.2.5",
-      "deviceInfo": {
-        "deviceType": "iOS",
-        "deviceModel": "iPhone 14",
-        "systemVersion": "iOS 17.2",
-        "networkType": "WiFi"
-      },
-      "createdAt": "2025-01-31 10:20:30",
-      "updatedAt": "2025-01-31 10:20:30"
-    },
-    "processInfo": {
-      "status": "pending",
-      "statusText": "待处理",
-      "priority": "normal",
-      "priorityText": "普通",
-      "handlerId": null,
-      "handlerName": null,
-      "replyContent": null,
-      "handledAt": null,
-      "closedAt": null
-    },
-    "processLogs": [
-      {
-        "logId": 1,
-        "action": "submit",
-        "actionText": "用户提交反馈",
-        "operatorId": 10086,
-        "operatorName": "张三",
-        "operatorType": "user",
-        "remark": "用户提交反馈",
-        "createdAt": "2025-01-31 10:20:30"
-      }
-    ]
+    "id": "示例ID",
+    "name": "示例数据"
   }
 }
 ```
@@ -3196,119 +2193,51 @@ GET /api/admin/operator/feedback/detail
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看用户反馈详情"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» feedbackId|string|true|none||none|
-|»» userInfo|object|true|none||none|
-|»»» userId|integer|true|none||none|
-|»»» nickname|string|true|none||none|
-|»»» avatar|string|true|none||none|
-|»»» phone|string|true|none||none|
-|»»» email|string|true|none||none|
-|»»» registerTime|string|true|none||none|
-|»»» userStatus|string|true|none||none|
-|»»» userStatusText|string|true|none||none|
-|»» feedbackInfo|object|true|none||none|
-|»»» feedbackType|string|true|none||none|
-|»»» feedbackTypeText|string|true|none||none|
-|»»» title|string|true|none||none|
-|»»» content|string|true|none||none|
-|»»» images|[string]|true|none||none|
-|»»» contact|string|true|none||none|
-|»»» source|string|true|none||none|
-|»»» sourceText|string|true|none||none|
-|»»» appVersion|string|true|none||none|
-|»»» deviceInfo|object|true|none||none|
-|»»»» deviceType|string|true|none||none|
-|»»»» deviceModel|string|true|none||none|
-|»»»» systemVersion|string|true|none||none|
-|»»»» networkType|string|true|none||none|
-|»»» createdAt|string|true|none||none|
-|»»» updatedAt|string|true|none||none|
-|»» processInfo|object|true|none||none|
-|»»» status|string|true|none||none|
-|»»» statusText|string|true|none||none|
-|»»» priority|string|true|none||none|
-|»»» priorityText|string|true|none||none|
-|»»» handlerId|null|true|none||none|
-|»»» handlerName|null|true|none||none|
-|»»» replyContent|null|true|none||none|
-|»»» handledAt|null|true|none||none|
-|»»» closedAt|null|true|none||none|
-|»» processLogs|[object]|true|none||none|
-|»»» logId|integer|false|none||none|
-|»»» action|string|false|none||none|
-|»»» actionText|string|false|none||none|
-|»»» operatorId|integer|false|none||none|
-|»»» operatorName|string|false|none||none|
-|»»» operatorType|string|false|none||none|
-|»»» remark|string|false|none||none|
-|»»» createdAt|string|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## POST 处理用户反馈
+POST /api/admin/operator/feedback/handle
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+运营管理员修改反馈处理状态和备注。
 
-状态码 **403**
+> Body 请求示例
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/普通管理员/ 设备当前固件版本
-
-## GET  查看设备当前固件版本
-
-GET /api/admin/operator/device/firmware-version
-
- 查看设备当前固件版本
+```json
+{
+  "feedbackId": "FB-001",
+  "status": "processed",
+  "remark": "后台已处理"
+}
+```
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|deviceId|query|string| 否 |设备 ID|
-|Authorization|header|string| 否 |none|
-
-#### 详细说明
-
-**deviceId**: 设备 ID
+|feedbackId|body|string|是|反馈 ID|
+|status|body|string|是|处理状态，例如 processed|
+|remark|body|string|否|处理备注|
 
 > 返回示例
 
@@ -3317,13 +2246,9 @@ GET /api/admin/operator/device/firmware-version
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "deviceId": "dev_001",
-    "deviceName": "客厅音箱",
-    "modelName": "SH-Mini A1",
-    "currentVersion": "1.0.3",
-    "latestVersion": "1.0.5",
-    "needUpdate": true
+    "result": true
   }
 }
 ```
@@ -3333,179 +2258,40 @@ GET /api/admin/operator/device/firmware-version
 ```json
 {
   "code": 401,
-  "message": "认证失败",
-  "error_details": "Authorization 格式错误，应为 Bearer access_token"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看设备固件版本"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» deviceId|string|true|none||none|
-|»» deviceName|string|true|none||none|
-|»» modelName|string|true|none||none|
-|»» currentVersion|string|true|none||none|
-|»» latestVersion|string|true|none||none|
-|»» needUpdate|boolean|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## POST  更新设备固件
-
-POST /api/admin/operator/device/update-firmware
-
- 更新设备固件
-
-> Body 请求参数
-
-```json
-{
-  "deviceId": "dev_001",
-  "targetVersion": "1.0.5"
-}
-```
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-|body|body|object| 是 |none|
-|» deviceId|body|string| 是 |none|
-|» targetVersion|body|string| 是 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "message": "固件更新任务已创建",
-  "data": {
-    "taskId": 10001,
-    "deviceId": "dev_001",
-    "targetVersion": "1.0.5",
-    "status": "pending"
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "设备不存在",
-  "error_details": "未找到对应设备"
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
+|名称|类型|必选|说明|
 |---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» taskId|integer|true|none||none|
-|»» deviceId|string|true|none||none|
-|»» targetVersion|string|true|none||none|
-|»» status|string|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **404**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/普通管理员/设备管理
-
+# 设备运营管理
 ## GET 设备列表
-
 GET /api/admin/operator/device/list
 
-设备列表
-数据来源
-device
-user
+获取设备列表、在线状态和归属用户摘要。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|page|query|string| 否 |none|
-|page_size|query|string| 否 |none|
-|status|query|string| 否 |none|
-|keyword|query|string| 否 |设备名 / 设备编号|
-|Authorization|header|string| 否 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -3514,17 +2300,13 @@ user
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "total": 120,
+    "total": 1,
     "list": [
       {
-        "deviceId": "dev_001",
-        "deviceName": "客厅音箱",
-        "modelName": "SH-Mini A1",
-        "ownerName": "张三",
-        "online": true,
-        "firmwareVersion": "1.0.3",
-        "lastOnlineAt": "2026-05-20 10:00:00"
+        "id": "示例ID",
+        "name": "示例数据"
       }
     ]
   }
@@ -3536,169 +2318,43 @@ user
 ```json
 {
   "code": 401,
-  "message": "Unauthorized"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "Permission denied"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» list|[object]|true|none||none|
-|»» deviceId|integer|false|none||none|
-|»» deviceName|string|false|none||none|
-|»» owner|string|false|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-
-## GET 获取设备详情 
-
-GET /api/admin/operator/device/detail
-
-Web 设备管理页
-用于获取用户绑定设备的详细信息，包括设备名称、型号、在线状态、当前音量、网络信息等。
-
-前端进入设备详情页时调用。
-
-### 请求参数
-
-|名称|位置|类型|必选|说明|
-|---|---|---|---|---|
-|deviceId|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "data": {
-    "deviceId": "dev_001",
-    "deviceName": "客厅音箱",
-    "modelName": "SH-Mini A1",
-    "ownerName": "张三",
-    "online": true,
-    "volume": 60,
-    "battery": 82,
-    "signalStrength": -73.59,
-    "currentNetwork": "Home-5G",
-    "firmwareVersion": "1.0.3",
-    "createdAt": "2026-05-01 10:00:00"
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "用户未登录",
-  "data": null
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "设备不存在",
-  "data": null
-}
-```
-
-### 返回结果
-
-|状态码|状态码含义|说明|数据模型|
+|名称|类型|必选|说明|
 |---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» deviceId|string|true|none||none|
-|»» deviceName|string|true|none||none|
-|»» modelName|string|true|none||none|
-|»» online|boolean|true|none||none|
-|»» isConnecting|boolean|true|none||none|
-|»» volume|integer|true|none||none|
-|»» signalStrength|number|true|none||none|
-|»» bassGain|integer|true|none||none|
-|»» currentNetwork|string|true|none||none|
-|»» volumeLimit|integer|true|none||none|
-
-状态码 **401**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|null|true|none||none|
-
-状态码 **404**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|null|true|none||none|
-
-## GET 实时设备状态
-
+## GET 设备运行状态
 GET /api/admin/operator/device/runtime-status
 
-实时设备状态
-数据来源
-MongoDB：
-device_runtime
+根据设备 ID 获取电量、音量、网络等实时状态。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|deviceId|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|d|e|v|i|c|
+|q|u|e|r|y|
+|s|t|r|i|n|
+|是|||||
+|设|备| |I|D|
 
 > 返回示例
 
@@ -3707,14 +2363,10 @@ device_runtime
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "deviceId": "dev_001",
-    "online": true,
-    "battery": 82,
-    "volume": 65,
-    "currentSong": "城市夜航",
-    "currentArtist": "Luna Echo",
-    "lastHeartbeat": "2026-05-20 10:30:00"
+    "id": "示例ID",
+    "name": "示例数据"
   }
 }
 ```
@@ -3724,79 +2376,39 @@ device_runtime
 ```json
 {
   "code": 401,
-  "message": "Unauthorized"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "Admin permission required"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» list|[object]|true|none||none|
-|»» deviceId|integer|false|none||none|
-|»» online|boolean|false|none||none|
-|»» battery|integer|false|none||none|
-|»» currentSong|string|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## GET 设备分组
+GET /api/admin/operator/device/groups
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-
-## POST 自定义设备名 
-
-POST /api/admin/operator/device/rename
-
-管理员修改设备名称
-用于修改用户设备名称。
-
-用户在设备详情页编辑设备名称后，前端调用该接口更新设备显示名称。
-
-> Body 请求参数
-
-```json
-{
-  "deviceId": "dev_001",
-  "name": "客厅音箱"
-}
-```
+获取设备分组统计。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-|body|body|object| 是 |none|
-|» deviceId|body|string| 是 |none|
-|» name|body|string| 是 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -3805,10 +2417,9 @@ POST /api/admin/operator/device/rename
 ```json
 {
   "code": 200,
-  "message": "设备名称修改成功",
+  "message": "success",
   "data": {
-    "deviceId": "dev_001",
-    "name": "客厅音箱"
+    "result": true
   }
 }
 ```
@@ -3818,81 +2429,39 @@ POST /api/admin/operator/device/rename
 ```json
 {
   "code": 401,
-  "message": "用户未登录或登录已失效",
-  "data": null
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "设备不存在",
-  "data": {
-    "deviceId": "dev_001"
-  }
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» deviceId|string|true|none||none|
-|»» name|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## GET 告警列表
+GET /api/admin/operator/device/alerts
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|null|true|none||none|
-
-状态码 **404**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» deviceId|string|true|none||none|
-
-## POST 解绑设备 
-
-POST /api/admin/operator/device/unbind
-
-解绑设备
-
-> Body 请求参数
-
-```json
-{
-  "deviceId": "dev_001"
-}
-```
+获取设备离线、升级失败等告警。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
-|body|body|object| 是 |none|
-|» deviceId|body|string| 是 |none|
+|无|-|-|-|该接口不需要额外参数|
 
 > 返回示例
 
@@ -3901,10 +2470,9 @@ POST /api/admin/operator/device/unbind
 ```json
 {
   "code": 200,
-  "message": "设备解绑成功",
+  "message": "success",
   "data": {
-    "deviceId": "dev_001",
-    "unbound": true
+    "result": true
   }
 }
 ```
@@ -3914,77 +2482,156 @@ POST /api/admin/operator/device/unbind
 ```json
 {
   "code": 401,
-  "message": "用户未登录或登录已失效",
-  "data": null
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "设备不存在",
-  "data": {
-    "deviceId": "dev_001"
-  }
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» deviceId|string|true|none||none|
-|»» unbound|boolean|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## GET 设备详情
+GET /api/admin/operator/device/detail
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|null|true|none||none|
+根据设备 ID 获取设备详情。
 
-状态码 **404**
+### 请求参数
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» deviceId|string|true|none||none|
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|d|e|v|i|c|
+|q|u|e|r|y|
+|s|t|r|i|n|
+|是|||||
+|设|备| |I|D|
 
-# web管理后台/普通管理员/ 查看设备日志
+> 返回示例
 
-## GET 查看设备日志列表
+> 200 Response
 
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "示例ID",
+    "name": "示例数据"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 设备绑定用户
+GET /api/admin/operator/device/bound-user
+
+根据设备 ID 获取当前绑定用户信息。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|d|e|v|i|c|
+|q|u|e|r|y|
+|s|t|r|i|n|
+|是|||||
+|设|备| |I|D|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "示例ID",
+    "name": "示例数据"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 设备日志列表
 GET /api/admin/operator/device/logs
 
-查看设备日志列表
+分页获取设备日志。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|deviceSn|query|string| 否 |none|
-|logLevel|query|string| 否 |none|
-|page|query|string| 否 |none|
-|pageSize|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|page|query|integer|否|页码，默认 1|
+|pageSize|query|integer|否|每页数量，默认 20|
 
 > 返回示例
 
@@ -3993,76 +2640,61 @@ GET /api/admin/operator/device/logs
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "total": 50,
+    "total": 1,
     "list": [
       {
-        "logId": 1,
-        "deviceId": "dev_001",
-        "deviceName": "客厅音箱",
-        "logType": "online",
-        "content": "设备上线",
-        "createdAt": "2026-05-20 10:00:00"
+        "id": "示例ID",
+        "name": "示例数据"
       }
     ]
   }
 }
 ```
 
-> 403 Response
+> 401 Response
 
 ```json
 {
-  "code": 403,
-  "message": "无权限操作",
-  "error_details": "当前账号无权更新设备固件"
+  "code": 401,
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» total|integer|true|none||none|
-|»» list|[object]|true|none||none|
-|»»» logId|integer|false|none||none|
-|»»» deviceId|string|false|none||none|
-|»»» deviceName|string|false|none||none|
-|»»» logType|string|false|none||none|
-|»»» content|string|false|none||none|
-|»»» createdAt|string|false|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **403**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-## GET 查看设备日志详情
-
+## GET 设备日志详情
 GET /api/admin/operator/device/log-detail
 
-查看设备日志详情
+根据日志 ID 获取日志原文和追踪信息。
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|logId|query|string| 否 |none|
-|Authorization|header|string| 否 |none|
+|l|o|g|I|d|
+|q|u|e|r|y|
+|s|t|r|i|n|
+|是|||||
+|日|志| |I|D|
 
 > 返回示例
 
@@ -4071,53 +2703,10 @@ GET /api/admin/operator/device/log-detail
 ```json
 {
   "code": 200,
-  "message": "获取成功",
+  "message": "success",
   "data": {
-    "logId": 900001,
-    "deviceId": 10001,
-    "deviceSn": "SN202501310001",
-    "deviceName": "客厅智能音箱",
-    "deviceType": "speaker",
-    "deviceTypeText": "智能音箱",
-    "deviceModel": "SPK-A1",
-    "logType": "firmware",
-    "logTypeText": "固件日志",
-    "logLevel": "info",
-    "logLevelText": "普通信息",
-    "title": "固件升级任务已下发",
-    "content": "设备接收到固件升级任务，目标版本：1.3.0",
-    "eventCode": "FIRMWARE_UPDATE_ISSUED",
-    "traceId": "TRACE202501310001",
-    "taskId": "FWU202501310001",
-    "firmwareVersion": "1.3.0",
-    "onlineStatus": "online",
-    "onlineStatusText": "在线",
-    "ipAddress": "192.168.1.100",
-    "networkType": "wifi",
-    "location": "客厅",
-    "extra": {
-      "currentVersion": "1.2.3",
-      "targetVersion": "1.3.0",
-      "batteryLevel": 86,
-      "signalStrength": -58
-    },
-    "stackTrace": null,
-    "requestInfo": {
-      "requestUrl": "/api/device/firmware/update",
-      "requestMethod": "POST",
-      "requestId": "REQ202501310001"
-    },
-    "responseInfo": {
-      "responseCode": 200,
-      "responseMessage": "success"
-    },
-    "operatorInfo": {
-      "operatorId": 3001,
-      "operatorName": "admin",
-      "operatorType": "admin"
-    },
-    "createdAt": "2025-01-31 18:45:00",
-    "updatedAt": "2025-01-31 18:45:00"
+    "id": "示例ID",
+    "name": "示例数据"
   }
 }
 ```
@@ -4127,128 +2716,49 @@ GET /api/admin/operator/device/log-detail
 ```json
 {
   "code": 401,
-  "message": "未登录",
-  "error_details": "缺少 Authorization 请求头"
-}
-```
-
-> 403 Response
-
-```json
-{
-  "code": 403,
-  "message": "无权限访问",
-  "error_details": "当前账号无权查看设备日志详情"
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "日志不存在",
-  "error_details": "未找到对应日志记录"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|403|[Forbidden](https://tools.ietf.org/html/rfc7231#section-6.5.3)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» data|object|true|none||none|
-|»» logId|integer|true|none||none|
-|»» deviceId|integer|true|none||none|
-|»» deviceSn|string|true|none||none|
-|»» deviceName|string|true|none||none|
-|»» deviceType|string|true|none||none|
-|»» deviceTypeText|string|true|none||none|
-|»» deviceModel|string|true|none||none|
-|»» logType|string|true|none||none|
-|»» logTypeText|string|true|none||none|
-|»» logLevel|string|true|none||none|
-|»» logLevelText|string|true|none||none|
-|»» title|string|true|none||none|
-|»» content|string|true|none||none|
-|»» eventCode|string|true|none||none|
-|»» traceId|string|true|none||none|
-|»» taskId|string|true|none||none|
-|»» firmwareVersion|string|true|none||none|
-|»» onlineStatus|string|true|none||none|
-|»» onlineStatusText|string|true|none||none|
-|»» ipAddress|string|true|none||none|
-|»» networkType|string|true|none||none|
-|»» location|string|true|none||none|
-|»» extra|object|true|none||none|
-|»»» currentVersion|string|true|none||none|
-|»»» targetVersion|string|true|none||none|
-|»»» batteryLevel|integer|true|none||none|
-|»»» signalStrength|integer|true|none||none|
-|»» stackTrace|null|true|none||none|
-|»» requestInfo|object|true|none||none|
-|»»» requestUrl|string|true|none||none|
-|»»» requestMethod|string|true|none||none|
-|»»» requestId|string|true|none||none|
-|»» responseInfo|object|true|none||none|
-|»»» responseCode|integer|true|none||none|
-|»»» responseMessage|string|true|none||none|
-|»» operatorInfo|object|true|none||none|
-|»»» operatorId|integer|true|none||none|
-|»»» operatorName|string|true|none||none|
-|»»» operatorType|string|true|none||none|
-|»» createdAt|string|true|none||none|
-|»» updatedAt|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## POST 重命名设备
+POST /api/admin/operator/device/rename
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+修改设备展示名称。
 
-状态码 **403**
+> Body 请求示例
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-状态码 **404**
-
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
-
-# web管理后台/普通管理员/个人信息 
-
-## GET 查看个人信息
-
-GET /api/operator/market/profile
-
-查看个人信息
+```json
+{
+  "deviceId": "1",
+  "name": "卧室音箱"
+}
+```
 
 ### 请求参数
 
-|名称|位置|类型|必选|说明|
+|名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|Authorization|header|string| 否 |none|
+|deviceId|body|string|是|设备 ID 或设备编号|
+|name|body|string|是|新的设备名称|
 
 > 返回示例
 
@@ -4257,15 +2767,9 @@ GET /api/operator/market/profile
 ```json
 {
   "code": 200,
+  "message": "success",
   "data": {
-    "adminId": 2,
-    "username": "market",
-    "realName": "李四",
-    "jobNo": "O001",
-    "position": "市场分析管理员",
-    "role": "market_admin",
-    "phone": "13800000000",
-    "email": "market@example.com"
+    "result": true
   }
 }
 ```
@@ -4275,61 +2779,1220 @@ GET /api/operator/market/profile
 ```json
 {
   "code": 401,
-  "message": "认证失败",
-  "error_details": "Authorization 格式错误，应为 Bearer access_token"
-}
-```
-
-> 404 Response
-
-```json
-{
-  "code": 404,
-  "message": "账号不存在",
-  "error_details": "当前登录账号不存在或已被删除"
+  "message": "未登录或登录已失效"
 }
 ```
 
 ### 返回结果
 
-|状态码|状态码含义|说明|数据模型|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
 
 ### 返回数据结构
 
 状态码 **200**
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» data|object|true|none||none|
-|»» adminId|integer|true|none||none|
-|»» username|string|true|none||none|
-|»» realName|string|true|none||none|
-|»» jobNo|string|true|none||none|
-|»» position|string|true|none||none|
-|»» role|string|true|none||none|
-|»» phone|string|true|none||none|
-|»» email|string|true|none||none|
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
 
-状态码 **401**
+## POST 解绑设备
+POST /api/admin/operator/device/unbind
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+解除设备与当前用户的绑定关系。
 
-状态码 **404**
+> Body 请求示例
 
-|名称|类型|必选|约束|中文名|说明|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» message|string|true|none||none|
-|» error_details|string|true|none||none|
+```json
+{
+  "deviceId": "1"
+}
+```
 
-# 数据模型
+### 请求参数
 
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|d|e|v|i|c|
+|b|o|d|y||
+|s|t|r|i|n|
+|是|||||
+|设|备| |I|D|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 设备固件
+## GET 当前固件版本
+GET /api/admin/operator/device/firmware-version
+
+获取当前固件版本、最新版本和是否需要升级。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "示例ID",
+    "name": "示例数据"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 固件包列表
+GET /api/admin/operator/device/firmware-packages
+
+获取可上传、已上传或可发布的固件包。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 固件升级任务列表
+GET /api/admin/operator/device/firmware-tasks
+
+获取固件升级任务进度。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 固件上传选项
+GET /api/admin/operator/device/firmware-upload-options
+
+获取弹窗中可选择上传的固件包。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "name": "示例数据",
+        "value": 100
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 上传固件包
+POST /api/admin/operator/device/firmware-upload
+
+将选中的固件包标记为已上传。
+
+> Body 请求示例
+
+```json
+{
+  "packageId": "FW-001"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|p|a|c|k|a|
+|b|o|d|y||
+|s|t|r|i|n|
+|是|||||
+|固|件|包| |I|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 创建固件升级任务
+POST /api/admin/operator/device/firmware-task
+
+创建固件灰度或全量升级任务。
+
+> Body 请求示例
+
+```json
+{
+  "targetVersion": "1.0.5",
+  "targetScope": "灰度 20%"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|targetVersion|body|string|是|目标固件版本|
+|targetScope|body|string|否|升级范围，例如 灰度 20%|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 系统管理
+## GET 管理员账号列表
+GET /api/admin/super/users
+
+获取后台管理员账号列表。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 新增管理员账号
+POST /api/admin/super/users/create
+
+创建新的后台管理员账号。
+
+> Body 请求示例
+
+```json
+{
+  "username": "operator01",
+  "password": "123456",
+  "role": "operator_admin",
+  "realName": "运营人员",
+  "phone": "13800000000",
+  "email": "op@example.com",
+  "jobNo": "A001"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|username|body|string|是|登录用户名|
+|password|body|string|是|初始密码|
+|role|body|string|是|角色：super_admin/market_admin/operator_admin/boss|
+|realName|body|string|否|真实姓名|
+|phone|body|string|否|手机号|
+|email|body|string|否|邮箱|
+|jobNo|body|string|否|工号|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 更新管理员账号
+POST /api/admin/super/users/update
+
+更新后台管理员账号资料，密码留空则不修改。
+
+> Body 请求示例
+
+```json
+{
+  "username": "operator01",
+  "role": "operator_admin",
+  "realName": "运营人员",
+  "phone": "13800000000"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|username|body|string|是|需要更新的用户名|
+|password|body|string|否|新密码|
+|role|body|string|否|新角色|
+|realName|body|string|否|真实姓名|
+|phone|body|string|否|手机号|
+|email|body|string|否|邮箱|
+|jobNo|body|string|否|工号|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 删除管理员账号
+POST /api/admin/super/users/delete
+
+删除指定后台管理员账号。
+
+> Body 请求示例
+
+```json
+{
+  "username": "operator01"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|u|s|e|r|n|
+|b|o|d|y||
+|s|t|r|i|n|
+|是|||||
+|需|要|删|除|的|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 角色权限列表
+GET /api/admin/super/roles
+
+获取角色列表、已分配权限和权限目录。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 保存角色权限
+POST /api/admin/super/roles/permissions
+
+保存指定角色的权限菜单。
+
+> Body 请求示例
+
+```json
+{
+  "role": "operator_admin",
+  "permissions": ["overview", "devices", "feedback"]
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|role|body|string|是|角色标识|
+|permissions|body|array|是|权限 key 数组|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "result": true
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 获取系统配置
+GET /api/admin/super/system/config
+
+获取系统名称、主题、上传限制、接口超时等配置。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|systemName|body|string|否|系统名称|
+|logoText|body|string|否|Logo 文案|
+|defaultTheme|body|string|否|默认主题|
+|uploadLimitMb|body|integer|否|上传限制 MB|
+|apiTimeoutSeconds|body|integer|否|接口超时秒数|
+|dataRetentionDays|body|integer|否|数据保留天数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "示例ID",
+    "name": "示例数据"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 保存系统配置
+POST /api/admin/super/system/config
+
+保存系统名称、主题、上传限制、接口超时等配置。
+
+> Body 请求示例
+
+```json
+{
+  "systemName": "声盒 Mini 后台管理系统",
+  "logoText": "Mini",
+  "defaultTheme": "green",
+  "uploadLimitMb": 100,
+  "apiTimeoutSeconds": 15,
+  "dataRetentionDays": 365
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|systemName|body|string|否|系统名称|
+|logoText|body|string|否|Logo 文案|
+|defaultTheme|body|string|否|默认主题|
+|uploadLimitMb|body|integer|否|上传限制 MB|
+|apiTimeoutSeconds|body|integer|否|接口超时秒数|
+|dataRetentionDays|body|integer|否|数据保留天数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "示例ID",
+    "name": "示例数据"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 系统公告列表
+GET /api/admin/super/notices
+
+获取系统公告列表。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## POST 创建系统公告
+POST /api/admin/super/notices
+
+创建新的系统公告。
+
+> Body 请求示例
+
+```json
+{
+  "title": "设备固件升级通知",
+  "type": "notice",
+  "status": "draft"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|title|body|string|是|公告标题|
+|type|body|string|否|公告类型|
+|status|body|string|否|公告状态：draft/published|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+## GET 审计与安全日志
+GET /api/admin/super/security/logs
+
+获取后台登录、安全事件和操作审计日志。
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|无|-|-|-|该接口不需要额外参数|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 1,
+    "list": [
+      {
+        "id": "示例ID",
+        "name": "示例数据"
+      }
+    ]
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "未登录或登录已失效"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|请求成功|
+|400|Bad Request|请求参数错误|
+|401|Unauthorized|未登录或 token 失效|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|接口返回数据，字段见返回示例|
+
+# 前端实际使用接口总表
+
+|方法|接口|说明|
+|---|---|---|
+|POST|$(@{Group=web后台登录/认证; Method=POST; Path=/api/admin/login; Title=账号密码登录; Desc=后台管理员使用用户名和密码登录，成功后返回 token 和管理员信息。}.Path)|账号密码登录|
+|POST|$(@{Group=web后台登录/认证; Method=POST; Path=/api/admin/wechat-login; Title=微信快捷登录; Desc=后台微信快捷登录，前端传入微信登录 code。}.Path)|微信快捷登录|
+|GET|$(@{Group=web后台登录/认证; Method=GET; Path=/api/admin/profile; Title=获取当前管理员信息; Desc=根据 Authorization token 获取当前登录管理员资料。}.Path)|获取当前管理员信息|
+|POST|$(@{Group=web后台登录/认证; Method=POST; Path=/api/admin/logout; Title=退出登录; Desc=清理后台登录态，前端调用后会移除本地 token。}.Path)|退出登录|
+|GET|$(@{Group=超级管理员数据总览; Method=GET; Path=/api/admin/super/overview/user-count; Title=用户数量概览; Desc=获取总用户数、新增用户数等用户指标。}.Path)|用户数量概览|
+|GET|$(@{Group=超级管理员数据总览; Method=GET; Path=/api/admin/super/overview/device-count; Title=设备数量概览; Desc=获取设备总数、在线设备数等设备指标。}.Path)|设备数量概览|
+|GET|$(@{Group=超级管理员数据总览; Method=GET; Path=/api/admin/super/overview/sales-amount; Title=销售金额概览; Desc=获取销售额和订单数量统计。}.Path)|销售金额概览|
+|GET|$(@{Group=超级管理员数据总览; Method=GET; Path=/api/admin/super/overview/activity-rate; Title=活跃度概览; Desc=获取活跃用户数和活跃率。}.Path)|活跃度概览|
+|GET|$(@{Group=超级管理员数据总览; Method=GET; Path=/api/admin/super/monitor; Title=系统监控; Desc=获取 Web API、MySQL、MongoDB 等服务健康状态和异常信息。}.Path)|系统监控|
+|GET|$(@{Group=趋势与决策分析; Method=GET; Path=/api/admin/super/trend/growth; Title=增长趋势; Desc=获取用户、设备、销售或留存趋势。}.Path)|增长趋势|
+|GET|$(@{Group=趋势与决策分析; Method=GET; Path=/api/admin/super/decision/summary; Title=超级管理员决策汇总; Desc=获取超级管理员视角的决策卡片、趋势和风险提示。}.Path)|超级管理员决策汇总|
+|GET|$(@{Group=趋势与决策分析; Method=GET; Path=/api/admin/market/decision/summary; Title=市场管理员决策汇总; Desc=获取市场分析管理员视角的决策卡片、趋势和风险提示。}.Path)|市场管理员决策汇总|
+|GET|$(@{Group=区域热力图; Method=GET; Path=/api/admin/super/region/sales-heatmap; Title=超级管理员销售热力图; Desc=获取各地区销售金额和订单数量。}.Path)|超级管理员销售热力图|
+|GET|$(@{Group=区域热力图; Method=GET; Path=/api/admin/super/region/user-heatmap; Title=超级管理员用户热力图; Desc=获取各地区用户数和活跃用户数。}.Path)|超级管理员用户热力图|
+|GET|$(@{Group=区域热力图; Method=GET; Path=/api/admin/market/region/sales-heatmap; Title=市场管理员销售热力图; Desc=获取市场视角各地区销售金额和订单数量。}.Path)|市场管理员销售热力图|
+|GET|$(@{Group=区域热力图; Method=GET; Path=/api/admin/market/region/user-heatmap; Title=市场管理员用户热力图; Desc=获取市场视角各地区用户数和活跃用户数。}.Path)|市场管理员用户热力图|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/super/user-profile/age-distribution; Title=超级管理员年龄分布; Desc=获取用户年龄段分布。}.Path)|超级管理员年龄分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/super/user-profile/region-distribution; Title=超级管理员地区分布; Desc=获取用户地区分布。}.Path)|超级管理员地区分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/super/user-profile/activity-distribution; Title=超级管理员活跃分布; Desc=获取用户活跃层级分布。}.Path)|超级管理员活跃分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/super/user-profile/music-service-distribution; Title=超级管理员音乐服务分布; Desc=获取用户绑定音乐平台分布。}.Path)|超级管理员音乐服务分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/market/user-profile/age-distribution; Title=市场管理员年龄分布; Desc=获取市场视角用户年龄段分布。}.Path)|市场管理员年龄分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/market/user-profile/region-distribution; Title=市场管理员地区分布; Desc=获取市场视角用户地区分布。}.Path)|市场管理员地区分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/market/user-profile/activity-distribution; Title=市场管理员活跃分布; Desc=获取市场视角用户活跃层级分布。}.Path)|市场管理员活跃分布|
+|GET|$(@{Group=用户画像; Method=GET; Path=/api/admin/market/user-profile/music-service-distribution; Title=市场管理员音乐服务分布; Desc=获取市场视角用户绑定音乐平台分布。}.Path)|市场管理员音乐服务分布|
+|GET|$(@{Group=用户价值; Method=GET; Path=/api/admin/super/user-value/normal-users; Title=超级管理员普通用户统计; Desc=获取普通用户数量及占比。}.Path)|超级管理员普通用户统计|
+|GET|$(@{Group=用户价值; Method=GET; Path=/api/admin/super/user-value/high-active-users; Title=超级管理员高活跃用户统计; Desc=获取高活跃用户数量及占比。}.Path)|超级管理员高活跃用户统计|
+|GET|$(@{Group=用户价值; Method=GET; Path=/api/admin/market/user-value/normal-users; Title=市场管理员普通用户统计; Desc=获取市场视角普通用户数量及占比。}.Path)|市场管理员普通用户统计|
+|GET|$(@{Group=用户价值; Method=GET; Path=/api/admin/market/user-value/high-active-users; Title=市场管理员高活跃用户统计; Desc=获取市场视角高活跃用户数量及占比。}.Path)|市场管理员高活跃用户统计|
+|GET|$(@{Group=市场分析; Method=GET; Path=/api/admin/market/top-songs; Title=热歌排行; Desc=获取播放量、用户数和平台来源排行榜。}.Path)|热歌排行|
+|GET|$(@{Group=市场分析; Method=GET; Path=/api/admin/market/retention/device-purchase; Title=设备购买留存; Desc=获取购买设备后的用户留存数据。}.Path)|设备购买留存|
+|GET|$(@{Group=市场分析; Method=GET; Path=/api/admin/market/segments; Title=用户分群; Desc=获取按活跃、留存、绑定和偏好建立的运营人群。}.Path)|用户分群|
+|GET|$(@{Group=市场分析; Method=GET; Path=/api/admin/market/insights; Title=营销洞察; Desc=获取转化漏斗和运营建议。}.Path)|营销洞察|
+|GET|$(@{Group=市场分析; Method=GET; Path=/api/admin/market/reports; Title=市场决策报表; Desc=获取市场日报、周报或月报列表。}.Path)|市场决策报表|
+|GET|$(@{Group=市场分析; Method=GET; Path=/api/admin/super/reports; Title=超级管理员决策报表; Desc=获取超级管理员视角的决策报表列表。}.Path)|超级管理员决策报表|
+|GET|$(@{Group=用户反馈; Method=GET; Path=/api/admin/super/feedback/list; Title=超级管理员反馈列表; Desc=分页获取用户反馈列表。}.Path)|超级管理员反馈列表|
+|GET|$(@{Group=用户反馈; Method=GET; Path=/api/admin/super/feedback/detail; Title=超级管理员反馈详情; Desc=根据反馈 ID 获取反馈、用户和处理信息。}.Path)|超级管理员反馈详情|
+|GET|$(@{Group=用户反馈; Method=GET; Path=/api/admin/operator/feedback/list; Title=运营管理员反馈列表; Desc=分页获取运营管理员可处理的用户反馈列表。}.Path)|运营管理员反馈列表|
+|GET|$(@{Group=用户反馈; Method=GET; Path=/api/admin/operator/feedback/detail; Title=运营管理员反馈详情; Desc=根据反馈 ID 获取反馈详情。}.Path)|运营管理员反馈详情|
+|POST|$(@{Group=用户反馈; Method=POST; Path=/api/admin/operator/feedback/handle; Title=处理用户反馈; Desc=运营管理员修改反馈处理状态和备注。}.Path)|处理用户反馈|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/list; Title=设备列表; Desc=获取设备列表、在线状态和归属用户摘要。}.Path)|设备列表|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/runtime-status; Title=设备运行状态; Desc=根据设备 ID 获取电量、音量、网络等实时状态。}.Path)|设备运行状态|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/groups; Title=设备分组; Desc=获取设备分组统计。}.Path)|设备分组|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/alerts; Title=告警列表; Desc=获取设备离线、升级失败等告警。}.Path)|告警列表|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/detail; Title=设备详情; Desc=根据设备 ID 获取设备详情。}.Path)|设备详情|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/bound-user; Title=设备绑定用户; Desc=根据设备 ID 获取当前绑定用户信息。}.Path)|设备绑定用户|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/logs; Title=设备日志列表; Desc=分页获取设备日志。}.Path)|设备日志列表|
+|GET|$(@{Group=设备运营管理; Method=GET; Path=/api/admin/operator/device/log-detail; Title=设备日志详情; Desc=根据日志 ID 获取日志原文和追踪信息。}.Path)|设备日志详情|
+|POST|$(@{Group=设备运营管理; Method=POST; Path=/api/admin/operator/device/rename; Title=重命名设备; Desc=修改设备展示名称。}.Path)|重命名设备|
+|POST|$(@{Group=设备运营管理; Method=POST; Path=/api/admin/operator/device/unbind; Title=解绑设备; Desc=解除设备与当前用户的绑定关系。}.Path)|解绑设备|
+|GET|$(@{Group=设备固件; Method=GET; Path=/api/admin/operator/device/firmware-version; Title=当前固件版本; Desc=获取当前固件版本、最新版本和是否需要升级。}.Path)|当前固件版本|
+|GET|$(@{Group=设备固件; Method=GET; Path=/api/admin/operator/device/firmware-packages; Title=固件包列表; Desc=获取可上传、已上传或可发布的固件包。}.Path)|固件包列表|
+|GET|$(@{Group=设备固件; Method=GET; Path=/api/admin/operator/device/firmware-tasks; Title=固件升级任务列表; Desc=获取固件升级任务进度。}.Path)|固件升级任务列表|
+|GET|$(@{Group=设备固件; Method=GET; Path=/api/admin/operator/device/firmware-upload-options; Title=固件上传选项; Desc=获取弹窗中可选择上传的固件包。}.Path)|固件上传选项|
+|POST|$(@{Group=设备固件; Method=POST; Path=/api/admin/operator/device/firmware-upload; Title=上传固件包; Desc=将选中的固件包标记为已上传。}.Path)|上传固件包|
+|POST|$(@{Group=设备固件; Method=POST; Path=/api/admin/operator/device/firmware-task; Title=创建固件升级任务; Desc=创建固件灰度或全量升级任务。}.Path)|创建固件升级任务|
+|GET|$(@{Group=系统管理; Method=GET; Path=/api/admin/super/users; Title=管理员账号列表; Desc=获取后台管理员账号列表。}.Path)|管理员账号列表|
+|POST|$(@{Group=系统管理; Method=POST; Path=/api/admin/super/users/create; Title=新增管理员账号; Desc=创建新的后台管理员账号。}.Path)|新增管理员账号|
+|POST|$(@{Group=系统管理; Method=POST; Path=/api/admin/super/users/update; Title=更新管理员账号; Desc=更新后台管理员账号资料，密码留空则不修改。}.Path)|更新管理员账号|
+|POST|$(@{Group=系统管理; Method=POST; Path=/api/admin/super/users/delete; Title=删除管理员账号; Desc=删除指定后台管理员账号。}.Path)|删除管理员账号|
+|GET|$(@{Group=系统管理; Method=GET; Path=/api/admin/super/roles; Title=角色权限列表; Desc=获取角色列表、已分配权限和权限目录。}.Path)|角色权限列表|
+|POST|$(@{Group=系统管理; Method=POST; Path=/api/admin/super/roles/permissions; Title=保存角色权限; Desc=保存指定角色的权限菜单。}.Path)|保存角色权限|
+|GET|$(@{Group=系统管理; Method=GET; Path=/api/admin/super/system/config; Title=获取系统配置; Desc=获取系统名称、主题、上传限制、接口超时等配置。}.Path)|获取系统配置|
+|POST|$(@{Group=系统管理; Method=POST; Path=/api/admin/super/system/config; Title=保存系统配置; Desc=保存系统名称、主题、上传限制、接口超时等配置。}.Path)|保存系统配置|
+|GET|$(@{Group=系统管理; Method=GET; Path=/api/admin/super/notices; Title=系统公告列表; Desc=获取系统公告列表。}.Path)|系统公告列表|
+|POST|$(@{Group=系统管理; Method=POST; Path=/api/admin/super/notices; Title=创建系统公告; Desc=创建新的系统公告。}.Path)|创建系统公告|
+|GET|$(@{Group=系统管理; Method=GET; Path=/api/admin/super/security/logs; Title=审计与安全日志; Desc=获取后台登录、安全事件和操作审计日志。}.Path)|审计与安全日志|
+
+> 以上接口来自 `index.html` 加载的 `src/App.vue` 与 `src/api.js` 实际调用路径；未在前端调用的后端兼容接口未列入本表。
