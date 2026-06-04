@@ -465,17 +465,25 @@ def song_from_mysql(external_id=None, mapping_id=None):
     if not row:
         return None
 
+    metadata = {}
+    try:
+        metadata = song_from_mongo(row.get("external_id")) or {}
+    except Exception:
+        metadata = {}
+    duration_seconds = int(metadata.get("durationSeconds") or metadata.get("duration") or 0)
+    duration_ms = int(metadata.get("durationMs") or duration_seconds * 1000)
+
     return {
         "songId": str(row.get("external_id") or row.get("mapping_id")),
         "name": row.get("song_title") or "未知歌曲",
         "songName": row.get("song_title") or "未知歌曲",
-        "album": row.get("album") or "",
+        "album": metadata.get("album") or row.get("album") or "",
         "artist": row.get("artist") or "",
         "artistText": row.get("artist") or "",
         "artists": [row.get("artist") or ""],
         "coverUrl": row.get("cover_url") or "",
-        "durationMs": int(row.get("duration_ms") or 0),
-        "durationSeconds": int((row.get("duration_ms") or 0) / 1000),
+        "durationMs": duration_ms,
+        "durationSeconds": duration_seconds,
         "source": row.get("platform") or "netease",
     }
 
@@ -736,8 +744,14 @@ def history_rows(user_id=None, source=None, keyword=None, limit=50):
     where = ["ph.user_id=%s"]
 
     if source:
-        where.append("COALESCE(ph.source_platform, mm.platform)=%s")
-        params.append(source)
+        source_aliases = {
+            "netease": ["netease", "网易云音乐"],
+            "qq": ["qq", "QQ音乐"],
+            "wechat": ["wechat", "微信小程序"],
+        }
+        values = source_aliases.get(str(source), [source])
+        where.append(f"COALESCE(ph.source_platform, mm.platform) IN ({', '.join(['%s'] * len(values))})")
+        params.extend(values)
 
     if keyword:
         where.append("(mm.song_title LIKE %s OR mm.artist LIKE %s)")

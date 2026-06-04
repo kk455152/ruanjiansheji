@@ -203,6 +203,14 @@ def mask_phone(phone):
     return text or "—"
 
 
+def fmt_dt(value):
+    if not value:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return str(value)
+
+
 def public_admin_info(admin, include_private=False):
     keys = [
         "adminId",
@@ -319,10 +327,38 @@ def cached_mysql_all(sql, params=(), fallback=None):
     )
 
 
-def current_device():
-    state_device = {}
+def device_runtime_doc(device_id):
+    if not device_id:
+        return {}
+    queries = [
+        {"device_id": str(device_id)},
+        {"deviceId": str(device_id)},
+    ]
+    try:
+        int_id = int(device_id)
+        queries.append({"device_id": int_id})
+    except Exception:
+        pass
+    for query in queries:
+        doc = mongo_one(
+            ["device_runtime", "runtime_state", "device_status", "device_metrics"],
+            query,
+            sort=[("updated_at", -1), ("_id", -1)],
+        )
+        if doc:
+            metrics = doc.get("metrics") if isinstance(doc.get("metrics"), dict) else doc
+            return metrics or {}
+    return {}
+
+
+def current_device(device_id=None):
+    params = ()
+    where = ""
+    if device_id:
+        where = "WHERE CAST(d.device_id AS CHAR)=%s OR d.device_number=%s"
+        params = (str(device_id), str(device_id))
     row = mysql_one(
-        """
+        f"""
         SELECT
             d.device_id,
             d.device_number,
@@ -336,11 +372,24 @@ def current_device():
         FROM device d
         LEFT JOIN user_device_binding b ON b.device_id = d.device_id
         LEFT JOIN `user` u ON u.user_id = b.user_id
+        {where}
         ORDER BY d.device_id ASC
         LIMIT 1
-        """
+        """,
+        params,
     )
     if row:
+        runtime = device_runtime_doc(row.get("device_id"))
+
+        def runtime_int(*names, default=0):
+            for name in names:
+                if runtime.get(name) is not None:
+                    try:
+                        return int(runtime.get(name))
+                    except Exception:
+                        return default
+            return default
+
         return {
             "deviceId": str(row.get("device_id")),
             "deviceSn": row.get("device_number") or "",
@@ -350,10 +399,10 @@ def current_device():
             "online": bool(row.get("status")),
             "firmwareVersion": row.get("firmware_version") or "",
             "lastOnlineAt": str(row.get("last_active") or ""),
-            "volume": 0,
-            "battery": 0,
-            "signalStrength": "",
-            "currentNetwork": row.get("current_network") or "",
+            "volume": runtime_int("volume", default=0),
+            "battery": runtime_int("battery", "battery_level", default=0),
+            "signalStrength": runtime.get("signal_strength", runtime.get("signalStrength", "")),
+            "currentNetwork": row.get("current_network") or runtime.get("current_network") or runtime.get("networkType") or "",
             "createdAt": "",
         }
 
@@ -372,6 +421,56 @@ def current_device():
         "currentNetwork": "",
         "createdAt": "",
     }
+
+
+def platform_text(value):
+    text = str(value or "").strip()
+    mapping = {
+        "netease": "网易云音乐",
+        "netease_cloud": "网易云音乐",
+        "qq": "QQ音乐",
+        "qq_music": "QQ音乐",
+        "wechat": "微信小程序",
+        "mini_program": "微信小程序",
+        "local": "本地曲库",
+    }
+    return mapping.get(text, text or "未知来源")
+
+
+def service_text(value):
+    parts = [part.strip() for part in str(value or "").split(",") if part.strip()]
+    if not parts:
+        return "未知平台"
+    return "、".join(platform_text(part) for part in parts)
+
+
+def latest_song_row(device_id=None):
+    rows = []
+    if device_id:
+        rows = mysql_all(
+            """
+            SELECT ph.created_at, COALESCE(ph.source_platform, mm.platform) AS source_platform,
+                   mm.song_title, mm.artist
+            FROM play_history ph
+            LEFT JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
+            WHERE CAST(ph.device_id AS CHAR)=%s
+            ORDER BY ph.created_at DESC
+            LIMIT 1
+            """,
+            (str(device_id),),
+        )
+    if not rows:
+        rows = mysql_all(
+            """
+            SELECT ph.created_at, COALESCE(ph.source_platform, mm.platform) AS source_platform,
+                   mm.song_title, mm.artist
+            FROM play_history ph
+            LEFT JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
+            ORDER BY ph.created_at DESC
+            LIMIT 1
+            """
+        )
+    return rows[0] if rows else {}
 
 
 def fallback_series(metric_type, dimension):
@@ -443,7 +542,7 @@ def distribution_data(kind):
         ORDER BY count DESC
         """
     )
-    return [{"service": row.get("service"), "serviceName": row.get("service"), "count": _int(row.get("count"), 0)} for row in rows]
+    return [{"service": row.get("service"), "serviceName": service_text(row.get("service")), "count": _int(row.get("count"), 0)} for row in rows]
 
     # Legacy demo data below is intentionally unreachable.
     if kind == "age":
@@ -519,9 +618,12 @@ def heatmap(kind):
 def feedback_rows():
     rows = cached_mysql_all(
         """
-        SELECT f.feedback_id, f.user_id, f.content, f.feedback_type, f.status,
-               f.priority, f.star_rating, f.handler_name, f.reply_content,
-               f.handled_at, f.created_at, u.username, u.phone, f.contact
+        SELECT f.feedback_id, f.feedback_no, f.user_id, f.title, f.content,
+               f.feedback_type, f.status, f.priority, f.star_rating, f.rating_tags,
+               f.device_info, f.handler_name, f.reply_content, f.handled_at,
+               f.closed_at, f.created_at, u.username, u.nickname, u.avatar,
+               u.phone, u.email, u.status AS user_status, u.created_at AS user_created_at,
+               u.last_login_at, f.contact
         FROM user_feedback f
         LEFT JOIN `user` u ON u.user_id = f.user_id
         ORDER BY f.feedback_id DESC
@@ -529,31 +631,61 @@ def feedback_rows():
         """
     )
     if rows:
+        type_text = {
+            "bug": "问题反馈",
+            "suggestion": "功能建议",
+            "complaint": "投诉",
+            "praise": "表扬建议",
+        }
+        status_text = {
+            "open": "待处理",
+            "pending": "待处理",
+            "processing": "处理中",
+            "processed": "已处理",
+            "closed": "已关闭",
+        }
+        priority_text = {
+            "high": "高",
+            "normal": "普通",
+            "low": "低",
+        }
         result = []
         for row in rows:
-            feedback_id = str(row.get("feedback_id"))
+            feedback_id = str(row.get("feedback_no") or row.get("feedback_id"))
+            feedback_type = row.get("feedback_type") or "suggestion"
+            status = row.get("status") or "open"
+            priority = row.get("priority") or "normal"
+            rating = _int(row.get("star_rating"), 0)
             result.append({
                 "feedbackId": feedback_id,
                 "userId": row.get("user_id"),
-                "nickname": row.get("username") or "用户",
-                "avatar": f"https://example.com/avatar/{row.get('user_id') or 0}.png",
-                "phone": row.get("phone") or "138****8888",
-                "feedbackType": "suggestion",
-                "feedbackTypeText": "意见建议",
+                "nickname": row.get("nickname") or row.get("username") or "用户",
+                "avatar": row.get("avatar") or f"https://example.com/avatar/{row.get('user_id') or 0}.png",
+                "phone": mask_phone(row.get("phone") or ""),
+                "feedbackType": feedback_type,
+                "feedbackTypeText": type_text.get(feedback_type, feedback_type),
+                "title": row.get("title") or "",
                 "content": row.get("content") or "",
                 "images": [],
-                "contact": row.get("phone") or "",
-                "status": "pending",
-                "statusText": "待处理",
-                "priority": "normal",
-                "priorityText": "普通",
-                "rating": 4,
-                "ratingText": "4星",
+                "contact": row.get("contact") or row.get("phone") or "",
+                "status": status,
+                "statusText": status_text.get(status, status),
+                "priority": priority,
+                "priorityText": priority_text.get(priority, priority),
+                "rating": rating,
+                "ratingText": f"{rating}星" if rating else "未评分",
+                "ratingTags": row.get("rating_tags") or "",
+                "deviceInfo": row.get("device_info") or "",
                 "handlerId": None,
-                "handlerName": None,
-                "replyContent": None,
-                "handledAt": None,
-                "createdAt": "2026-05-20 10:20:30",
+                "handlerName": row.get("handler_name"),
+                "replyContent": row.get("reply_content"),
+                "handledAt": fmt_dt(row.get("handled_at")),
+                "closedAt": fmt_dt(row.get("closed_at")),
+                "createdAt": fmt_dt(row.get("created_at")),
+                "email": row.get("email") or "",
+                "registerTime": fmt_dt(row.get("user_created_at")),
+                "lastLoginAt": fmt_dt(row.get("last_login_at")),
+                "userStatus": row.get("user_status") or "normal",
             })
         return result
 
@@ -635,22 +767,23 @@ def feedback_detail(feedback_id):
             "nickname": row["nickname"],
             "avatar": row["avatar"],
             "phone": row["phone"],
-            "email": "zhangsan@example.com",
-            "registerTime": "2024-08-12 09:30:20",
-            "userStatus": "normal",
-            "userStatusText": "正常",
+            "email": row.get("email") or "",
+            "registerTime": row.get("registerTime") or "",
+            "lastLoginAt": row.get("lastLoginAt") or "",
+            "userStatus": row.get("userStatus") or "normal",
+            "userStatusText": "正常" if row.get("userStatus") != "inactive" else "停用",
         },
         "feedbackInfo": {
             "feedbackType": row["feedbackType"],
             "feedbackTypeText": row["feedbackTypeText"],
-            "title": "登录时提示网络异常",
+            "title": row.get("title") or "",
             "content": row["content"],
             "images": row["images"],
             "contact": row["contact"],
-            "source": "app",
-            "sourceText": "移动端 App",
+            "source": "mini_program",
+            "sourceText": "小程序",
             "appVersion": "1.2.5",
-            "deviceInfo": {"deviceType": "iOS", "deviceModel": "iPhone 14", "systemVersion": "17.4"},
+            "deviceInfo": row.get("deviceInfo") or "",
         },
         "processInfo": {
             "status": row["status"],
@@ -659,6 +792,7 @@ def feedback_detail(feedback_id):
             "priorityText": row["priorityText"],
             "rating": row.get("rating", 4),
             "ratingText": row.get("ratingText", "4星"),
+            "ratingTags": row.get("ratingTags") or "",
             "handlerId": row["handlerId"],
             "handlerName": row["handlerName"],
             "replyContent": row["replyContent"],
@@ -872,10 +1006,18 @@ def feedback_detail_route():
 def top_songs():
     rows = cached_mysql_all(
         """
-        SELECT hottest_song_name, hottest_artist, hottest_play_count
-        FROM daily_stats
-        WHERE hottest_song_name IS NOT NULL
-        ORDER BY stat_date DESC
+        SELECT
+            mm.mapping_id,
+            mm.song_title,
+            mm.artist,
+            COALESCE(ph.source_platform, mm.platform) AS platform,
+            COUNT(*) AS play_count,
+            COUNT(DISTINCT ph.user_id) AS user_count
+        FROM play_history ph
+        JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
+        WHERE mm.song_title IS NOT NULL AND mm.song_title <> ''
+        GROUP BY mm.mapping_id, mm.song_title, mm.artist, COALESCE(ph.source_platform, mm.platform)
+        ORDER BY play_count DESC, user_count DESC, mm.mapping_id ASC
         LIMIT 10
         """
     )
@@ -883,11 +1025,11 @@ def top_songs():
         data = [
             {
                 "rank": index + 1,
-                "songName": row.get("hottest_song_name") or "城市夜航",
-                "artist": row.get("hottest_artist") or "Luna Echo",
-                "platform": "netease",
-                "playCount": _int(row.get("hottest_play_count"), 0),
-                "userCount": max(_int(row.get("hottest_play_count"), 0) // 2, 1),
+                "songName": row.get("song_title") or "未知歌曲",
+                "artist": row.get("artist") or "未知歌手",
+                "platform": platform_text(row.get("platform")),
+                "playCount": _int(row.get("play_count"), 0),
+                "userCount": _int(row.get("user_count"), 0),
             }
             for index, row in enumerate(rows)
         ]
@@ -1105,7 +1247,7 @@ def operator_device_bound_user():
     if row:
         active_map = {"high": "高活跃", "medium": "中活跃", "low": "低活跃"}
         value_map = {"high": "高价值", "normal": "普通", "low": "低价值"}
-        status_map = {"active": "正常", "frozen": "已冻结", "disabled": "已禁用"}
+        status_map = {"active": "正常", "normal": "正常", "frozen": "已冻结", "disabled": "已禁用"}
         gender_map = {"male": "男", "female": "女", "unknown": "未知"}
         active = str(row.get("active_level") or "")
         value = str(row.get("value_level") or "")
@@ -1159,16 +1301,16 @@ def operator_device_bound_user():
 @admin_bp.get("/operator/device/runtime-status")
 @require_admin("super", "operator")
 def runtime_status():
-    state = load_state()
-    device = current_device()
-    playing = state.get("playing", {})
+    requested_device_id = request.args.get("deviceId")
+    device = current_device(requested_device_id)
+    playing = latest_song_row(device["deviceId"] or requested_device_id)
     return response_ok({
-        "deviceId": request.args.get("deviceId") or device["deviceId"],
+        "deviceId": requested_device_id or device["deviceId"],
         "online": device["online"],
         "battery": device["battery"],
         "volume": device["volume"],
-        "currentSong": playing.get("songName") or playing.get("name") or "城市夜航",
-        "currentArtist": playing.get("artist") or "Luna Echo",
+        "currentSong": playing.get("song_title") or "暂无播放记录",
+        "currentArtist": playing.get("artist") or "未知歌手",
         "lastHeartbeat": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     })
 
