@@ -16,6 +16,108 @@ from .common import (
 )
 
 
+def _listening_summary(user_id):
+    summary = mysql_one(
+        """
+        SELECT
+            COALESCE(SUM(play_duration), 0) AS total_seconds,
+            COUNT(*) AS play_count,
+            COUNT(DISTINCT mapping_id) AS song_count
+        FROM play_history
+        WHERE user_id=%s
+        """,
+        (user_id,),
+    ) or {}
+    style = mysql_one(
+        """
+        SELECT COALESCE(style, 'unknown') AS style_name, COUNT(*) AS count_value
+        FROM play_history
+        WHERE user_id=%s
+        GROUP BY COALESCE(style, 'unknown')
+        ORDER BY count_value DESC
+        LIMIT 1
+        """,
+        (user_id,),
+    ) or {}
+    hour = mysql_one(
+        """
+        SELECT HOUR(created_at) AS hour_value, COUNT(*) AS count_value
+        FROM play_history
+        WHERE user_id=%s AND created_at IS NOT NULL
+        GROUP BY HOUR(created_at)
+        ORDER BY count_value DESC
+        LIMIT 1
+        """,
+        (user_id,),
+    ) or {}
+    total_users = mysql_one("SELECT COUNT(*) AS count_value FROM `user`") or {}
+    ahead_users = mysql_one(
+        """
+        SELECT COUNT(*) AS count_value
+        FROM (
+            SELECT user_id, COUNT(*) AS play_count
+            FROM play_history
+            GROUP BY user_id
+            HAVING play_count > %s
+        ) ranked_users
+        """,
+        (int(summary.get("play_count") or 0),),
+    ) or {}
+
+    total = max(int(total_users.get("count_value") or 1), 1)
+    ahead = int(ahead_users.get("count_value") or 0)
+    rank_percent = max(1, min(99, int(((ahead + 1) / total) * 100)))
+    start_hour = int(hour.get("hour_value") or 21)
+    end_hour = (start_hour + 2) % 24
+
+    return {
+        "minutes": int((summary.get("total_seconds") or 0) / 60),
+        "songCount": int(summary.get("song_count") or 0),
+        "favoriteStyle": str(style.get("style_name") or "unknown"),
+        "activeTime": f"{start_hour:02d}:00-{end_hour:02d}:00",
+        "topPercent": f"Top {rank_percent}%",
+        "playCount": int(summary.get("play_count") or 0),
+    }
+
+
+def _weekly_report_data(user_id):
+    summary = _listening_summary(user_id)
+    artist = mysql_one(
+        """
+        SELECT mm.artist, COUNT(*) AS count_value
+        FROM play_history ph
+        LEFT JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
+        WHERE ph.user_id=%s
+        GROUP BY mm.artist
+        ORDER BY count_value DESC
+        LIMIT 1
+        """,
+        (user_id,),
+    ) or {}
+    style = mysql_one(
+        """
+        SELECT COALESCE(style, 'unknown') AS style_name, COUNT(*) AS count_value
+        FROM play_history
+        WHERE user_id=%s
+        GROUP BY COALESCE(style, 'unknown')
+        ORDER BY count_value DESC
+        LIMIT 1
+        """,
+        (user_id,),
+    ) or {}
+    return {
+        "summary": summary,
+        "topArtist": {
+            "artistName": artist.get("artist") or "Unknown Artist",
+            "songCount": int(artist.get("count_value") or 0),
+        },
+        "topPlaylist": {
+            "playlistName": str(style.get("style_name") or "unknown").title(),
+            "playCount": int(style.get("count_value") or 0),
+        },
+    }
+
+
 @api_bp.post("/share/song-link")
 def share_song_link():
     body = body_json()
@@ -84,40 +186,16 @@ def share_song_card():
 @api_bp.get("/listening-data/summary")
 def listening_data_summary():
     user_id = current_user_id()
-    row = mysql_one(
-        """
-        SELECT *
-        FROM Daily_Stats
-        WHERE user_id=%s
-        ORDER BY stat_date DESC
-        LIMIT 1
-        """,
-        (user_id,),
-    )
-
-    if row:
-        return plain(
-            {
-                "code": 200,
-                "data": {
-                    "minutes": int((row.get("total_play_duration_seconds") or 0) / 60),
-                    "songCount": int(row.get("unique_song_count") or 0),
-                    "favoriteStyle": "【兜底数据】华语流行",
-                    "activeTime": "21:00-23:00",
-                    "topPercent": "Top 12%",
-                },
-            }
-        )
-
+    summary = _listening_summary(user_id)
     return plain(
         {
             "code": 200,
             "data": {
-                "minutes": 428,
-                "songCount": len(history_rows(user_id=user_id, limit=200)),
-                "favoriteStyle": "【兜底数据】华语流行",
-                "activeTime": "21:00-23:00",
-                "topPercent": "Top 12%",
+                "minutes": summary["minutes"],
+                "songCount": summary["songCount"],
+                "favoriteStyle": summary["favoriteStyle"],
+                "activeTime": summary["activeTime"],
+                "topPercent": summary["topPercent"],
             },
         }
     )
@@ -198,32 +276,20 @@ def weekly_report():
     if week < 1 or week > 53:
         return ok("请求参数错误", {"field": "week", "reason": "week 必须是 1-53 之间的整数"}, 400)
 
-    row = mysql_one(
-        """
-        SELECT *
-        FROM Daily_Stats
-        WHERE user_id=%s
-        ORDER BY stat_date DESC
-        LIMIT 1
-        """,
-        (current_user_id(),),
-    )
-
-    minutes = int((row.get("total_play_duration_seconds") or 0) / 60) if row else 428
-    top_artist = row.get("hottest_artist") if row else "【兜底数据】Luna Echo"
-    top_count = int(row.get("hottest_play_count") or 12) if row else 12
+    report = _weekly_report_data(current_user_id())
+    summary = report["summary"]
 
     return ok(
         "获取个人听歌总结成功",
         {
             "year": year,
             "week": week,
-            "rank": "Top 12%",
-            "minutes": minutes,
-            "compareLastWeek": "【兜底数据】比上周多听 23%",
-            "summaryText": "【兜底数据】夜间播放和轻音乐占比明显上升。",
-            "topArtist": {"artistName": top_artist, "songCount": top_count},
-            "topPlaylist": {"playlistName": "【兜底数据】夜间专注", "playCount": 18},
+            "rank": summary["topPercent"],
+            "minutes": summary["minutes"],
+            "compareLastWeek": "Compared with last week: stable listening activity",
+            "summaryText": f"{summary['favoriteStyle'].title()} was the most played style during {summary['activeTime']}.",
+            "topArtist": report["topArtist"],
+            "topPlaylist": report["topPlaylist"],
         },
     )
 

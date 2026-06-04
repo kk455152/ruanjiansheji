@@ -9,27 +9,28 @@
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
-      color: #1f2933;
-      background: #f3f8f4;
+      color: #26342c;
+      background: #f6faf7;
     }
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 18px 24px;
-      background: #14532d;
-      color: white;
+      padding: 16px 24px;
+      background: #e9f7ee;
+      border-bottom: 1px solid #d6ecdc;
+      color: #224634;
     }
-    header h1 { margin: 0; font-size: 20px; font-weight: 600; }
-    header span { color: #bcccdc; font-size: 13px; }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header span { color: #7a9583; font-size: 12px; }
     main {
       display: grid;
       grid-template-columns: 300px minmax(0, 1fr);
       min-height: calc(100vh - 61px);
     }
     aside {
-      border-right: 1px solid #dbe8dd;
+      border-right: 1px solid #dceee2;
       background: #fff;
       padding: 16px;
       overflow: auto;
@@ -44,14 +45,14 @@
       border: 0;
       border-radius: 6px;
       padding: 9px 14px;
-      background: #15803d;
+      background: #4f9f72;
       color: white;
       cursor: pointer;
       font: inherit;
     }
-    button.secondary, .source-tabs button { background: #5f7f68; }
-    .source-tabs button.active { background: #15803d; }
-    button.danger { background: #b42318; }
+    button.secondary, .source-tabs button { background: #dfeee4; color: #416150; }
+    .source-tabs button.active { background: #5aa77b; color: white; }
+    button.danger { background: #d46b60; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .item-btn {
       width: 100%;
@@ -61,11 +62,11 @@
       margin-bottom: 6px;
       text-align: left;
       background: transparent;
-      color: #334e68;
+      color: #344b3b;
       cursor: pointer;
     }
-    .item-btn.active, .item-btn:hover { background: #e7f6ec; color: #15803d; }
-    .item-btn small { color: #627d98; display: block; margin-top: 2px; }
+    .item-btn.active, .item-btn:hover { background: #eef8f1; color: #2f7d55; }
+    .item-btn small { color: #91a79a; display: block; margin-top: 2px; font-size: 11px; font-weight: 400; }
     section { min-width: 0; padding: 20px; }
     .toolbar {
       display: flex;
@@ -76,22 +77,28 @@
     }
     input, textarea {
       width: 100%;
-      border: 1px solid #b8cdbd;
+      border: 1px solid #cfe3d5;
       border-radius: 6px;
       padding: 8px 10px;
       font: inherit;
       background: white;
     }
     .toolbar input { width: 260px; }
-    .status { margin: 12px 0; color: #52606d; font-size: 13px; }
+    .status { margin: 12px 0; color: #7d9185; font-size: 12px; }
     .table-title {
       margin: 0 0 12px;
-      color: #14532d;
+      color: #284d37;
       font-size: 16px;
       font-weight: 600;
     }
+    .table-title small {
+      margin-left: 8px;
+      color: #9aac9f;
+      font-size: 12px;
+      font-weight: 400;
+    }
     .panel {
-      border: 1px solid #dbe8dd;
+      border: 1px solid #dceee2;
       border-radius: 8px;
       background: white;
       overflow: hidden;
@@ -100,7 +107,7 @@
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td {
       padding: 10px 12px;
-      border-bottom: 1px solid #edf5ef;
+      border-bottom: 1px solid #eef6f1;
       text-align: left;
       vertical-align: top;
       white-space: nowrap;
@@ -108,16 +115,17 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    th { position: sticky; top: 0; background: #edf7ef; z-index: 1; }
+    th { position: sticky; top: 0; background: #f1f8f3; z-index: 1; }
     td.actions { display: flex; gap: 8px; }
-    .field-name { font-weight: 600; color: #14532d; }
+    .field-name { font-weight: 600; color: #223d2e; }
     .field-comment {
       display: block;
       margin-top: 3px;
-      color: #627d98;
-      font-size: 12px;
+      color: #98aa9e;
+      font-size: 11px;
       line-height: 1.35;
       white-space: normal;
+      font-weight: 400;
     }
     .badges { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
     .badge {
@@ -125,20 +133,20 @@
       align-items: center;
       border-radius: 4px;
       padding: 1px 5px;
-      background: #e8f1ea;
-      color: #31563b;
-      font-size: 11px;
+      background: #edf6f0;
+      color: #6d8c78;
+      font-size: 10px;
       line-height: 1.4;
     }
     .badge.pk { background: #fef3c7; color: #92400e; }
-    .badge.insert { background: #dcfce7; color: #166534; }
-    .badge.update { background: #dff5e7; color: #166534; }
+    .badge.insert { background: #e5f7eb; color: #4d8a62; }
+    .badge.update { background: #e7f4ed; color: #4d8a62; }
     .editor {
       display: none;
       margin-top: 16px;
       padding: 16px;
-      border-top: 1px solid #dbe8dd;
-      background: #fbfdfb;
+      border-top: 1px solid #dceee2;
+      background: #fbfdfc;
     }
     .editor.open { display: block; }
     .form-grid {
@@ -149,14 +157,20 @@
     label span {
       display: block;
       margin-bottom: 5px;
-      color: #52606d;
+      color: #2d3d33;
       font-size: 12px;
+    }
+    label span small {
+      margin-left: 6px;
+      color: #a0b0a5;
+      font-size: 11px;
+      font-weight: 400;
     }
     .field-hint {
       display: block;
       margin-top: 4px;
-      color: #627d98;
-      font-size: 12px;
+      color: #9aaca0;
+      font-size: 11px;
       line-height: 1.45;
     }
     .json-editor textarea {
@@ -229,6 +243,51 @@
       pk: null,
       currentDocId: null,
     };
+    const MONGO_META = {
+      device_runtime: {
+        label: "设备实时状态",
+        sample: { device_id: 20001, deviceId: "20001", device_number: "SHMINI-A1-0001", online: true, battery: 82, volume: 45, signalStrength: -58, networkType: "wifi" },
+      },
+      player_state: {
+        label: "播放器当前状态",
+        sample: { device_id: 20001, deviceId: "20001", isPlaying: true, songId: "song_001", songName: "City Lights", artist: "Nova Echo", source: "netease", playTime: 96 },
+      },
+      play_queue: {
+        label: "下一首播放队列",
+        sample: { device_id: 20001, deviceId: "20001", queue: [{ songId: "song_002", songName: "Morning Walk" }] },
+      },
+      operation_logs: {
+        label: "运行操作日志",
+        sample: { requestId: "REQ202606040001", device_id: 20001, action: "play", source: "manual", result: "success" },
+      },
+      media_metadata: {
+        label: "歌曲元数据缓存",
+        sample: { song_id: "song_001", external_id: "song_001", name: "City Lights", artist: "Nova Echo", cover_url: "https://cdn.example.com/covers/song_001.jpg", duration: 242 },
+      },
+    };
+    const MONGO_FIELD_COMMENTS = {
+      _id: "MongoDB 自动主键",
+      device_id: "关联 MySQL device.device_id",
+      deviceId: "前端使用的设备 ID 字符串",
+      device_number: "设备 SN",
+      online: "是否在线",
+      battery: "电量百分比",
+      volume: "当前音量",
+      signalStrength: "Wi-Fi 信号强度",
+      networkType: "网络类型",
+      isPlaying: "是否播放中",
+      songId: "歌曲 ID",
+      songName: "歌曲名称",
+      artist: "歌手",
+      source: "来源",
+      playTime: "播放进度秒数",
+      queue: "播放队列",
+      requestId: "请求追踪 ID",
+      action: "操作动作",
+      result: "执行结果",
+      created_at: "创建时间",
+      updated_at: "更新时间",
+    };
     const el = (id) => document.getElementById(id);
 
     async function api(path, options = {}) {
@@ -281,8 +340,8 @@
     function renderItems() {
       const store = currentStore();
       const html = state.source === "mysql"
-        ? store.items.map((t) => `<button class="item-btn" data-key="${escapeHtml(t.key)}">${escapeHtml(t.label || t.key)}<small>${escapeHtml(t.key)} / ${escapeHtml(t.table)}</small></button>`).join("")
-        : store.items.map((c) => `<button class="item-btn" data-key="${escapeHtml(c.name)}">${escapeHtml(c.name)}<small>${c.count} 条 / ${escapeHtml(state.mongo.database)}</small></button>`).join("");
+        ? store.items.map((t) => `<button class="item-btn" data-key="${escapeHtml(t.key)}">${escapeHtml(t.key)}<small>${escapeHtml(t.label || "")} / ${escapeHtml(t.table)}</small></button>`).join("")
+        : store.items.map((c) => `<button class="item-btn" data-key="${escapeHtml(c.name)}">${escapeHtml(c.name)}<small>${escapeHtml(MONGO_META[c.name]?.label || "MongoDB collection")} / ${c.count} 条</small></button>`).join("");
       el("items").innerHTML = html || "<p class='status'>没有可显示的数据源</p>";
       el("items").querySelectorAll("button").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.key === store.current);
@@ -314,7 +373,7 @@
       store.rows = data.list || [];
       renderMysqlTable();
       const info = tableInfo(store.current);
-      el("tableTitle").textContent = `${info?.label || store.current}（${store.current}）`;
+      el("tableTitle").innerHTML = `${escapeHtml(store.current)} <small>${escapeHtml(info?.label || "")}</small>`;
       setStatus(`MySQL / ${store.current}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
     }
 
@@ -325,7 +384,7 @@
       store.columns = data.columns || [];
       store.rows = data.list || [];
       renderMongoTable();
-      el("tableTitle").textContent = `MongoDB 集合：${data.collection}`;
+      el("tableTitle").innerHTML = `${escapeHtml(data.collection)} <small>${escapeHtml(MONGO_META[data.collection]?.label || "MongoDB collection")}</small>`;
       setStatus(`MongoDB / ${data.collection}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
     }
 
@@ -347,17 +406,12 @@
 
     function renderHeader(column) {
       const meta = metaFor(column);
-      const badges = [
-        meta.isPk ? "<span class='badge pk'>主键</span>" : "",
-        meta.canInsert ? "<span class='badge insert'>可新增</span>" : "",
-        meta.canUpdate ? "<span class='badge update'>可修改</span>" : "",
-      ].join("");
-      return `<span class="field-name">${escapeHtml(meta.label || column)}</span><span class="field-comment">${escapeHtml(column)}：${escapeHtml(meta.comment || "")}</span><span class="badges">${badges}</span>`;
+      return `<span class="field-name">${escapeHtml(column)}</span><span class="field-comment">${escapeHtml(meta.label || "")} ${escapeHtml(meta.comment || "")}</span>`;
     }
 
     function renderMongoTable() {
       const columns = state.mongo.columns.length ? state.mongo.columns : ["_id"];
-      el("thead").innerHTML = `<tr>${columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}<th>操作</th></tr>`;
+      el("thead").innerHTML = `<tr>${columns.map((c) => `<th>${renderMongoHeader(c)}</th>`).join("")}<th>操作</th></tr>`;
       el("tbody").innerHTML = state.mongo.rows.map((row, index) => `
         <tr>
           ${columns.map((c) => `<td title="${escapeHtml(valueText(row[c]))}">${escapeHtml(valueText(row[c]))}</td>`).join("")}
@@ -369,6 +423,10 @@
       `).join("");
       el("tbody").querySelectorAll("[data-edit]").forEach((btn) => btn.onclick = () => openMongoEditor("edit", state.mongo.rows[btn.dataset.edit]));
       el("tbody").querySelectorAll("[data-del]").forEach((btn) => btn.onclick = () => deleteMongoRow(state.mongo.rows[btn.dataset.del]));
+    }
+
+    function renderMongoHeader(column) {
+      return `<span class="field-name">${escapeHtml(column)}</span><span class="field-comment">${escapeHtml(MONGO_FIELD_COMMENTS[column] || "")}</span>`;
     }
 
     function valueText(value) {
@@ -397,7 +455,7 @@
         const meta = metaFor(field);
         return `
           <label>
-            <span>${escapeHtml(meta.label || field)}（${escapeHtml(field)}）</span>
+            <span>${escapeHtml(field)} <small>${escapeHtml(meta.label || "")}</small></span>
             <textarea data-field="${escapeHtml(field)}" rows="2">${escapeHtml(formatValue(row[field]))}</textarea>
             <small class="field-hint">${escapeHtml(meta.comment || "")}</small>
           </label>
@@ -409,11 +467,15 @@
     function openMongoEditor(mode, row = {}) {
       state.mode = mode;
       state.currentDocId = row._id || null;
-      const copy = { ...row };
+      const copy = mode === "create"
+        ? { ...(MONGO_META[state.mongo.current]?.sample || { name: "example", value: "edit me" }) }
+        : { ...row };
+      if (mode === "create") copy.updated_at = new Date().toISOString().slice(0, 19).replace("T", " ");
       if (mode === "create") delete copy._id;
       el("editorTitle").textContent = mode === "create" ? `新增 MongoDB / ${state.mongo.current}` : `编辑 MongoDB / ${state.mongo.current}`;
       el("form").style.display = "none";
       el("jsonForm").style.display = "block";
+      el("jsonForm").querySelector("span").innerHTML = `MongoDB JSON 文档 <small>${escapeHtml(MONGO_META[state.mongo.current]?.label || "按集合含义填写")}</small>`;
       el("jsonText").value = JSON.stringify(copy, null, 2);
       el("editor").classList.add("open");
     }

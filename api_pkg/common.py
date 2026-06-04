@@ -541,7 +541,7 @@ def get_song(song_id=None, mapping_id=None):
             SELECT ph.*, mm.song_title, mm.artist, mm.platform, mm.external_id, mm.cover_url
             FROM play_history ph
             LEFT JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
-            ORDER BY COALESCE(ph.played_at, ph.created_at) DESC
+            ORDER BY ph.created_at DESC
             LIMIT 1
             """
         )
@@ -747,7 +747,7 @@ def history_rows(user_id=None, source=None, keyword=None, limit=50):
         f"""
         SELECT
             ph.history_id,
-            ph.played_at,
+            ph.created_at AS played_at,
             ph.created_at,
             COALESCE(ph.source_platform, mm.platform) AS source_platform,
             mm.external_id,
@@ -757,7 +757,7 @@ def history_rows(user_id=None, source=None, keyword=None, limit=50):
         FROM play_history ph
         LEFT JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
         WHERE {' AND '.join(where)}
-        ORDER BY COALESCE(ph.played_at, ph.created_at) DESC
+        ORDER BY ph.created_at DESC
         LIMIT {int(limit)}
         """,
         tuple(params),
