@@ -5,6 +5,12 @@ from decimal import Decimal
 from flask import Blueprint, jsonify, request
 
 from db_config import get_mysql_connection
+from api_pkg.common import json_safe, mongo_db
+
+try:
+    from bson import ObjectId
+except Exception:
+    ObjectId = None
 
 
 db_api = Blueprint("db_api", __name__, url_prefix="/api/db")
@@ -627,6 +633,24 @@ def pick_allowed_fields(body, allowed_columns):
     }
 
 
+def parse_mongo_id(value):
+    if ObjectId is not None:
+        try:
+            return ObjectId(value)
+        except Exception:
+            pass
+    return value
+
+
+def mongo_collection_or_error(collection_name):
+    db = mongo_db()
+    if db is None:
+        return None, error("MongoDB 连接失败", 500)
+    if collection_name not in db.list_collection_names():
+        return None, error(f"不支持的 MongoDB 集合: {collection_name}", 404)
+    return db[collection_name], None
+
+
 # =========================================================
 # 健康检查
 # GET /api/db/health
@@ -670,6 +694,98 @@ def list_supported_tables():
         }
         for key, config in TABLE_CONFIG.items()
     ])
+
+
+@db_api.route("/mysql/tables", methods=["GET"])
+def list_mysql_tables():
+    return list_supported_tables()
+
+
+@db_api.route("/mongo/collections", methods=["GET"])
+def list_mongo_collections():
+    db = mongo_db()
+    if db is None:
+        return error("MongoDB 连接失败", 500)
+
+    result = []
+    for name in sorted(db.list_collection_names()):
+        try:
+            count = db[name].count_documents({})
+        except Exception:
+            count = 0
+        result.append({"name": name, "count": count})
+    return success({"database": db.name, "collections": result})
+
+
+@db_api.route("/mongo/<collection_name>", methods=["GET"])
+def list_mongo_documents(collection_name):
+    collection, err = mongo_collection_or_error(collection_name)
+    if err:
+        return err
+
+    try:
+        limit = min(max(int(request.args.get("limit", "100")), 1), 500)
+        offset = max(int(request.args.get("offset", "0")), 0)
+    except ValueError:
+        return error("limit 和 offset 必须是整数", 400)
+
+    docs = list(collection.find({}).sort("_id", -1).skip(offset).limit(limit))
+    total = collection.count_documents({})
+    keys = []
+    seen = set()
+    for doc in docs:
+        for key in doc.keys():
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
+
+    return success({
+        "collection": collection_name,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "columns": keys,
+        "list": json_safe(docs),
+    })
+
+
+@db_api.route("/mongo/<collection_name>", methods=["POST"])
+def create_mongo_document(collection_name):
+    collection, err = mongo_collection_or_error(collection_name)
+    if err:
+        return err
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return error("请求体必须是 JSON 对象", 400)
+    body.pop("_id", None)
+    result = collection.insert_one(body)
+    return success({"id": str(result.inserted_id)}, "新增成功")
+
+
+@db_api.route("/mongo/<collection_name>/<doc_id>", methods=["PUT", "PATCH"])
+def update_mongo_document(collection_name, doc_id):
+    collection, err = mongo_collection_or_error(collection_name)
+    if err:
+        return err
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return error("请求体必须是 JSON 对象", 400)
+    body.pop("_id", None)
+    result = collection.update_one({"_id": parse_mongo_id(doc_id)}, {"$set": body})
+    if result.matched_count == 0:
+        return error("记录不存在", 404)
+    return success({"matched": result.matched_count, "modified": result.modified_count}, "更新成功")
+
+
+@db_api.route("/mongo/<collection_name>/<doc_id>", methods=["DELETE"])
+def delete_mongo_document(collection_name, doc_id):
+    collection, err = mongo_collection_or_error(collection_name)
+    if err:
+        return err
+    result = collection.delete_one({"_id": parse_mongo_id(doc_id)})
+    if result.deleted_count == 0:
+        return error("记录不存在", 404)
+    return success({"deleted": result.deleted_count}, "删除成功")
 
 
 @db_api.route("/<table_key>/schema", methods=["GET"])

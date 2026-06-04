@@ -25,7 +25,7 @@
     header span { color: #bcccdc; font-size: 13px; }
     main {
       display: grid;
-      grid-template-columns: 260px minmax(0, 1fr);
+      grid-template-columns: 280px minmax(0, 1fr);
       min-height: calc(100vh - 61px);
     }
     aside {
@@ -34,7 +34,21 @@
       padding: 16px;
       overflow: auto;
     }
-    .table-btn {
+    .source-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .source-tabs button {
+      background: #e6edf3;
+      color: #334e68;
+    }
+    .source-tabs button.active {
+      background: #0967d2;
+      color: white;
+    }
+    .item-btn {
       width: 100%;
       border: 0;
       border-radius: 6px;
@@ -45,7 +59,8 @@
       color: #334e68;
       cursor: pointer;
     }
-    .table-btn.active, .table-btn:hover { background: #e6f6ff; color: #0967d2; }
+    .item-btn.active, .item-btn:hover { background: #e6f6ff; color: #0967d2; }
+    .item-btn small { color: #627d98; }
     section { min-width: 0; padding: 20px; }
     .toolbar {
       display: flex;
@@ -54,7 +69,7 @@
       gap: 10px;
       margin-bottom: 14px;
     }
-    input, textarea, select {
+    input, textarea {
       width: 100%;
       border: 1px solid #bcccdc;
       border-radius: 6px;
@@ -88,6 +103,9 @@
       text-align: left;
       vertical-align: top;
       white-space: nowrap;
+      max-width: 420px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     th { position: sticky; top: 0; background: #f0f4f8; z-index: 1; }
     td.actions { display: flex; gap: 8px; }
@@ -111,9 +129,14 @@
       color: #52606d;
       font-size: 12px;
     }
+    .json-editor textarea {
+      min-height: 300px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+    }
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
-      aside { max-height: 220px; }
+      aside { max-height: 240px; }
       .form-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -121,19 +144,27 @@
 <body>
   <header>
     <h1>数据库维护</h1>
-    <span>数据来自 /api/db，保存后刷新现有后台页面即可看到变化</span>
+    <span>MySQL 表和 MongoDB 集合分开维护；保存后刷新后台页面即可看到数据库变化</span>
   </header>
   <main>
-    <aside id="tables"></aside>
+    <aside>
+      <div class="source-tabs">
+        <button id="mysqlTab" class="active">MySQL</button>
+        <button id="mongoTab">MongoDB</button>
+      </div>
+      <div id="items"></div>
+    </aside>
     <section>
-      <div class="toolbar">
-        <input id="keyword" placeholder="按当前表字段精确筛选，例如 username">
+      <div class="toolbar" id="mysqlToolbar">
+        <input id="keyword" placeholder="MySQL 字段名，例如 username">
         <input id="keywordValue" placeholder="筛选值">
         <button id="filterBtn">筛选</button>
+      </div>
+      <div class="toolbar">
         <button id="reloadBtn" class="secondary">刷新</button>
         <button id="newBtn">新增</button>
       </div>
-      <div id="status" class="status">正在加载表结构...</div>
+      <div id="status" class="status">正在加载...</div>
       <div class="panel">
         <div class="table-wrap">
           <table>
@@ -144,6 +175,12 @@
         <div id="editor" class="editor">
           <h3 id="editorTitle">编辑记录</h3>
           <div id="form" class="form-grid"></div>
+          <div id="jsonForm" class="json-editor" style="display:none">
+            <label>
+              <span>MongoDB JSON 文档</span>
+              <textarea id="jsonText"></textarea>
+            </label>
+          </div>
           <div class="toolbar" style="margin-top:14px">
             <button id="saveBtn">保存</button>
             <button id="cancelBtn" class="secondary">取消</button>
@@ -153,7 +190,14 @@
     </section>
   </main>
   <script>
-    const state = { tables: [], current: null, schema: null, rows: [], mode: "create", pk: null };
+    const state = {
+      source: "mysql",
+      mysql: { items: [], current: null, schema: null, rows: [] },
+      mongo: { database: "", items: [], current: null, columns: [], rows: [] },
+      mode: "create",
+      pk: null,
+      currentDocId: null,
+    };
     const el = (id) => document.getElementById(id);
 
     async function api(path, options = {}) {
@@ -168,65 +212,131 @@
     }
 
     function setStatus(text) { el("status").textContent = text; }
+    function currentStore() { return state[state.source]; }
 
-    async function loadTables() {
-      state.tables = await api("/api/db/tables");
-      el("tables").innerHTML = state.tables.map((t) =>
-        `<button class="table-btn" data-key="${t.key}">${t.key}<br><small>${t.table}</small></button>`
-      ).join("");
-      el("tables").querySelectorAll("button").forEach((btn) => {
-        btn.onclick = () => selectTable(btn.dataset.key);
-      });
-      if (state.tables.length) selectTable(state.tables[0].key);
+    function setSource(source) {
+      state.source = source;
+      el("mysqlTab").classList.toggle("active", source === "mysql");
+      el("mongoTab").classList.toggle("active", source === "mongo");
+      el("mysqlToolbar").style.display = source === "mysql" ? "flex" : "none";
+      closeEditor();
+      renderItems();
+      const store = currentStore();
+      if (store.current) loadRows();
     }
 
-    async function selectTable(key) {
-      state.current = key;
-      document.querySelectorAll(".table-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.key === key));
+    async function loadSources() {
+      const [mysql, mongo] = await Promise.all([
+        api("/api/db/mysql/tables"),
+        api("/api/db/mongo/collections"),
+      ]);
+      state.mysql.items = mysql;
+      state.mongo.database = mongo.database;
+      state.mongo.items = mongo.collections;
+      state.mysql.current = mysql[0]?.key || null;
+      state.mongo.current = mongo.collections[0]?.name || null;
+      renderItems();
+      await loadRows();
+    }
+
+    function renderItems() {
+      const store = currentStore();
+      const html = state.source === "mysql"
+        ? store.items.map((t) => `<button class="item-btn" data-key="${t.key}">${t.key}<br><small>${t.table}</small></button>`).join("")
+        : store.items.map((c) => `<button class="item-btn" data-key="${c.name}">${c.name}<br><small>${c.count} 条 / ${state.mongo.database}</small></button>`).join("");
+      el("items").innerHTML = html || "<p class='status'>没有可显示的数据源</p>";
+      el("items").querySelectorAll("button").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.key === store.current);
+        btn.onclick = () => selectItem(btn.dataset.key);
+      });
+    }
+
+    async function selectItem(key) {
+      currentStore().current = key;
       closeEditor();
+      renderItems();
       await loadRows();
     }
 
     async function loadRows() {
-      if (!state.current) return;
+      if (state.source === "mysql") return loadMysqlRows();
+      return loadMongoRows();
+    }
+
+    async function loadMysqlRows() {
+      const store = state.mysql;
+      if (!store.current) return;
       const params = new URLSearchParams({ limit: "100", offset: "0" });
       const field = el("keyword").value.trim();
       const value = el("keywordValue").value.trim();
       if (field && value) params.set(field, value);
-      const data = await api(`/api/db/${state.current}?${params.toString()}`);
-      state.schema = data.schema;
-      state.rows = data.list || [];
-      renderTable();
-      setStatus(`${state.current}: 共 ${data.total || 0} 条，当前显示 ${state.rows.length} 条`);
+      const data = await api(`/api/db/${store.current}?${params.toString()}`);
+      store.schema = data.schema;
+      store.rows = data.list || [];
+      renderMysqlTable();
+      setStatus(`MySQL / ${store.current}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
     }
 
-    function renderTable() {
-      const columns = state.schema.columns;
+    async function loadMongoRows() {
+      const store = state.mongo;
+      if (!store.current) return;
+      const data = await api(`/api/db/mongo/${encodeURIComponent(store.current)}?limit=100&offset=0`);
+      store.columns = data.columns || [];
+      store.rows = data.list || [];
+      renderMongoTable();
+      setStatus(`MongoDB / ${data.collection}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
+    }
+
+    function renderMysqlTable() {
+      const columns = state.mysql.schema.columns;
       el("thead").innerHTML = `<tr>${columns.map((c) => `<th>${c}</th>`).join("")}<th>操作</th></tr>`;
-      el("tbody").innerHTML = state.rows.map((row, index) => `
+      el("tbody").innerHTML = state.mysql.rows.map((row, index) => `
         <tr>
-          ${columns.map((c) => `<td>${formatValue(row[c])}</td>`).join("")}
+          ${columns.map((c) => `<td title="${formatValue(row[c])}">${formatValue(row[c])}</td>`).join("")}
           <td class="actions">
             <button data-edit="${index}">编辑</button>
             <button class="danger" data-del="${index}">删除</button>
           </td>
         </tr>
       `).join("");
-      el("tbody").querySelectorAll("[data-edit]").forEach((btn) => btn.onclick = () => openEditor("edit", state.rows[btn.dataset.edit]));
-      el("tbody").querySelectorAll("[data-del]").forEach((btn) => btn.onclick = () => deleteRow(state.rows[btn.dataset.del]));
+      el("tbody").querySelectorAll("[data-edit]").forEach((btn) => btn.onclick = () => openMysqlEditor("edit", state.mysql.rows[btn.dataset.edit]));
+      el("tbody").querySelectorAll("[data-del]").forEach((btn) => btn.onclick = () => deleteMysqlRow(state.mysql.rows[btn.dataset.del]));
+    }
+
+    function renderMongoTable() {
+      const columns = state.mongo.columns.length ? state.mongo.columns : ["_id"];
+      el("thead").innerHTML = `<tr>${columns.map((c) => `<th>${c}</th>`).join("")}<th>操作</th></tr>`;
+      el("tbody").innerHTML = state.mongo.rows.map((row, index) => `
+        <tr>
+          ${columns.map((c) => `<td title="${formatValue(valueText(row[c]))}">${formatValue(valueText(row[c]))}</td>`).join("")}
+          <td class="actions">
+            <button data-edit="${index}">编辑</button>
+            <button class="danger" data-del="${index}">删除</button>
+          </td>
+        </tr>
+      `).join("");
+      el("tbody").querySelectorAll("[data-edit]").forEach((btn) => btn.onclick = () => openMongoEditor("edit", state.mongo.rows[btn.dataset.edit]));
+      el("tbody").querySelectorAll("[data-del]").forEach((btn) => btn.onclick = () => deleteMongoRow(state.mongo.rows[btn.dataset.del]));
+    }
+
+    function valueText(value) {
+      if (value === null || value === undefined) return "";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
     }
 
     function formatValue(value) {
-      if (value === null || value === undefined) return "";
-      return String(value).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+      return String(value ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
     }
 
-    function openEditor(mode, row = {}) {
+    function openMysqlEditor(mode, row = {}) {
       state.mode = mode;
       state.pk = {};
-      for (const key of state.schema.pk) state.pk[key] = row[key];
-      const fields = mode === "create" ? state.schema.insertColumns : state.schema.updateColumns;
-      el("editorTitle").textContent = mode === "create" ? `新增 ${state.current}` : `编辑 ${state.current}`;
+      for (const key of state.mysql.schema.pk) state.pk[key] = row[key];
+      const fields = mode === "create" ? state.mysql.schema.insertColumns : state.mysql.schema.updateColumns;
+      el("editorTitle").textContent = mode === "create" ? `新增 MySQL / ${state.mysql.current}` : `编辑 MySQL / ${state.mysql.current}`;
+      el("jsonForm").style.display = "none";
+      el("form").style.display = "grid";
       el("form").innerHTML = fields.map((field) => `
         <label>
           <span>${field}</span>
@@ -236,12 +346,25 @@
       el("editor").classList.add("open");
     }
 
+    function openMongoEditor(mode, row = {}) {
+      state.mode = mode;
+      state.currentDocId = row._id || null;
+      const copy = { ...row };
+      if (mode === "create") delete copy._id;
+      el("editorTitle").textContent = mode === "create" ? `新增 MongoDB / ${state.mongo.current}` : `编辑 MongoDB / ${state.mongo.current}`;
+      el("form").style.display = "none";
+      el("jsonForm").style.display = "block";
+      el("jsonText").value = JSON.stringify(copy, null, 2);
+      el("editor").classList.add("open");
+    }
+
     function closeEditor() {
       el("editor").classList.remove("open");
       el("form").innerHTML = "";
+      el("jsonText").value = "";
     }
 
-    function collectForm() {
+    function collectMysqlForm() {
       const data = {};
       el("form").querySelectorAll("[data-field]").forEach((input) => {
         data[input.dataset.field] = input.value === "" ? null : input.value;
@@ -250,33 +373,68 @@
     }
 
     function pkPath(row) {
-      if (state.schema.pk.length !== 1) throw new Error("联合主键表请使用对应 detail 接口维护");
-      return encodeURIComponent(row[state.schema.pk[0]]);
+      if (state.mysql.schema.pk.length !== 1) throw new Error("联合主键表请使用对应 detail 接口维护");
+      return encodeURIComponent(row[state.mysql.schema.pk[0]]);
     }
 
     async function saveRow() {
-      const data = collectForm();
+      if (state.source === "mysql") return saveMysqlRow();
+      return saveMongoRow();
+    }
+
+    async function saveMysqlRow() {
+      const data = collectMysqlForm();
       if (state.mode === "create") {
-        await api(`/api/db/${state.current}`, { method: "POST", body: data });
+        await api(`/api/db/${state.mysql.current}`, { method: "POST", body: data });
       } else {
-        await api(`/api/db/${state.current}/${pkPath(state.pk)}`, { method: "PUT", body: data });
+        await api(`/api/db/${state.mysql.current}/${pkPath(state.pk)}`, { method: "PUT", body: data });
       }
       closeEditor();
       await loadRows();
     }
 
-    async function deleteRow(row) {
-      if (!confirm("确定删除这条记录吗？")) return;
-      await api(`/api/db/${state.current}/${pkPath(row)}`, { method: "DELETE" });
+    async function saveMongoRow() {
+      let data;
+      try {
+        data = JSON.parse(el("jsonText").value || "{}");
+      } catch (err) {
+        alert("JSON 格式不正确");
+        return;
+      }
+      if (state.mode === "create") {
+        await api(`/api/db/mongo/${encodeURIComponent(state.mongo.current)}`, { method: "POST", body: data });
+      } else {
+        await api(`/api/db/mongo/${encodeURIComponent(state.mongo.current)}/${encodeURIComponent(state.currentDocId)}`, { method: "PUT", body: data });
+      }
+      closeEditor();
       await loadRows();
     }
 
+    async function deleteMysqlRow(row) {
+      if (!confirm("确定删除这条 MySQL 记录吗？")) return;
+      await api(`/api/db/${state.mysql.current}/${pkPath(row)}`, { method: "DELETE" });
+      await loadRows();
+    }
+
+    async function deleteMongoRow(row) {
+      if (!confirm("确定删除这条 MongoDB 文档吗？")) return;
+      await api(`/api/db/mongo/${encodeURIComponent(state.mongo.current)}/${encodeURIComponent(row._id)}`, { method: "DELETE" });
+      await loadRows();
+    }
+
+    function openNew() {
+      if (state.source === "mysql") openMysqlEditor("create");
+      else openMongoEditor("create");
+    }
+
+    el("mysqlTab").onclick = () => setSource("mysql");
+    el("mongoTab").onclick = () => setSource("mongo");
     el("filterBtn").onclick = loadRows;
     el("reloadBtn").onclick = loadRows;
-    el("newBtn").onclick = () => openEditor("create");
+    el("newBtn").onclick = openNew;
     el("saveBtn").onclick = saveRow;
     el("cancelBtn").onclick = closeEditor;
-    loadTables().catch((err) => setStatus(err.message));
+    loadSources().catch((err) => setStatus(err.message));
   </script>
 </body>
 </html>
