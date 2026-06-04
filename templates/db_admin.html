@@ -188,7 +188,7 @@
 <body>
   <header>
     <h1>数据库维护</h1>
-    <span>按原业务接口文档维护 MySQL 表和 MongoDB 集合；保存后刷新后台页面检查数据变化</span>
+    <span>维护 MySQL 表和 MongoDB 集合；play_history + media_mapping 会影响 Web 热歌排行，小程序播放后可刷新后台查看变化</span>
   </header>
   <main>
     <aside>
@@ -250,11 +250,11 @@
       },
       player_state: {
         label: "播放器当前状态",
-        sample: { device_id: 20001, deviceId: "20001", isPlaying: true, songId: "song_001", songName: "City Lights", artist: "Nova Echo", source: "netease", playTime: 96 },
+        sample: { device_id: 20001, deviceId: "20001", isPlaying: true, songId: "1491830535", songName: "稻香", artist: "周杰伦", source: "netease", playTime: 96 },
       },
       play_queue: {
         label: "下一首播放队列",
-        sample: { device_id: 20001, deviceId: "20001", queue: [{ songId: "song_002", songName: "Morning Walk" }] },
+        sample: { device_id: 20001, deviceId: "20001", queue: [{ songId: "song_30001", songName: "晴天", artist: "周杰伦" }] },
       },
       operation_logs: {
         label: "运行操作日志",
@@ -262,7 +262,7 @@
       },
       media_metadata: {
         label: "歌曲元数据缓存",
-        sample: { song_id: "song_001", external_id: "song_001", name: "City Lights", artist: "Nova Echo", cover_url: "https://cdn.example.com/covers/song_001.jpg", duration: 242 },
+        sample: { song_id: "1491830535", external_id: "1491830535", name: "稻香", artist: "周杰伦", cover_url: "https://cdn.example.com/covers/daoxiang.jpg", duration: 223 },
       },
     };
     const MONGO_FIELD_COMMENTS = {
