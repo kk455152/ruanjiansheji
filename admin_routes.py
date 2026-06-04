@@ -2118,13 +2118,61 @@ def create_firmware_task():
 @require_admin("super", "operator")
 def handle_feedback():
     body = request.get_json(silent=True) or {}
+    feedback_id = str(body.get("feedbackId") or "").strip()
+    status = str(body.get("status") or "processed").strip()
+    remark = str(body.get("remark") or "").strip()
+
+    if not feedback_id:
+        return response_error(400, "处理失败", "feedbackId 不能为空")
+
+    valid_status = {"open", "pending", "processing", "processed", "closed"}
+    if status not in valid_status:
+        return response_error(400, "处理失败", "status 必须是 open、pending、processing、processed 或 closed")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    handled_at = now if status in {"processing", "processed", "closed"} else None
+    closed_at = now if status == "closed" else None
+    handler_name = g.admin.get("realName") or g.admin.get("roleName") or g.admin.get("username")
+    admin_id = g.admin.get("adminId")
+
+    affected = mysql_exec(
+        """
+        UPDATE user_feedback
+        SET status=%s,
+            admin_id=%s,
+            handler_name=%s,
+            reply_content=%s,
+            handled_at=COALESCE(%s, handled_at),
+            closed_at=%s,
+            updated_at=NOW()
+        WHERE feedback_no=%s OR CAST(feedback_id AS CHAR)=%s
+        """,
+        (
+            status,
+            admin_id,
+            handler_name,
+            remark or "已记录处理意见",
+            handled_at,
+            closed_at,
+            feedback_id,
+            feedback_id,
+        ),
+    )
+
+    if not affected:
+        return response_error(404, "处理失败", "反馈不存在")
+
+    with _ADMIN_CACHE_LOCK:
+        _ADMIN_CACHE.clear()
+
     return response_ok(
         {
-            "feedbackId": body.get("feedbackId"),
-            "status": body.get("status") or "processed",
-            "handlerName": g.admin["roleName"],
-            "handledAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "remark": body.get("remark") or "已记录处理意见",
+            "result": True,
+            "feedbackId": feedback_id,
+            "status": status,
+            "handlerName": handler_name,
+            "handledAt": handled_at or "",
+            "remark": remark or "已记录处理意见",
         },
         "反馈处理状态已更新",
     )
