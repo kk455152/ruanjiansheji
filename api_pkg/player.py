@@ -40,11 +40,49 @@ from .common import body_json, get_device, get_song, load_state, mongo_update, o
 
 
 
-def real_device_id(device_code):
-    return 2
+def real_device_id(device_code, user_id=None):
+    conn = real_conn()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT device_id
+                FROM device
+                WHERE CAST(device_id AS CHAR)=%s OR device_number=%s
+                ORDER BY device_id ASC
+                LIMIT 1
+                """,
+                (str(device_code), str(device_code)),
+            )
+            row = cursor.fetchone()
+            if row and row.get("device_id") is not None:
+                return int(row["device_id"])
 
-def real_user_id():
-    return 2
+            if user_id:
+                cursor.execute(
+                    """
+                    SELECT device_id
+                    FROM user_device_binding
+                    WHERE user_id=%s
+                    ORDER BY is_primary DESC, bind_time DESC
+                    LIMIT 1
+                    """,
+                    (int(user_id),),
+                )
+                row = cursor.fetchone()
+                if row and row.get("device_id") is not None:
+                    return int(row["device_id"])
+
+            cursor.execute("SELECT device_id FROM device ORDER BY device_id ASC LIMIT 1")
+            row = cursor.fetchone()
+            if row and row.get("device_id") is not None:
+                return int(row["device_id"])
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    raise RuntimeError("没有可用设备")
 
 def ensure_mapping(user_id, song_id, song_name, artist, source, cover_url=""):
     conn = real_conn()
@@ -54,11 +92,12 @@ def ensure_mapping(user_id, song_id, song_name, artist, source, cover_url=""):
                 """
                 SELECT mapping_id
                 FROM media_mapping
-                WHERE external_id=%s AND platform=%s
+                WHERE (external_id=%s OR (song_title=%s AND artist=%s))
+                  AND platform=%s
                 ORDER BY mapping_id DESC
                 LIMIT 1
                 """,
-                (str(song_id), str(source)),
+                (str(song_id), song_name, artist or "", str(source)),
             )
             row = cursor.fetchone()
 
@@ -120,8 +159,8 @@ def play_song():
         song_name = song_id
 
     try:
-        did = real_device_id(device_code)
-        uid = real_user_id()
+        uid = current_user_id()
+        did = real_device_id(device_code, uid)
         mapping_id = ensure_mapping(uid, song_id, song_name, artist, source, cover_url)
 
         conn = real_conn()
@@ -130,8 +169,8 @@ def play_song():
                 cursor.execute(
                     """
                     INSERT INTO play_history
-                    (device_id, user_id, mapping_id, play_duration, created_at, played_at, style, source_platform)
-                    VALUES (%s,%s,%s,%s,NOW(),NOW(),%s,%s)
+                    (device_id, user_id, mapping_id, play_duration, created_at, style, source_platform)
+                    VALUES (%s,%s,%s,%s,NOW(),%s,%s)
                     """,
                     (did, uid, mapping_id, 0, "normal", source),
                 )

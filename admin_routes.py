@@ -1004,20 +1004,19 @@ def feedback_detail_route():
 @admin_bp.get("/market/top-songs")
 @require_admin("super", "market", "boss")
 def top_songs():
-    rows = cached_mysql_all(
+    rows = mysql_all(
         """
         SELECT
-            mm.mapping_id,
             mm.song_title,
             mm.artist,
-            COALESCE(ph.source_platform, mm.platform) AS platform,
+            MIN(COALESCE(ph.source_platform, mm.platform)) AS platform,
             COUNT(*) AS play_count,
             COUNT(DISTINCT ph.user_id) AS user_count
         FROM play_history ph
         JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
         WHERE mm.song_title IS NOT NULL AND mm.song_title <> ''
-        GROUP BY mm.mapping_id, mm.song_title, mm.artist, COALESCE(ph.source_platform, mm.platform)
-        ORDER BY play_count DESC, user_count DESC, mm.mapping_id ASC
+        GROUP BY mm.song_title, mm.artist
+        ORDER BY play_count DESC, user_count DESC, mm.song_title ASC
         LIMIT 10
         """
     )
