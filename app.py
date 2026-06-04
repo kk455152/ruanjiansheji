@@ -10,7 +10,7 @@ import threading
 import time
 
 import pika
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
@@ -32,6 +32,7 @@ from mongo_routes import mongo_bp
 from api_routes import api_bp
 from c_observe_routes import c_observe_bp
 from admin_routes import admin_bp, admin_compat_bp
+from db_api_service import db_api
 app.register_blueprint(auth_bp)
 app.register_blueprint(device_bp)
 app.register_blueprint(stats_bp)
@@ -40,6 +41,7 @@ app.register_blueprint(api_bp)
 app.register_blueprint(c_observe_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(admin_compat_bp)
+app.register_blueprint(db_api)
 # =========================
 # 原来的网关配置，不要乱改
 # =========================
@@ -503,6 +505,11 @@ def health():
         'code': 200,
         'msg': 'ok'
     }), 200
+
+
+@app.route('/db-admin', methods=['GET'])
+def db_admin_page():
+    return render_template('db_admin.html')
 
 
 if __name__ == '__main__':

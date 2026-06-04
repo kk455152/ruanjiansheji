@@ -48,18 +48,21 @@ TABLE_CONFIG = {
             "device_number",
             "model_name",
             "status",
+            "firmware_version",
             "last_active",
         ],
         "insert_columns": [
             "device_number",
             "model_name",
             "status",
+            "firmware_version",
             "last_active",
         ],
         "update_columns": [
             "device_number",
             "model_name",
             "status",
+            "firmware_version",
             "last_active",
         ],
     },
@@ -229,21 +232,28 @@ TABLE_CONFIG = {
         ],
     },
 
-    "Daily_Stats": {
-        "table": "Daily_Stats",
+    "daily_stats": {
+        "table": "daily_stats",
         "pk": ["stat_date"],
         "columns": [
             "stat_date",
             "total_play_count",
             "unique_song_count",
             "unique_user_count",
+            "active_user_count",
+            "online_device_count",
+            "platform_wechat_count",
+            "platform_qq_count",
             "unique_device_count",
             "total_play_duration_seconds",
             "avg_play_duration_seconds",
-            "hottest_song_id",
+            "hottest_song_external_id",
             "hottest_song_name",
             "hottest_artist",
             "hottest_play_count",
+            "new_user_count",
+            "new_device_count",
+            "total_sales_amount",
             "generated_at",
             "updated_at",
         ],
@@ -252,13 +262,20 @@ TABLE_CONFIG = {
             "total_play_count",
             "unique_song_count",
             "unique_user_count",
+            "active_user_count",
+            "online_device_count",
+            "platform_wechat_count",
+            "platform_qq_count",
             "unique_device_count",
             "total_play_duration_seconds",
             "avg_play_duration_seconds",
-            "hottest_song_id",
+            "hottest_song_external_id",
             "hottest_song_name",
             "hottest_artist",
             "hottest_play_count",
+            "new_user_count",
+            "new_device_count",
+            "total_sales_amount",
             "generated_at",
             "updated_at",
         ],
@@ -266,15 +283,260 @@ TABLE_CONFIG = {
             "total_play_count",
             "unique_song_count",
             "unique_user_count",
+            "active_user_count",
+            "online_device_count",
+            "platform_wechat_count",
+            "platform_qq_count",
             "unique_device_count",
             "total_play_duration_seconds",
             "avg_play_duration_seconds",
-            "hottest_song_id",
+            "hottest_song_external_id",
             "hottest_song_name",
             "hottest_artist",
             "hottest_play_count",
+            "new_user_count",
+            "new_device_count",
+            "total_sales_amount",
             "generated_at",
             "updated_at",
+        ],
+    },
+
+    "admin_user": {
+        "table": "admin_user",
+        "pk": ["admin_id"],
+        "columns": [
+            "admin_id", "username", "password_hash", "role", "created_at", "updated_at",
+            "last_login_at", "status", "real_name", "job_no", "position", "phone",
+            "email", "wechat_open_id", "avatar", "is_super_admin",
+        ],
+        "insert_columns": [
+            "username", "password_hash", "role", "status", "real_name", "job_no",
+            "position", "phone", "email", "wechat_open_id", "avatar", "is_super_admin",
+        ],
+        "update_columns": [
+            "password_hash", "role", "status", "real_name", "job_no", "position",
+            "phone", "email", "wechat_open_id", "avatar", "is_super_admin",
+        ],
+    },
+
+    "user_profile": {
+        "table": "user_profile",
+        "pk": ["profile_id"],
+        "columns": [
+            "profile_id", "user_id", "nickname", "email", "gender", "age", "age_range",
+            "province_code", "province_name", "city_code", "city_name", "active_level",
+            "value_level", "bound_platforms", "user_status", "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "user_id", "nickname", "email", "gender", "age", "age_range", "province_code",
+            "province_name", "city_code", "city_name", "active_level", "value_level",
+            "bound_platforms", "user_status",
+        ],
+        "update_columns": [
+            "nickname", "email", "gender", "age", "age_range", "province_code",
+            "province_name", "city_code", "city_name", "active_level", "value_level",
+            "bound_platforms", "user_status",
+        ],
+    },
+
+    "region_stats_daily": {
+        "table": "region_stats_daily",
+        "pk": ["id"],
+        "columns": [
+            "id", "stat_date", "region_level", "region_name", "user_count",
+            "active_user_count", "device_count", "order_count", "sales_amount",
+            "created_at", "updated_at", "region_code",
+        ],
+        "insert_columns": [
+            "stat_date", "region_level", "region_name", "user_count", "active_user_count",
+            "device_count", "order_count", "sales_amount", "region_code",
+        ],
+        "update_columns": [
+            "stat_date", "region_level", "region_name", "user_count", "active_user_count",
+            "device_count", "order_count", "sales_amount", "region_code",
+        ],
+    },
+
+    "sales_order": {
+        "table": "sales_order",
+        "pk": ["order_id"],
+        "columns": [
+            "order_id", "order_no", "user_id", "device_id", "order_amount", "pay_amount",
+            "order_status", "pay_status", "province_code", "province_name", "city_code",
+            "city_name", "paid_at", "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "order_no", "user_id", "device_id", "order_amount", "pay_amount",
+            "order_status", "pay_status", "province_code", "province_name",
+            "city_code", "city_name", "paid_at",
+        ],
+        "update_columns": [
+            "user_id", "device_id", "order_amount", "pay_amount", "order_status",
+            "pay_status", "province_code", "province_name", "city_code", "city_name",
+            "paid_at",
+        ],
+    },
+
+    "hot_ranking_daily": {
+        "table": "hot_ranking_daily",
+        "pk": ["ranking_id"],
+        "columns": [
+            "ranking_id", "ranking_date", "ranking_type", "scope_type", "scope_code",
+            "rank_no", "target_id", "target_name", "target_category", "metric_value",
+            "metric_unit", "created_at",
+        ],
+        "insert_columns": [
+            "ranking_date", "ranking_type", "scope_type", "scope_code", "rank_no",
+            "target_id", "target_name", "target_category", "metric_value", "metric_unit",
+        ],
+        "update_columns": [
+            "ranking_date", "ranking_type", "scope_type", "scope_code", "rank_no",
+            "target_id", "target_name", "target_category", "metric_value", "metric_unit",
+        ],
+    },
+
+    "user_value_segment_daily": {
+        "table": "user_value_segment_daily",
+        "pk": ["id"],
+        "columns": [
+            "id", "stat_date", "segment_code", "segment_name", "user_count",
+            "active_user_count", "avg_play_count", "avg_pay_amount", "retention_rate",
+            "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "stat_date", "segment_code", "segment_name", "user_count", "active_user_count",
+            "avg_play_count", "avg_pay_amount", "retention_rate",
+        ],
+        "update_columns": [
+            "stat_date", "segment_code", "segment_name", "user_count", "active_user_count",
+            "avg_play_count", "avg_pay_amount", "retention_rate",
+        ],
+    },
+
+    "device_log": {
+        "table": "device_log",
+        "pk": ["log_id"],
+        "columns": [
+            "log_id", "device_id", "device_sn", "device_name", "device_type",
+            "device_model", "log_type", "log_level", "title", "content", "event_code",
+            "trace_id", "task_id", "firmware_version", "online_status", "ip_address",
+            "network_type", "location", "request_url", "request_method", "request_id",
+            "response_code", "response_message", "admin_id", "operator_name",
+            "operator_type", "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "device_id", "device_sn", "device_name", "device_type", "device_model",
+            "log_type", "log_level", "title", "content", "event_code", "trace_id",
+            "task_id", "firmware_version", "online_status", "ip_address", "network_type",
+            "location", "request_url", "request_method", "request_id", "response_code",
+            "response_message", "admin_id", "operator_name", "operator_type",
+        ],
+        "update_columns": [
+            "device_sn", "device_name", "device_type", "device_model", "log_type",
+            "log_level", "title", "content", "event_code", "trace_id", "task_id",
+            "firmware_version", "online_status", "ip_address", "network_type",
+            "location", "request_url", "request_method", "request_id", "response_code",
+            "response_message", "admin_id", "operator_name", "operator_type",
+        ],
+    },
+
+    "device_firmware": {
+        "table": "device_firmware",
+        "pk": ["firmware_id"],
+        "columns": [
+            "firmware_id", "model_name", "device_type", "hardware_version", "version",
+            "version_code", "file_url", "file_md5", "file_size", "description",
+            "force_update", "status", "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "model_name", "device_type", "hardware_version", "version", "version_code",
+            "file_url", "file_md5", "file_size", "description", "force_update", "status",
+        ],
+        "update_columns": [
+            "model_name", "device_type", "hardware_version", "version", "version_code",
+            "file_url", "file_md5", "file_size", "description", "force_update", "status",
+        ],
+    },
+
+    "device_firmware_release": {
+        "table": "device_firmware_release",
+        "pk": ["release_id"],
+        "columns": [
+            "release_id", "release_no", "firmware_id", "target_model_name",
+            "target_device_type", "target_hardware_version", "release_scope",
+            "total_device_count", "success_device_count", "fail_device_count", "status",
+            "admin_id", "operator_name", "scheduled_at", "started_at", "finished_at",
+            "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "release_no", "firmware_id", "target_model_name", "target_device_type",
+            "target_hardware_version", "release_scope", "total_device_count",
+            "success_device_count", "fail_device_count", "status", "admin_id",
+            "operator_name", "scheduled_at", "started_at", "finished_at",
+        ],
+        "update_columns": [
+            "firmware_id", "target_model_name", "target_device_type",
+            "target_hardware_version", "release_scope", "total_device_count",
+            "success_device_count", "fail_device_count", "status", "admin_id",
+            "operator_name", "scheduled_at", "started_at", "finished_at",
+        ],
+    },
+
+    "device_firmware_update_task": {
+        "table": "device_firmware_update_task",
+        "pk": ["task_id"],
+        "columns": [
+            "task_id", "task_no", "device_id", "firmware_id", "release_device_id",
+            "current_version", "target_version", "status", "progress", "fail_reason",
+            "admin_id", "operator_name", "started_at", "finished_at", "created_at",
+            "updated_at",
+        ],
+        "insert_columns": [
+            "task_no", "device_id", "firmware_id", "release_device_id", "current_version",
+            "target_version", "status", "progress", "fail_reason", "admin_id",
+            "operator_name", "started_at", "finished_at",
+        ],
+        "update_columns": [
+            "firmware_id", "release_device_id", "current_version", "target_version",
+            "status", "progress", "fail_reason", "admin_id", "operator_name",
+            "started_at", "finished_at",
+        ],
+    },
+
+    "system_config": {
+        "table": "system_config",
+        "pk": ["config_id"],
+        "columns": [
+            "config_id", "config_key", "config_value", "config_type", "config_group",
+            "config_name", "description", "editable", "updated_by", "created_at",
+            "updated_at",
+        ],
+        "insert_columns": [
+            "config_key", "config_value", "config_type", "config_group", "config_name",
+            "description", "editable", "updated_by",
+        ],
+        "update_columns": [
+            "config_value", "config_type", "config_group", "config_name", "description",
+            "editable", "updated_by",
+        ],
+    },
+
+    "admin_operation_log": {
+        "table": "admin_operation_log",
+        "pk": ["log_id"],
+        "columns": [
+            "log_id", "admin_id", "action", "module", "operation_name", "path",
+            "request_method", "ip_address", "user_agent", "params", "result_status",
+            "error_message", "created_at",
+        ],
+        "insert_columns": [
+            "admin_id", "action", "module", "operation_name", "path", "request_method",
+            "ip_address", "user_agent", "params", "result_status", "error_message",
+        ],
+        "update_columns": [
+            "admin_id", "action", "module", "operation_name", "path", "request_method",
+            "ip_address", "user_agent", "params", "result_status", "error_message",
         ],
     },
 }
@@ -397,7 +659,32 @@ def health_check():
 
 @db_api.route("/tables", methods=["GET"])
 def list_supported_tables():
-    return success(list(TABLE_CONFIG.keys()))
+    return success([
+        {
+            "key": key,
+            "table": config["table"],
+            "pk": config["pk"],
+            "columns": config["columns"],
+            "insertColumns": config["insert_columns"],
+            "updateColumns": config["update_columns"],
+        }
+        for key, config in TABLE_CONFIG.items()
+    ])
+
+
+@db_api.route("/<table_key>/schema", methods=["GET"])
+def table_schema(table_key):
+    config, err = get_config_or_error(table_key)
+    if err:
+        return err
+    return success({
+        "key": table_key,
+        "table": config["table"],
+        "pk": config["pk"],
+        "columns": config["columns"],
+        "insertColumns": config["insert_columns"],
+        "updateColumns": config["update_columns"],
+    })
 
 
 # =========================================================
@@ -456,8 +743,28 @@ def list_records(table_key):
         with conn.cursor() as cursor:
             cursor.execute(sql, params)
             rows = cursor.fetchall()
+            count_sql = (
+                f"SELECT COUNT(*) AS total "
+                f"FROM {quote_identifier(table)} "
+                f"{where_sql}"
+            )
+            cursor.execute(count_sql, params[:-2])
+            count_row = cursor.fetchone() or {}
 
-        return success(serialize_rows(rows))
+        return success({
+            "total": int(count_row.get("total") or 0),
+            "limit": limit,
+            "offset": offset,
+            "list": serialize_rows(rows),
+            "schema": {
+                "key": table_key,
+                "table": table,
+                "pk": config["pk"],
+                "columns": columns,
+                "insertColumns": config["insert_columns"],
+                "updateColumns": config["update_columns"],
+            },
+        })
     except Exception as exc:
         return error(f"查询失败: {exc}", 500)
     finally:

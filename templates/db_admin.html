@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据库维护</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+      color: #1f2933;
+      background: #f5f7f8;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      background: #102a43;
+      color: white;
+    }
+    header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    header span { color: #bcccdc; font-size: 13px; }
+    main {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      min-height: calc(100vh - 61px);
+    }
+    aside {
+      border-right: 1px solid #d9e2ec;
+      background: #fff;
+      padding: 16px;
+      overflow: auto;
+    }
+    .table-btn {
+      width: 100%;
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      text-align: left;
+      background: transparent;
+      color: #334e68;
+      cursor: pointer;
+    }
+    .table-btn.active, .table-btn:hover { background: #e6f6ff; color: #0967d2; }
+    section { min-width: 0; padding: 20px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid #bcccdc;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      background: white;
+    }
+    .toolbar input { width: 260px; }
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: 9px 14px;
+      background: #0967d2;
+      color: white;
+      cursor: pointer;
+    }
+    button.secondary { background: #627d98; }
+    button.danger { background: #ba2525; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .panel {
+      border: 1px solid #d9e2ec;
+      border-radius: 8px;
+      background: white;
+      overflow: hidden;
+    }
+    .table-wrap { overflow: auto; max-height: 58vh; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #edf2f7;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    th { position: sticky; top: 0; background: #f0f4f8; z-index: 1; }
+    td.actions { display: flex; gap: 8px; }
+    .status { margin: 12px 0; color: #52606d; font-size: 13px; }
+    .editor {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      border-top: 1px solid #d9e2ec;
+      background: #fbfdfe;
+    }
+    .editor.open { display: block; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    label span {
+      display: block;
+      margin-bottom: 5px;
+      color: #52606d;
+      font-size: 12px;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      aside { max-height: 220px; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>数据库维护</h1>
+    <span>数据来自 /api/db，保存后刷新现有后台页面即可看到变化</span>
+  </header>
+  <main>
+    <aside id="tables"></aside>
+    <section>
+      <div class="toolbar">
+        <input id="keyword" placeholder="按当前表字段精确筛选，例如 username">
+        <input id="keywordValue" placeholder="筛选值">
+        <button id="filterBtn">筛选</button>
+        <button id="reloadBtn" class="secondary">刷新</button>
+        <button id="newBtn">新增</button>
+      </div>
+      <div id="status" class="status">正在加载表结构...</div>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div id="editor" class="editor">
+          <h3 id="editorTitle">编辑记录</h3>
+          <div id="form" class="form-grid"></div>
+          <div class="toolbar" style="margin-top:14px">
+            <button id="saveBtn">保存</button>
+            <button id="cancelBtn" class="secondary">取消</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const state = { tables: [], current: null, schema: null, rows: [], mode: "create", pk: null };
+    const el = (id) => document.getElementById(id);
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        method: options.method || "GET",
+        headers: options.body ? { "Content-Type": "application/json" } : {},
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      });
+      const payload = await res.json();
+      if (!res.ok || payload.status === "error") throw new Error(payload.message || "请求失败");
+      return payload.data;
+    }
+
+    function setStatus(text) { el("status").textContent = text; }
+
+    async function loadTables() {
+      state.tables = await api("/api/db/tables");
+      el("tables").innerHTML = state.tables.map((t) =>
+        `<button class="table-btn" data-key="${t.key}">${t.key}<br><small>${t.table}</small></button>`
+      ).join("");
+      el("tables").querySelectorAll("button").forEach((btn) => {
+        btn.onclick = () => selectTable(btn.dataset.key);
+      });
+      if (state.tables.length) selectTable(state.tables[0].key);
+    }
+
+    async function selectTable(key) {
+      state.current = key;
+      document.querySelectorAll(".table-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.key === key));
+      closeEditor();
+      await loadRows();
+    }
+
+    async function loadRows() {
+      if (!state.current) return;
+      const params = new URLSearchParams({ limit: "100", offset: "0" });
+      const field = el("keyword").value.trim();
+      const value = el("keywordValue").value.trim();
+      if (field && value) params.set(field, value);
+      const data = await api(`/api/db/${state.current}?${params.toString()}`);
+      state.schema = data.schema;
+      state.rows = data.list || [];
+      renderTable();
+      setStatus(`${state.current}: 共 ${data.total || 0} 条，当前显示 ${state.rows.length} 条`);
+    }
+
+    function renderTable() {
+      const columns = state.schema.columns;
+      el("thead").innerHTML = `<tr>${columns.map((c) => `<th>${c}</th>`).join("")}<th>操作</th></tr>`;
+      el("tbody").innerHTML = state.rows.map((row, index) => `
+        <tr>
+          ${columns.map((c) => `<td>${formatValue(row[c])}</td>`).join("")}
+          <td class="actions">
+            <button data-edit="${index}">编辑</button>
+            <button class="danger" data-del="${index}">删除</button>
+          </td>
+        </tr>
+      `).join("");
+      el("tbody").querySelectorAll("[data-edit]").forEach((btn) => btn.onclick = () => openEditor("edit", state.rows[btn.dataset.edit]));
+      el("tbody").querySelectorAll("[data-del]").forEach((btn) => btn.onclick = () => deleteRow(state.rows[btn.dataset.del]));
+    }
+
+    function formatValue(value) {
+      if (value === null || value === undefined) return "";
+      return String(value).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    }
+
+    function openEditor(mode, row = {}) {
+      state.mode = mode;
+      state.pk = {};
+      for (const key of state.schema.pk) state.pk[key] = row[key];
+      const fields = mode === "create" ? state.schema.insertColumns : state.schema.updateColumns;
+      el("editorTitle").textContent = mode === "create" ? `新增 ${state.current}` : `编辑 ${state.current}`;
+      el("form").innerHTML = fields.map((field) => `
+        <label>
+          <span>${field}</span>
+          <textarea data-field="${field}" rows="2">${formatValue(row[field])}</textarea>
+        </label>
+      `).join("");
+      el("editor").classList.add("open");
+    }
+
+    function closeEditor() {
+      el("editor").classList.remove("open");
+      el("form").innerHTML = "";
+    }
+
+    function collectForm() {
+      const data = {};
+      el("form").querySelectorAll("[data-field]").forEach((input) => {
+        data[input.dataset.field] = input.value === "" ? null : input.value;
+      });
+      return data;
+    }
+
+    function pkPath(row) {
+      if (state.schema.pk.length !== 1) throw new Error("联合主键表请使用对应 detail 接口维护");
+      return encodeURIComponent(row[state.schema.pk[0]]);
+    }
+
+    async function saveRow() {
+      const data = collectForm();
+      if (state.mode === "create") {
+        await api(`/api/db/${state.current}`, { method: "POST", body: data });
+      } else {
+        await api(`/api/db/${state.current}/${pkPath(state.pk)}`, { method: "PUT", body: data });
+      }
+      closeEditor();
+      await loadRows();
+    }
+
+    async function deleteRow(row) {
+      if (!confirm("确定删除这条记录吗？")) return;
+      await api(`/api/db/${state.current}/${pkPath(row)}`, { method: "DELETE" });
+      await loadRows();
+    }
+
+    el("filterBtn").onclick = loadRows;
+    el("reloadBtn").onclick = loadRows;
+    el("newBtn").onclick = () => openEditor("create");
+    el("saveBtn").onclick = saveRow;
+    el("cancelBtn").onclick = closeEditor;
+    loadTables().catch((err) => setStatus(err.message));
+  </script>
+</body>
+</html>

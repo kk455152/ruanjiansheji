@@ -8,7 +8,7 @@ MYSQL_CONFIG = {
     "port": int(os.getenv("MYSQL_PORT", "3306")),
     "user": os.getenv("MYSQL_USER", "root"),
     "password": os.getenv("MYSQL_PASSWORD", ""),
-    "database": os.getenv("MYSQL_DB", "music_player"),
+    "database": os.getenv("MYSQL_DATABASE", os.getenv("MYSQL_DB", "smart_speaker")),
     "charset": "utf8mb4",
 }
 

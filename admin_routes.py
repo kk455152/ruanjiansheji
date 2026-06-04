@@ -11,7 +11,7 @@ from functools import wraps
 
 from flask import Blueprint, jsonify, request, g
 
-from api_pkg.common import json_safe, load_state, mysql_all, mysql_exec, mysql_one, save_state
+from api_pkg.common import json_safe, load_state, mongo_many, mongo_one, mysql_all, mysql_exec, mysql_one, save_state
 
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -104,6 +104,41 @@ def admin_accounts_overlay():
 
 def all_admins():
     """DEFAULT_ADMINS 叠加持久化覆盖层，得到当前全部管理员账号。"""
+    db_rows = mysql_all(
+        """
+        SELECT admin_id, username, password_hash, role, real_name, job_no,
+               position, phone, email, wechat_open_id, status, last_login_at,
+               is_super_admin
+        FROM admin_user
+        WHERE COALESCE(status, 1) <> 0
+        ORDER BY admin_id ASC
+        """
+    )
+    if db_rows:
+        result = {}
+        for row in db_rows:
+            role = row.get("role") or ("super_admin" if row.get("is_super_admin") else "operator_admin")
+            username = row.get("username")
+            if not username:
+                continue
+            result[username] = {
+                "adminId": row.get("admin_id"),
+                "username": username,
+                "password": row.get("password_hash") or "",
+                "role": role,
+                "roleName": ROLE_NAME_MAP.get(role, role),
+                "realName": row.get("real_name") or username,
+                "jobNo": row.get("job_no") or "-",
+                "position": row.get("position") or ROLE_NAME_MAP.get(role, role),
+                "phone": row.get("phone") or "",
+                "email": row.get("email") or "",
+                "wechatOpenId": row.get("wechat_open_id") or "",
+                "status": "enabled" if str(row.get("status")) not in ("0", "disabled") else "disabled",
+                "lastLoginAt": str(row.get("last_login_at") or ""),
+            }
+        if result:
+            return result
+
     overlay = admin_accounts_overlay()
     result = {username: dict(record) for username, record in DEFAULT_ADMINS.items()}
     for username in overlay["deleted"]:
@@ -118,6 +153,19 @@ def all_admins():
 
 def find_admin(username):
     return all_admins().get(username)
+
+
+def verify_admin_password(raw_password, stored_password):
+    stored = str(stored_password or "")
+    raw = str(raw_password or "")
+    if hmac.compare_digest(raw, stored):
+        return True
+    if len(stored) == 64:
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        if hmac.compare_digest(digest, stored):
+            return True
+    md5_digest = hashlib.md5(raw.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(md5_digest, stored)
 
 
 def response_ok(data=None, message=None, code=200):
@@ -258,8 +306,8 @@ def count_sql(sql, params=(), fallback=0):
     def loader():
         row = mysql_one(sql, params)
         if not row:
-            return fallback
-        return _int(next(iter(row.values())), fallback)
+            return 0
+        return _int(next(iter(row.values())), 0)
 
     return cached_value(("count", sql, tuple(params), fallback), loader)
 
@@ -272,7 +320,7 @@ def cached_mysql_all(sql, params=(), fallback=None):
 
 
 def current_device():
-    state_device = load_state().get("device", {})
+    state_device = {}
     row = mysql_one(
         """
         SELECT
@@ -281,7 +329,9 @@ def current_device():
             d.model_name,
             d.status,
             d.last_active,
+            d.firmware_version,
             b.custom_device_name,
+            b.current_network,
             u.username AS owner_name
         FROM device d
         LEFT JOIN user_device_binding b ON b.device_id = d.device_id
@@ -293,74 +343,109 @@ def current_device():
     if row:
         return {
             "deviceId": str(row.get("device_id")),
-            "deviceSn": row.get("device_number") or "SHMINI-A1-0001",
-            "deviceName": row.get("custom_device_name") or "客厅音箱",
-            "modelName": row.get("model_name") or "SH-Mini A1",
-            "ownerName": row.get("owner_name") or "张三",
+            "deviceSn": row.get("device_number") or "",
+            "deviceName": row.get("custom_device_name") or row.get("device_number") or "",
+            "modelName": row.get("model_name") or "",
+            "ownerName": row.get("owner_name") or "",
             "online": bool(row.get("status")),
-            "firmwareVersion": state_device.get("firmware", "1.0.3"),
-            "lastOnlineAt": str(row.get("last_active") or "2026-05-20 10:00:00"),
-            "volume": state_device.get("volume", 60),
-            "battery": state_device.get("battery", 82),
-            "signalStrength": state_device.get("signalStrength", -73.59),
-            "currentNetwork": state_device.get("currentNetwork", "Home-5G"),
-            "createdAt": "2026-05-01 10:00:00",
+            "firmwareVersion": row.get("firmware_version") or "",
+            "lastOnlineAt": str(row.get("last_active") or ""),
+            "volume": 0,
+            "battery": 0,
+            "signalStrength": "",
+            "currentNetwork": row.get("current_network") or "",
+            "createdAt": "",
         }
 
     return {
-        "deviceId": state_device.get("deviceId", "dev_001"),
-        "deviceSn": state_device.get("deviceSn", "SHMINI-A1-0001"),
-        "deviceName": state_device.get("deviceName", "客厅音箱"),
-        "modelName": state_device.get("modelName", "SH-Mini A1"),
-        "ownerName": "张三",
-        "online": bool(state_device.get("online", True)),
-        "firmwareVersion": state_device.get("firmware", "1.0.3"),
-        "lastOnlineAt": "2026-05-20 10:00:00",
-        "volume": state_device.get("volume", 60),
-        "battery": state_device.get("battery", 82),
-        "signalStrength": state_device.get("signalStrength", -73.59),
-        "currentNetwork": state_device.get("currentNetwork", "Home-5G"),
-        "createdAt": "2026-05-01 10:00:00",
+        "deviceId": "",
+        "deviceSn": "",
+        "deviceName": "",
+        "modelName": "",
+        "ownerName": "",
+        "online": False,
+        "firmwareVersion": "",
+        "lastOnlineAt": "",
+        "volume": 0,
+        "battery": 0,
+        "signalStrength": "",
+        "currentNetwork": "",
+        "createdAt": "",
     }
 
 
 def fallback_series(metric_type, dimension):
-    today = datetime.now().date()
-    base = {"user": 120, "device": 80, "sales": 65000}.get(metric_type, 120)
-    result = []
-
-    if dimension == "week":
-        for index in range(8):
-            week_day = today - timedelta(weeks=7 - index)
-            label = f"{week_day.isocalendar().year}-W{week_day.isocalendar().week:02d}"
-            result.append({"date": label, "value": base + index * (48 if metric_type != "sales" else 12500)})
-        return result
-
-    if dimension == "month":
-        year = today.year
-        month = today.month
-        for index in range(12):
-            offset = 11 - index
-            m = month - offset
-            y = year
-            while m <= 0:
-                m += 12
-                y -= 1
-            result.append({"date": f"{y}-{m:02d}", "value": base + index * (96 if metric_type != "sales" else 28000)})
-        return result
-
-    if dimension == "year":
-        for index in range(5):
-            result.append({"date": str(today.year - 4 + index), "value": base + index * (380 if metric_type != "sales" else 120000)})
-        return result
-
-    for index in range(12):
-        day = today - timedelta(days=11 - index)
-        result.append({"date": day.isoformat(), "value": base + index * (13 if metric_type != "sales" else 3500)})
-    return result
+    metric_columns = {
+        "user": "new_user_count",
+        "device": "new_device_count",
+        "sales": "total_sales_amount",
+        "retention": "active_user_count",
+    }
+    column = metric_columns.get(metric_type, "new_user_count")
+    buckets = {
+        "week": ("DATE_FORMAT(stat_date, '%x-W%v')", 8),
+        "month": ("DATE_FORMAT(stat_date, '%Y-%m')", 12),
+        "year": ("DATE_FORMAT(stat_date, '%Y')", 5),
+        "day": ("DATE_FORMAT(stat_date, '%Y-%m-%d')", 12),
+    }
+    bucket_sql, limit = buckets.get(dimension, buckets["day"])
+    rows = mysql_all(
+        f"""
+        SELECT {bucket_sql} AS label, SUM({column}) AS value
+        FROM daily_stats
+        GROUP BY label
+        ORDER BY label DESC
+        LIMIT {limit}
+        """
+    )
+    return [
+        {"date": row.get("label"), "value": _float(row.get("value"), 0)}
+        for row in reversed(rows or [])
+    ]
 
 
 def distribution_data(kind):
+    if kind == "age":
+        rows = mysql_all(
+            """
+            SELECT COALESCE(age_range, 'unknown') AS label, COUNT(*) AS count
+            FROM user_profile
+            GROUP BY COALESCE(age_range, 'unknown')
+            ORDER BY count DESC
+            """
+        )
+        return [{"ageRange": row.get("label"), "count": _int(row.get("count"), 0)} for row in rows]
+    if kind == "region":
+        rows = mysql_all(
+            """
+            SELECT COALESCE(province_name, 'unknown') AS label, COUNT(*) AS count
+            FROM user_profile
+            GROUP BY COALESCE(province_name, 'unknown')
+            ORDER BY count DESC
+            """
+        )
+        return [{"regionName": row.get("label"), "count": _int(row.get("count"), 0)} for row in rows]
+    if kind == "activity":
+        rows = mysql_all(
+            """
+            SELECT COALESCE(active_level, 'unknown') AS level, COUNT(*) AS count
+            FROM user_profile
+            GROUP BY COALESCE(active_level, 'unknown')
+            ORDER BY count DESC
+            """
+        )
+        return [{"level": row.get("level"), "levelName": row.get("level"), "count": _int(row.get("count"), 0)} for row in rows]
+    rows = mysql_all(
+        """
+        SELECT COALESCE(bound_platforms, 'unknown') AS service, COUNT(*) AS count
+        FROM user_profile
+        GROUP BY COALESCE(bound_platforms, 'unknown')
+        ORDER BY count DESC
+        """
+    )
+    return [{"service": row.get("service"), "serviceName": row.get("service"), "count": _int(row.get("count"), 0)} for row in rows]
+
+    # Legacy demo data below is intentionally unreachable.
     if kind == "age":
         return [
             {"ageRange": "18-25", "count": 320},
@@ -389,6 +474,37 @@ def distribution_data(kind):
 
 
 def heatmap(kind):
+    rows = mysql_all(
+        """
+        SELECT region_code, region_name, sales_amount, order_count,
+               user_count, active_user_count
+        FROM region_stats_daily
+        WHERE stat_date = (SELECT MAX(stat_date) FROM region_stats_daily)
+        ORDER BY sales_amount DESC, user_count DESC
+        LIMIT 20
+        """
+    )
+    if kind == "sales":
+        return [
+            {
+                "regionCode": row.get("region_code"),
+                "regionName": row.get("region_name"),
+                "salesAmount": _float(row.get("sales_amount"), 0),
+                "orderCount": _int(row.get("order_count"), 0),
+            }
+            for row in rows
+        ]
+    return [
+        {
+            "regionCode": row.get("region_code"),
+            "regionName": row.get("region_name"),
+            "userCount": _int(row.get("user_count"), 0),
+            "activeUserCount": _int(row.get("active_user_count"), 0),
+        }
+        for row in rows
+    ]
+
+    # Legacy demo data below is intentionally unreachable.
     rows = [
         ("440000", "广东省", 65000, 50, 520, 180),
         ("500000", "重庆市", 42000, 32, 260, 92),
@@ -403,7 +519,9 @@ def heatmap(kind):
 def feedback_rows():
     rows = cached_mysql_all(
         """
-        SELECT f.feedback_id, f.user_id, f.content, u.username, u.phone
+        SELECT f.feedback_id, f.user_id, f.content, f.feedback_type, f.status,
+               f.priority, f.star_rating, f.handler_name, f.reply_content,
+               f.handled_at, f.created_at, u.username, u.phone, f.contact
         FROM user_feedback f
         LEFT JOIN `user` u ON u.user_id = f.user_id
         ORDER BY f.feedback_id DESC
@@ -439,7 +557,7 @@ def feedback_rows():
             })
         return result
 
-    return _fallback_feedback_rows()
+    return []
 
 
 _FEEDBACK_SEEDS = [
@@ -560,7 +678,7 @@ def login():
         return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
 
     admin = find_admin(username)
-    if not admin or not hmac.compare_digest(password, str(admin.get("password", ""))):
+    if not admin or not verify_admin_password(password, admin.get("password", "")):
         return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
 
     token = sign_token(admin)
@@ -618,7 +736,23 @@ def device_count():
 @admin_bp.get("/super/overview/sales-amount")
 @require_admin("super", "boss")
 def sales_amount():
-    return response_ok({"salesAmount": 325000.5, "orderCount": 240})
+    row = mysql_one(
+        """
+        SELECT COALESCE(SUM(pay_amount), 0) AS sales_amount,
+               COUNT(*) AS order_count
+        FROM sales_order
+        WHERE pay_status IN ('paid', 'success', 'finished')
+        """
+    ) or {}
+    if not row.get("order_count"):
+        row = mysql_one(
+            """
+            SELECT COALESCE(SUM(total_sales_amount), 0) AS sales_amount,
+                   COALESCE(SUM(total_play_count), 0) AS order_count
+            FROM daily_stats
+            """
+        ) or {}
+    return response_ok({"salesAmount": _float(row.get("sales_amount"), 0), "orderCount": _int(row.get("order_count"), 0)})
 
 
 @admin_bp.get("/super/overview/activity-rate")
@@ -663,7 +797,7 @@ def normal_users():
         "SELECT COUNT(*) AS c FROM (SELECT user_id FROM play_history GROUP BY user_id HAVING COUNT(*) >= 10) t",
         fallback=260,
     )
-    return response_ok({"normalUserCount": max(total - high_active, 0) or 900})
+    return response_ok({"normalUserCount": max(total - high_active, 0)})
 
 
 @admin_bp.get("/super/user-value/high-active-users")
@@ -739,7 +873,7 @@ def top_songs():
     rows = cached_mysql_all(
         """
         SELECT hottest_song_name, hottest_artist, hottest_play_count
-        FROM Daily_Stats
+        FROM daily_stats
         WHERE hottest_song_name IS NOT NULL
         ORDER BY stat_date DESC
         LIMIT 10
@@ -762,22 +896,44 @@ def top_songs():
             {"rank": 1, "songName": "城市夜航", "artist": "Luna Echo", "platform": "qq", "playCount": 128, "userCount": 60},
             {"rank": 2, "songName": "雨后电台", "artist": "阿青", "platform": "netease", "playCount": 96, "userCount": 44},
         ]
+    if not rows:
+        data = []
     return response_ok({"list": data})
 
 
 @admin_bp.get("/market/retention/device-purchase")
 @require_admin("super", "market")
 def retention_device_purchase():
-    today = datetime.now().date()
+    rows = mysql_all(
+        """
+        SELECT DATE(created_at) AS date_value, COUNT(DISTINCT user_id) AS purchases
+        FROM sales_order
+        WHERE pay_status IN ('paid', 'success', 'finished')
+        GROUP BY DATE(created_at)
+        ORDER BY date_value DESC
+        LIMIT 7
+        """
+    )
     data = []
-    for index in range(7):
-        date_value = today - timedelta(days=6 - index)
-        purchases = 80 + index * 7
-        day1 = int(purchases * 0.62)
-        day7 = int(purchases * 0.35)
-        day30 = int(purchases * 0.18)
+    for row in reversed(rows or []):
+        date_value = row.get("date_value")
+        purchases = _int(row.get("purchases"), 0)
+        if not purchases:
+            continue
+        day1 = count_sql(
+            "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at) >= DATE_ADD(%s, INTERVAL 1 DAY)",
+            (date_value,),
+        )
+        day7 = count_sql(
+            "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at) >= DATE_ADD(%s, INTERVAL 7 DAY)",
+            (date_value,),
+        )
+        day30 = count_sql(
+            "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at) >= DATE_ADD(%s, INTERVAL 30 DAY)",
+            (date_value,),
+        )
         data.append({
-            "date": date_value.isoformat(),
+            "date": str(date_value),
             "purchaseUserCount": purchases,
             "day1RetainedCount": day1,
             "day7RetainedCount": day7,
@@ -838,6 +994,7 @@ DEMO_DEVICE_OWNERS = [
 
 def pad_operator_devices(devices, target=11):
     """补足设备列表到 target 台（演示用），保持已有真实设备在前。"""
+    return list(devices or [])
     result = list(devices or [])
     existing = len(result)
     for i in range(existing, target):
@@ -865,6 +1022,7 @@ def operator_device_list():
             d.device_number,
             d.model_name,
             d.status,
+            d.firmware_version,
             d.last_active,
             b.user_id,
             b.custom_device_name,
@@ -880,14 +1038,14 @@ def operator_device_list():
         devices = [
             {
                 "deviceId": str(row.get("device_id")),
-                "deviceSn": row.get("device_number") or "SHMINI-A1-0001",
-                "deviceName": row.get("custom_device_name") or "客厅音箱",
-                "modelName": row.get("model_name") or "SH-Mini A1",
-                "ownerName": row.get("owner_name") or "张三",
+                "deviceSn": row.get("device_number") or "",
+                "deviceName": row.get("custom_device_name") or row.get("device_number") or "",
+                "modelName": row.get("model_name") or "",
+                "ownerName": row.get("owner_name") or "",
                 "userId": str(row.get("user_id")) if row.get("user_id") is not None else "",
                 "online": bool(row.get("status")),
-                "firmwareVersion": "1.0.3",
-                "lastOnlineAt": str(row.get("last_active") or "2026-05-20 10:00:00"),
+                "firmwareVersion": row.get("firmware_version") or "",
+                "lastOnlineAt": str(row.get("last_active") or ""),
             }
             for row in rows
         ]
@@ -1043,6 +1201,30 @@ def unbind_device():
 @admin_bp.get("/operator/device/logs")
 @require_admin("super", "operator")
 def device_logs():
+    rows = mysql_all(
+        """
+        SELECT log_id, device_id, device_name, log_type, content, created_at
+        FROM device_log
+        ORDER BY created_at DESC, log_id DESC
+        LIMIT 100
+        """
+    )
+    if rows:
+        result = [
+            {
+                "logId": row.get("log_id"),
+                "deviceId": str(row.get("device_id") or ""),
+                "deviceName": row.get("device_name") or "",
+                "logType": row.get("log_type") or "",
+                "content": row.get("content") or "",
+                "createdAt": str(row.get("created_at") or ""),
+            }
+            for row in rows
+        ]
+        return response_ok({"total": len(result), "list": result})
+
+    return response_ok({"total": 0, "list": []})
+
     device = current_device()
     rows = [
         {"logId": 1, "deviceId": device["deviceId"], "deviceName": device["deviceName"], "logType": "online", "content": "设备上线", "createdAt": "2026-05-20 10:00:00"},
@@ -1115,13 +1297,15 @@ def daily_stats_rows(limit=12):
         SELECT stat_date, total_play_count, unique_user_count, unique_device_count,
                total_play_duration_seconds, avg_play_duration_seconds,
                hottest_song_name, hottest_artist, hottest_play_count
-        FROM Daily_Stats
+        FROM daily_stats
         ORDER BY stat_date DESC
         LIMIT {limit}
         """
     )
     if rows:
         return list(reversed(rows))
+
+    return []
 
     today = datetime.now().date()
     return [
@@ -1448,8 +1632,7 @@ def admin_user_delete():
     _save_admin_overlay({"accounts": accounts, "deleted": deleted})
     return response_ok(None, "账号已删除")
 
-
-
+@admin_bp.get("/super/roles")
 @require_admin("super")
 def admin_roles():
     rows = merged_role_rows()
