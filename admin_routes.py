@@ -84,6 +84,42 @@ ROLE_SCOPES = {
     "boss": {"boss"},
 }
 
+ROLE_NAME_MAP = {
+    "super_admin": "超级管理员",
+    "market_admin": "市场分析管理员",
+    "operator_admin": "普通管理员",
+    "boss": "老板",
+}
+
+
+def admin_accounts_overlay():
+    """读取持久化的管理员账号覆盖层（只读，不触发写盘）。"""
+    state = load_state()
+    overlay = (state.get("admin_console", {}) or {}).get("adminAccounts") or {}
+    return {
+        "accounts": overlay.get("accounts", {}) or {},
+        "deleted": list(overlay.get("deleted", []) or []),
+    }
+
+
+def all_admins():
+    """DEFAULT_ADMINS 叠加持久化覆盖层，得到当前全部管理员账号。"""
+    overlay = admin_accounts_overlay()
+    result = {username: dict(record) for username, record in DEFAULT_ADMINS.items()}
+    for username in overlay["deleted"]:
+        result.pop(username, None)
+    for username, record in overlay["accounts"].items():
+        if username in result:
+            result[username].update(record)
+        else:
+            result[username] = dict(record)
+    return result
+
+
+def find_admin(username):
+    return all_admins().get(username)
+
+
 def response_ok(data=None, message=None, code=200):
     body = {"code": code}
     if message is not None:
@@ -156,7 +192,7 @@ def decode_token(token):
         payload = json.loads(_b64_decode(payload_part).decode("utf-8"))
         if int(payload.get("exp", 0)) < int(datetime.now().timestamp()):
             return None
-        admin = DEFAULT_ADMINS.get(payload.get("username"))
+        admin = find_admin(payload.get("username"))
         if not admin or admin.get("role") != payload.get("role"):
             return None
         return admin
@@ -523,8 +559,8 @@ def login():
     if not username or not password:
         return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
 
-    admin = DEFAULT_ADMINS.get(username)
-    if not admin or not hmac.compare_digest(password, admin["password"]):
+    admin = find_admin(username)
+    if not admin or not hmac.compare_digest(password, str(admin.get("password", ""))):
         return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
 
     token = sign_token(admin)
@@ -1119,15 +1155,16 @@ def admin_users_data():
             "username": admin["username"],
             "realName": admin["realName"],
             "role": admin["role"],
-            "roleName": admin["roleName"],
-            "jobNo": admin["jobNo"],
-            "position": admin["position"],
+            "roleName": admin.get("roleName") or ROLE_NAME_MAP.get(admin["role"], admin["role"]),
+            "jobNo": admin.get("jobNo") or "-",
+            "position": admin.get("position") or admin.get("roleName") or "",
             "phone": admin.get("phone"),
             "email": admin.get("email"),
-            "status": "enabled",
-            "lastLoginAt": "2026-05-29 09:30:00",
+            "status": admin.get("status", "enabled"),
+            "lastLoginAt": admin.get("lastLoginAt", "2026-05-29 09:30:00"),
+            "editable": True,
         }
-        for admin in DEFAULT_ADMINS.values()
+        for admin in all_admins().values()
     ]
     for row in rows[:6]:
         users.append(
@@ -1143,6 +1180,7 @@ def admin_users_data():
                 "email": "",
                 "status": "readonly",
                 "lastLoginAt": str(row.get("created_at") or "-"),
+                "editable": False,
             }
         )
     return users
@@ -1300,7 +1338,118 @@ def admin_users():
     return response_ok({"total": len(users), "list": users})
 
 
-@admin_bp.get("/super/roles")
+def _save_admin_overlay(overlay):
+    save_admin_state_section("adminAccounts", overlay)
+
+
+def _next_admin_id(admins):
+    ids = [int(a["adminId"]) for a in admins.values() if str(a.get("adminId", "")).isdigit()]
+    return (max(ids) + 1) if ids else 1
+
+
+def _validate_role(role):
+    return role if role in ROLE_NAME_MAP else None
+
+
+@admin_bp.post("/super/users/create")
+@require_admin("super")
+def admin_user_create():
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    password = str(body.get("password", "")).strip()
+    role = _validate_role(str(body.get("role", "")).strip())
+    real_name = str(body.get("realName", "")).strip() or username
+
+    if not username or not password:
+        return response_error(400, "创建失败", "用户名和密码不能为空。")
+    if not role:
+        return response_error(400, "创建失败", "请选择有效的角色。")
+    if find_admin(username):
+        return response_error(409, "创建失败", "该用户名已存在。")
+
+    overlay = admin_accounts_overlay()
+    accounts = dict(overlay["accounts"])
+    deleted = [u for u in overlay["deleted"] if u != username]
+    record = {
+        "adminId": _next_admin_id(all_admins()),
+        "username": username,
+        "password": password,
+        "role": role,
+        "roleName": ROLE_NAME_MAP[role],
+        "realName": real_name,
+        "jobNo": str(body.get("jobNo", "")).strip() or "-",
+        "position": str(body.get("position", "")).strip() or ROLE_NAME_MAP[role],
+        "phone": str(body.get("phone", "")).strip(),
+        "email": str(body.get("email", "")).strip(),
+        "status": "enabled",
+    }
+    accounts[username] = record
+    _save_admin_overlay({"accounts": accounts, "deleted": deleted})
+    return response_ok(public_admin_info(record, include_private=True), "账号已创建")
+
+
+@admin_bp.post("/super/users/update")
+@require_admin("super")
+def admin_user_update():
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    admin = find_admin(username)
+    if not admin:
+        return response_error(404, "更新失败", "账号不存在。")
+
+    new_password = str(body.get("password", "")).strip()
+    new_role = str(body.get("role", "")).strip()
+    if new_role:
+        if not _validate_role(new_role):
+            return response_error(400, "更新失败", "请选择有效的角色。")
+        # 防止移除最后一个超级管理员
+        if admin.get("role") == "super_admin" and new_role != "super_admin":
+            supers = [a for a in all_admins().values() if a.get("role") == "super_admin"]
+            if len(supers) <= 1:
+                return response_error(400, "更新失败", "至少需保留一个超级管理员。")
+
+    overlay = admin_accounts_overlay()
+    accounts = dict(overlay["accounts"])
+    record = dict(accounts.get(username) or admin)
+    record["username"] = username
+    if new_password:
+        record["password"] = new_password
+    if new_role:
+        record["role"] = new_role
+        record["roleName"] = ROLE_NAME_MAP[new_role]
+    for key in ("realName", "phone", "email", "jobNo", "position"):
+        if key in body and body.get(key) is not None:
+            record[key] = str(body.get(key)).strip()
+    accounts[username] = record
+    _save_admin_overlay({"accounts": accounts, "deleted": overlay["deleted"]})
+    return response_ok(public_admin_info(record, include_private=True), "账号已更新")
+
+
+@admin_bp.post("/super/users/delete")
+@require_admin("super")
+def admin_user_delete():
+    body = request.get_json(silent=True) or {}
+    username = str(body.get("username", "")).strip()
+    admin = find_admin(username)
+    if not admin:
+        return response_error(404, "删除失败", "账号不存在。")
+    if username == g.admin.get("username"):
+        return response_error(400, "删除失败", "不能删除当前登录的账号。")
+    if admin.get("role") == "super_admin":
+        supers = [a for a in all_admins().values() if a.get("role") == "super_admin"]
+        if len(supers) <= 1:
+            return response_error(400, "删除失败", "至少需保留一个超级管理员。")
+
+    overlay = admin_accounts_overlay()
+    accounts = {u: r for u, r in overlay["accounts"].items() if u != username}
+    deleted = list(overlay["deleted"])
+    if username in DEFAULT_ADMINS and username not in deleted:
+        deleted.append(username)
+    _save_admin_overlay({"accounts": accounts, "deleted": deleted})
+    return response_ok(None, "账号已删除")
+
+
+
 @require_admin("super")
 def admin_roles():
     rows = merged_role_rows()

@@ -75,6 +75,7 @@ const state = reactive({
   users: { total: 0, list: [] },
   roles: { total: 0, list: [], catalog: [] },
   roleEditor: { open: false, role: "", roleName: "", selected: [], saving: false },
+  userEditor: { open: false, mode: "create", saving: false, original: "", form: { username: "", password: "", role: "operator_admin", realName: "", phone: "", email: "", jobNo: "" } },
   settings: {},
   monitor: { services: [], metrics: {}, exceptions: [] },
   notices: { total: 0, list: [] },
@@ -766,6 +767,91 @@ async function saveRolePermissions() {
 
 function permissionLabel(key) {
   return state.roles.catalog?.find((item) => item.key === key)?.label || key
+}
+
+function openUserCreate() {
+  state.userEditor = {
+    open: true,
+    mode: "create",
+    saving: false,
+    original: "",
+    form: { username: "", password: "", role: "operator_admin", realName: "", phone: "", email: "", jobNo: "" },
+  }
+}
+
+function openUserEdit(user) {
+  state.userEditor = {
+    open: true,
+    mode: "edit",
+    saving: false,
+    original: user.username,
+    form: {
+      username: user.username,
+      password: "",
+      role: user.role,
+      realName: user.realName || "",
+      phone: user.phone || "",
+      email: user.email || "",
+      jobNo: user.jobNo && user.jobNo !== "-" ? user.jobNo : "",
+    },
+  }
+}
+
+function closeUserEditor() {
+  state.userEditor.open = false
+}
+
+async function saveUserEditor() {
+  const form = state.userEditor.form
+  const isCreate = state.userEditor.mode === "create"
+  if (!form.username.trim()) {
+    ElMessage.warning("请输入用户名")
+    return
+  }
+  if (isCreate && !form.password.trim()) {
+    ElMessage.warning("请设置初始密码")
+    return
+  }
+  state.userEditor.saving = true
+  try {
+    const path = isCreate ? "/api/admin/super/users/create" : "/api/admin/super/users/update"
+    const body = {
+      username: form.username.trim(),
+      role: form.role,
+      realName: form.realName.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      jobNo: form.jobNo.trim(),
+    }
+    if (form.password.trim()) body.password = form.password.trim()
+    await api(path, { method: "POST", body })
+    ElMessage.success(isCreate ? "账号已创建" : "账号已更新")
+    state.userEditor.open = false
+    await loadUsers()
+  } catch (error) {
+    ElMessage.error(error.message || "保存失败")
+  } finally {
+    state.userEditor.saving = false
+  }
+}
+
+async function deleteUser(user) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除账号「${user.realName} · ${user.username}」吗？该操作不可恢复。`,
+      "删除管理员账号",
+      { type: "warning", confirmButtonText: "删除", cancelButtonText: "取消" },
+    )
+  } catch {
+    return
+  }
+  try {
+    await api("/api/admin/super/users/delete", { method: "POST", body: { username: user.username } })
+    ElMessage.success("账号已删除")
+    await loadUsers()
+  } catch (error) {
+    ElMessage.error(error.message || "删除失败")
+  }
 }
 
 async function loadSettings() {
@@ -1497,12 +1583,22 @@ onMounted(restoreSession)
       </section>
 
       <section v-if="state.active === 'users'" class="panel full">
-        <div class="panel-head"><div><h3>管理员与绑定用户</h3><p>账号、角色、状态和最近登录</p></div><button class="ghost-button" @click="exportRows('users.csv', state.users.list)">导出</button></div>
+        <div class="panel-head">
+          <div><h3>管理员与绑定用户</h3><p>账号、角色、状态和最近登录</p></div>
+          <div class="modal-buttons">
+            <button class="primary-button compact" @click="openUserCreate"><i class="fa-solid fa-user-plus"></i> 新增账号</button>
+            <button class="ghost-button" @click="exportRows('users.csv', state.users.list)">导出</button>
+          </div>
+        </div>
         <div class="data-table">
-          <div v-for="user in state.users.list" :key="user.adminId" class="table-row">
+          <div v-for="user in state.users.list" :key="user.adminId" class="table-row user-row">
             <strong>{{ user.realName }} · {{ user.username }}</strong>
             <span>{{ user.roleName }} / {{ user.jobNo }} / {{ user.phone || "未配置手机号" }}</span>
-            <em>{{ statusText(user.status) }}</em>
+            <div v-if="user.editable" class="row-actions">
+              <button class="ghost-button compact" @click="openUserEdit(user)"><i class="fa-solid fa-user-pen"></i> 编辑</button>
+              <button class="ghost-button compact danger" @click="deleteUser(user)"><i class="fa-solid fa-trash"></i> 删除</button>
+            </div>
+            <em v-else>{{ statusText(user.status) }}</em>
           </div>
         </div>
       </section>
@@ -1618,6 +1714,50 @@ onMounted(restoreSession)
             <button class="ghost-button compact" @click="closeRoleEditor">取消</button>
             <button class="primary-button compact" :disabled="state.roleEditor.saving" @click="saveRolePermissions">
               {{ state.roleEditor.saving ? "保存中..." : "保存权限" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="state.userEditor.open" class="modal-mask" @click.self="closeUserEditor">
+      <div class="modal-card">
+        <div class="panel-head">
+          <div>
+            <h3>{{ state.userEditor.mode === "create" ? "新增管理员账号" : "编辑账号 · " + state.userEditor.form.username }}</h3>
+            <p>{{ state.userEditor.mode === "create" ? "设置账号、初始密码与角色权限" : "可修改密码、角色及资料，留空密码则不变更" }}</p>
+          </div>
+          <button class="icon-close" @click="closeUserEditor"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="form-grid">
+          <label class="field">
+            <span>用户名</span>
+            <input v-model="state.userEditor.form.username" :disabled="state.userEditor.mode === 'edit'" placeholder="登录用户名" />
+          </label>
+          <label class="field">
+            <span>{{ state.userEditor.mode === "create" ? "初始密码" : "重置密码（留空不改）" }}</span>
+            <input v-model="state.userEditor.form.password" type="password" placeholder="登录密码" />
+          </label>
+          <label class="field">
+            <span>角色</span>
+            <select v-model="state.userEditor.form.role">
+              <option value="super_admin">超级管理员</option>
+              <option value="market_admin">市场分析管理员</option>
+              <option value="operator_admin">普通管理员</option>
+              <option value="boss">老板</option>
+            </select>
+          </label>
+          <label class="field"><span>姓名</span><input v-model="state.userEditor.form.realName" placeholder="真实姓名" /></label>
+          <label class="field"><span>工号</span><input v-model="state.userEditor.form.jobNo" placeholder="如 A001" /></label>
+          <label class="field"><span>手机号</span><input v-model="state.userEditor.form.phone" placeholder="联系电话" /></label>
+          <label class="field"><span>邮箱</span><input v-model="state.userEditor.form.email" placeholder="邮箱地址" /></label>
+        </div>
+        <div class="modal-foot">
+          <span class="muted">角色决定该账号可访问的后台模块</span>
+          <div class="modal-buttons">
+            <button class="ghost-button compact" @click="closeUserEditor">取消</button>
+            <button class="primary-button compact" :disabled="state.userEditor.saving" @click="saveUserEditor">
+              {{ state.userEditor.saving ? "保存中..." : "保存账号" }}
             </button>
           </div>
         </div>
@@ -1842,6 +1982,45 @@ button {
   display: grid;
   gap: 8px;
   margin-bottom: 16px;
+}
+
+.field > input,
+.field > select {
+  width: 100%;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
+  outline: none;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.field > input:focus,
+.field > select:focus {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 0 3px var(--accent-green-light);
+}
+
+.field > input:disabled {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ghost-button.danger {
+  color: #c0563f;
+  border-color: rgba(192, 86, 63, 0.35);
+}
+
+.ghost-button.danger:hover {
+  background: rgba(192, 86, 63, 0.08);
 }
 
 .field span,
