@@ -1168,10 +1168,11 @@ def operator_device_list():
             d.last_active,
             b.user_id,
             b.custom_device_name,
-            u.username AS owner_name
+            COALESCE(p.nickname, u.nickname, u.username) AS owner_name
         FROM device d
         LEFT JOIN user_device_binding b ON b.device_id = d.device_id
         LEFT JOIN `user` u ON u.user_id = b.user_id
+        LEFT JOIN user_profile p ON p.user_id = u.user_id
         ORDER BY d.device_id ASC
         LIMIT 100
         """
@@ -1469,9 +1470,11 @@ def daily_stats_rows(limit=12):
 def admin_users_data():
     rows = cached_mysql_all(
         """
-        SELECT user_id, username, phone, created_at
-        FROM `user`
-        ORDER BY user_id ASC
+        SELECT u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username) AS display_name,
+               u.phone, u.created_at, u.last_login_at
+        FROM `user` u
+        LEFT JOIN user_profile p ON p.user_id=u.user_id
+        ORDER BY u.user_id ASC
         LIMIT 20
         """
     )
@@ -1497,7 +1500,7 @@ def admin_users_data():
             {
                 "adminId": f"user-{row.get('user_id')}",
                 "username": row.get("username") or f"user{row.get('user_id')}",
-                "realName": row.get("username") or "业务用户",
+                "realName": row.get("display_name") or row.get("username") or "业务用户",
                 "role": "customer",
                 "roleName": "绑定用户",
                 "jobNo": "-",
@@ -1505,7 +1508,7 @@ def admin_users_data():
                 "phone": row.get("phone"),
                 "email": "",
                 "status": "readonly",
-                "lastLoginAt": str(row.get("created_at") or "-"),
+                "lastLoginAt": str(row.get("last_login_at") or row.get("created_at") or "-"),
                 "editable": False,
             }
         )
@@ -1522,10 +1525,11 @@ def device_admin_rows():
             d.status,
             d.last_active,
             b.custom_device_name,
-            u.username AS owner_name
+            COALESCE(p.nickname, u.nickname, u.username) AS owner_name
         FROM device d
         LEFT JOIN user_device_binding b ON b.device_id = d.device_id
         LEFT JOIN `user` u ON u.user_id = b.user_id
+        LEFT JOIN user_profile p ON p.user_id = u.user_id
         ORDER BY d.device_id ASC
         LIMIT 100
         """
@@ -1949,13 +1953,20 @@ def market_segments():
 @admin_bp.get("/market/insights")
 @require_admin("super", "market")
 def market_insights():
+    new_users = count_sql("SELECT COUNT(*) AS c FROM `user` WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")
+    bound_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM user_device_binding")
+    first_play_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM play_history")
+    retained_users = count_sql(
+        "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+    )
+    base = max(new_users, bound_users, first_play_users, retained_users, 1)
     return response_ok(
         {
             "funnels": [
-                {"label": "新增用户", "value": 420, "rate": 1},
-                {"label": "绑定设备", "value": 318, "rate": 0.76},
-                {"label": "完成首播", "value": 246, "rate": 0.59},
-                {"label": "7 日留存", "value": 148, "rate": 0.35},
+                {"label": "新增用户", "value": new_users, "rate": round(new_users / base, 4)},
+                {"label": "绑定设备", "value": bound_users, "rate": round(bound_users / base, 4)},
+                {"label": "完成首播", "value": first_play_users, "rate": round(first_play_users / base, 4)},
+                {"label": "7 日活跃", "value": retained_users, "rate": round(retained_users / base, 4)},
             ],
             "recommendations": [
                 "针对潜在流失用户推送热门歌单",
