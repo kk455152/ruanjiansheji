@@ -508,6 +508,7 @@ def health():
 
 
 @app.route('/db-admin', methods=['GET'])
+@app.route('/api/db-admin', methods=['GET'])
 def db_admin_page():
     return render_template('db_admin.html')
 
