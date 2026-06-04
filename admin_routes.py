@@ -383,10 +383,10 @@ def fallback_series(metric_type, dimension):
     }
     column = metric_columns.get(metric_type, "new_user_count")
     buckets = {
-        "week": ("DATE_FORMAT(stat_date, '%x-W%v')", 8),
-        "month": ("DATE_FORMAT(stat_date, '%Y-%m')", 12),
-        "year": ("DATE_FORMAT(stat_date, '%Y')", 5),
-        "day": ("DATE_FORMAT(stat_date, '%Y-%m-%d')", 12),
+        "week": ("DATE_FORMAT(stat_date, '%%x-W%%v')", 8),
+        "month": ("DATE_FORMAT(stat_date, '%%Y-%%m')", 12),
+        "year": ("DATE_FORMAT(stat_date, '%%Y')", 5),
+        "day": ("DATE_FORMAT(stat_date, '%%Y-%%m-%%d')", 12),
     }
     bucket_sql, limit = buckets.get(dimension, buckets["day"])
     rows = mysql_all(
