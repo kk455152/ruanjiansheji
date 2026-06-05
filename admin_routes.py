@@ -574,6 +574,7 @@ def latest_song_row(device_id=None):
             """,
             (str(device_id),),
         )
+        return rows[0] if rows else {}
     if not rows:
         rows = mysql_all(
             """
