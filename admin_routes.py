@@ -385,6 +385,20 @@ def _system_config_values(defaults=None):
     return data
 
 
+def _system_config_group_rows(group_name, limit=50):
+    return mysql_all(
+        """
+        SELECT config_id, config_key, config_value, config_type, config_group,
+               config_name, description, created_at, updated_at
+        FROM system_config
+        WHERE config_group=%s
+        ORDER BY updated_at DESC, created_at DESC, config_id DESC
+        LIMIT %s
+        """,
+        (group_name, limit),
+    )
+
+
 def _save_system_config_value(key, value, group_name="system", config_name=None):
     config_type = _infer_config_type(value)
     stored_value = "1" if isinstance(value, bool) and value else "0" if isinstance(value, bool) else str(value)
@@ -1324,7 +1338,6 @@ def operator_device_list():
         devices = []
 
     # 演示数据：补足到 11 台设备，使设备总数/在线率/设备运行概览保持一致
-    devices = pad_operator_devices(devices, target=11)
     return response_ok({"total": len(devices), "list": devices})
 
 
@@ -1693,6 +1706,30 @@ def device_admin_rows():
 
 
 def role_rows():
+    db_rows = _system_config_group_rows("admin_role", 20)
+    if db_rows:
+        rows = []
+        for row in db_rows:
+            role = row.get("config_key")
+            if not role:
+                continue
+            permissions = [
+                item.strip()
+                for item in str(row.get("description") or "").split(",")
+                if item.strip() in PERMISSION_CATALOG
+            ]
+            rows.append(
+                {
+                    "role": role,
+                    "roleName": row.get("config_name") or role,
+                    "description": row.get("config_value") or "",
+                    "permissions": permissions,
+                    "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", (role,), fallback=0),
+                }
+            )
+        if rows:
+            return rows
+
     return [
         {
             "role": "super_admin",
@@ -1998,9 +2035,28 @@ def system_monitor():
     online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=320)
     feedback_total = len(feedback_rows())
     monitor_config = _system_config_values({"apiErrorRate": 0.004, "storageUsage": "62%"})
+    service_rows = _system_config_group_rows("monitor_service", 20)
+    services = [
+        {
+            "name": row.get("config_name") or row.get("config_key") or "-",
+            "status": row.get("config_value") or "healthy",
+            "latencyMs": _int(row.get("description"), 0),
+        }
+        for row in service_rows
+    ]
+    exception_rows = _system_config_group_rows("monitor_exception", 20)
+    exceptions = [
+        {
+            "code": row.get("config_key") or f"EX-{row.get('config_id')}",
+            "title": row.get("config_name") or row.get("config_value") or "-",
+            "count": _int(row.get("description"), 0),
+            "level": row.get("config_type") or "info",
+        }
+        for row in exception_rows
+    ]
     return response_ok(
         {
-            "services": [
+            "services": services or [
                 {"name": "Web API", "status": "healthy", "latencyMs": 46},
                 {"name": "MySQL", "status": "healthy", "latencyMs": 28},
                 {"name": "MongoDB", "status": "connected", "latencyMs": 62},
@@ -2013,7 +2069,7 @@ def system_monitor():
                 "apiErrorRate": _float(monitor_config.get("apiErrorRate"), 0.004),
                 "storageUsage": str(monitor_config.get("storageUsage") or "62%"),
             },
-            "exceptions": [
+            "exceptions": exceptions or [
                 {"code": "DEVICE_OFFLINE_SPIKE", "title": "设备离线率上升", "count": max(total_devices - online_devices, 0), "level": "warning"},
                 {"code": "FEEDBACK_PENDING", "title": "待处理反馈", "count": feedback_total, "level": "info"},
             ],
@@ -2098,6 +2154,15 @@ def create_admin_notice():
 def decision_summary():
     stats = daily_stats_rows(8)
     latest = stats[-1] if stats else {}
+    risk_rows = _system_config_group_rows("decision_risk", 20)
+    risks = [
+        {
+            "name": row.get("config_name") or row.get("config_key") or "-",
+            "level": row.get("config_type") or "normal",
+            "value": row.get("config_value") or row.get("description") or "-",
+        }
+        for row in risk_rows
+    ]
     return response_ok(
         {
             "cards": [
@@ -2107,7 +2172,7 @@ def decision_summary():
                 {"label": "平均播放时长", "value": f"{_int(latest.get('avg_play_duration_seconds'), 0)} 秒", "trend": "+3%"},
             ],
             "trend": stats,
-            "risks": [
+            "risks": risks or [
                 {"name": "设备离线异常", "level": "warning", "value": "需关注"},
                 {"name": "差评突增", "level": "normal", "value": "稳定"},
                 {"name": "销售下降", "level": "normal", "value": "未触发"},
@@ -2202,6 +2267,12 @@ def market_insights():
     first_play_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM play_history")
     retained_users = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'")
     base = max(new_users, bound_users, first_play_users, retained_users, 1)
+    recommendation_rows = _system_config_group_rows("market_recommendation", 20)
+    recommendations = [
+        row.get("config_value") or row.get("config_name") or row.get("description")
+        for row in recommendation_rows
+        if row.get("config_value") or row.get("config_name") or row.get("description")
+    ]
     return response_ok(
         {
             "funnels": [
@@ -2210,7 +2281,7 @@ def market_insights():
                 {"label": "完成首播", "value": first_play_users, "rate": round(first_play_users / base, 4)},
                 {"label": "7 日活跃", "value": retained_users, "rate": round(retained_users / base, 4)},
             ],
-            "recommendations": [
+            "recommendations": recommendations or [
                 "针对潜在流失用户推送热门歌单",
                 "广东、重庆地区适合投放设备升级活动",
                 "提升固件升级成功率可降低售后反馈量",
