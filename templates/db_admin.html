@@ -468,7 +468,7 @@
       state.mode = mode;
       state.currentDocId = row._id || null;
       const copy = mode === "create"
-        ? { ...(MONGO_META[state.mongo.current]?.sample || { name: "example", value: "edit me" }) }
+        ? { ...(Object.keys(row).length ? row : (MONGO_META[state.mongo.current]?.sample || { name: "example", value: "edit me" })) }
         : { ...row };
       if (mode === "create") copy.updated_at = new Date().toISOString().slice(0, 19).replace("T", " ");
       if (mode === "create") delete copy._id;
@@ -544,9 +544,17 @@
       await loadRows();
     }
 
-    function openNew() {
-      if (state.source === "mysql") openMysqlEditor("create");
-      else openMongoEditor("create");
+    async function openNew() {
+      const label = state.source === "mysql" ? state.mysql.current : state.mongo.current;
+      if (!label) return;
+      if (state.source === "mysql") {
+        const sample = await api(`/api/db/${state.mysql.current}/sample`);
+        openMysqlEditor("create", sample);
+      } else {
+        const sample = await api(`/api/db/mongo/${encodeURIComponent(state.mongo.current)}/sample`);
+        openMongoEditor("create", sample);
+      }
+      setStatus(`已生成随机模拟数据，可修改后保存：${label}`);
     }
 
     el("mysqlTab").onclick = () => setSource("mysql");

@@ -15,6 +15,7 @@ from flask import Flask, jsonify, render_template, request
 from mq_config import EXCHANGE_NAME, declare_exchange, get_connection
 from security_utils import TOKEN_SALT, decrypt_data
 from storage_backends import persist_payload
+from daily_stats_job import run_daily_stats_once
 
 # =========================
 # Flask App
@@ -370,6 +371,34 @@ threading.Thread(
 ).start()
 
 
+def daily_stats_scheduler():
+    enabled = os.environ.get('DAILY_STATS_AUTO_UPDATE', 'true').lower() in (
+        '1',
+        'true',
+        'yes',
+        'on',
+    )
+    if not enabled:
+        return
+
+    interval = int(os.environ.get('DAILY_STATS_INTERVAL_SECONDS', str(24 * 60 * 60)))
+    generate_count = int(os.environ.get('DAILY_STATS_GENERATE_COUNT', '50'))
+    while True:
+        try:
+            result = run_daily_stats_once(generate_count=generate_count)
+            app.logger.info('daily_stats auto update finished: %s', result)
+        except Exception as exc:
+            app.logger.warning('daily_stats auto update failed: %s', exc)
+        time.sleep(max(interval, 60))
+
+
+threading.Thread(
+    target=daily_stats_scheduler,
+    name='daily-stats-scheduler',
+    daemon=True,
+).start()
+
+
 def validate_and_decrypt(request_json, auth_token, timestamp):
     if not timestamp:
         return None, 'Missing Timestamp'
@@ -505,6 +534,23 @@ def health():
         'code': 200,
         'msg': 'ok'
     }), 200
+
+
+@app.route('/api/db/daily-stats/run', methods=['POST'])
+def run_daily_stats_now():
+    body = request.get_json(silent=True) or {}
+    try:
+        result = run_daily_stats_once(
+            date_value=body.get('date'),
+            generate_count=int(body.get('generate_count') or os.environ.get('DAILY_STATS_GENERATE_COUNT', '50')),
+            skip_seed=bool(body.get('skip_seed', False)),
+            skip_generate=bool(body.get('skip_generate', False)),
+            keywords=body.get('keywords'),
+        )
+        return jsonify({'status': 'success', 'data': result}), 200
+    except Exception as exc:
+        app.logger.warning('manual daily_stats update failed: %s', exc)
+        return jsonify({'status': 'error', 'message': str(exc)}), 500
 
 
 @app.route('/db-admin', methods=['GET'])

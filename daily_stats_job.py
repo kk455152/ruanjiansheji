@@ -55,6 +55,36 @@ def ensure_daily_stats_table():
     try:
         with connection.cursor() as cursor:
             cursor.execute(DAILY_STATS_TABLE_SQL)
+            cursor.execute(
+                """
+                SELECT COLUMN_NAME
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'daily_stats'
+                """
+            )
+            columns = {row["COLUMN_NAME"] for row in cursor.fetchall()}
+            if "hottest_song_id" in columns and "hottest_song_external_id" not in columns:
+                cursor.execute(
+                    "ALTER TABLE daily_stats CHANGE COLUMN hottest_song_id "
+                    "hottest_song_external_id VARCHAR(100) NOT NULL DEFAULT ''"
+                )
+                columns.remove("hottest_song_id")
+                columns.add("hottest_song_external_id")
+            required_columns = {
+                "active_user_count": "INT NOT NULL DEFAULT 0",
+                "online_device_count": "INT NOT NULL DEFAULT 0",
+                "platform_wechat_count": "INT NOT NULL DEFAULT 0",
+                "platform_qq_count": "INT NOT NULL DEFAULT 0",
+                "hottest_song_external_id": "VARCHAR(100) NOT NULL DEFAULT ''",
+                "hottest_song_name": "VARCHAR(255) NOT NULL DEFAULT ''",
+                "hottest_artist": "VARCHAR(255) NOT NULL DEFAULT ''",
+                "new_user_count": "INT NOT NULL DEFAULT 0",
+                "new_device_count": "INT NOT NULL DEFAULT 0",
+                "total_sales_amount": "DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+            }
+            for column, definition in required_columns.items():
+                if column not in columns:
+                    cursor.execute(f"ALTER TABLE daily_stats ADD COLUMN {column} {definition}")
     finally:
         connection.close()
 
@@ -178,18 +208,25 @@ def aggregate_from_play_logs(stat_date):
 
 def upsert_daily_stats(stats):
     sql = """
-    INSERT INTO Daily_Stats (
+    INSERT INTO daily_stats (
         stat_date,
         total_play_count,
         unique_song_count,
         unique_user_count,
+        active_user_count,
+        online_device_count,
+        platform_wechat_count,
+        platform_qq_count,
         unique_device_count,
         total_play_duration_seconds,
         avg_play_duration_seconds,
-        hottest_song_id,
+        hottest_song_external_id,
         hottest_song_name,
         hottest_artist,
         hottest_play_count,
+        new_user_count,
+        new_device_count,
+        total_sales_amount,
         generated_at,
         updated_at
     ) VALUES (
@@ -197,13 +234,20 @@ def upsert_daily_stats(stats):
         %(total_play_count)s,
         %(unique_song_count)s,
         %(unique_user_count)s,
+        %(active_user_count)s,
+        %(online_device_count)s,
+        %(platform_wechat_count)s,
+        %(platform_qq_count)s,
         %(unique_device_count)s,
         %(total_play_duration_seconds)s,
         %(avg_play_duration_seconds)s,
-        %(hottest_song_id)s,
+        %(hottest_song_external_id)s,
         %(hottest_song_name)s,
         %(hottest_artist)s,
         %(hottest_play_count)s,
+        %(new_user_count)s,
+        %(new_device_count)s,
+        %(total_sales_amount)s,
         NOW(),
         NOW()
     )
@@ -211,15 +255,35 @@ def upsert_daily_stats(stats):
         total_play_count = VALUES(total_play_count),
         unique_song_count = VALUES(unique_song_count),
         unique_user_count = VALUES(unique_user_count),
+        active_user_count = VALUES(active_user_count),
+        online_device_count = VALUES(online_device_count),
+        platform_wechat_count = VALUES(platform_wechat_count),
+        platform_qq_count = VALUES(platform_qq_count),
         unique_device_count = VALUES(unique_device_count),
         total_play_duration_seconds = VALUES(total_play_duration_seconds),
         avg_play_duration_seconds = VALUES(avg_play_duration_seconds),
-        hottest_song_id = VALUES(hottest_song_id),
+        hottest_song_external_id = VALUES(hottest_song_external_id),
         hottest_song_name = VALUES(hottest_song_name),
         hottest_artist = VALUES(hottest_artist),
         hottest_play_count = VALUES(hottest_play_count),
+        new_user_count = VALUES(new_user_count),
+        new_device_count = VALUES(new_device_count),
+        total_sales_amount = VALUES(total_sales_amount),
         updated_at = NOW()
     """
+    stats = {
+        **stats,
+        "active_user_count": stats.get("unique_user_count") or 0,
+        "online_device_count": stats.get("unique_device_count") or 0,
+        "platform_wechat_count": 0,
+        "platform_qq_count": 0,
+        "hottest_song_external_id": stats.get("hottest_song_id") or "",
+        "hottest_song_name": stats.get("hottest_song_name") or "",
+        "hottest_artist": stats.get("hottest_artist") or "",
+        "new_user_count": 0,
+        "new_device_count": 0,
+        "total_sales_amount": 0,
+    }
     connection = pymysql.connect(**get_mysql_config())
     try:
         with connection.cursor() as cursor:
@@ -245,7 +309,7 @@ def run_once(args):
         "mongo_database": get_mongo_database_name(),
         "song_collection": "song_info",
         "play_log_collection": "play_logs",
-        "daily_stats_table": "Daily_Stats",
+        "daily_stats_table": "daily_stats",
         "stat_date": stat_date.isoformat(),
         "seeded_song_count": len(seeded),
         "generated_play_log_count": len(generated_logs),
@@ -256,8 +320,21 @@ def run_once(args):
     }
 
 
+def run_daily_stats_once(date_value=None, generate_count=50, skip_seed=False, skip_generate=False, keywords=None):
+    class Args:
+        pass
+
+    args = Args()
+    args.date = date_value
+    args.generate_count = generate_count
+    args.skip_seed = skip_seed
+    args.skip_generate = skip_generate
+    args.keywords = keywords or ",".join(DEFAULT_SONG_KEYWORDS)
+    return run_once(args)
+
+
 def build_parser():
-    parser = argparse.ArgumentParser(description="Seed song JSON and build MySQL Daily_Stats.")
+    parser = argparse.ArgumentParser(description="Seed song JSON and build MySQL daily_stats.")
     parser.add_argument("--date", help="Target stat date in YYYY-MM-DD. Defaults to today in UTC+8.")
     parser.add_argument(
         "--keywords",

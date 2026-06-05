@@ -298,6 +298,9 @@ def _float(value, default=0.0):
 
 
 def cached_value(key, loader, ttl=ADMIN_CACHE_TTL_SECONDS):
+    if os.environ.get("ADMIN_REALTIME_DB", "true").lower() in ("1", "true", "yes", "on"):
+        return loader()
+
     now = datetime.now().timestamp()
     with _ADMIN_CACHE_LOCK:
         item = _ADMIN_CACHE.get(key)
@@ -325,6 +328,100 @@ def cached_mysql_all(sql, params=(), fallback=None):
         ("all", sql, tuple(params)),
         lambda: mysql_all(sql, params) or (fallback or []),
     )
+
+
+def _config_default():
+    return {
+        "systemName": "声盒 Mini 后台管理系统",
+        "logoText": "Mini",
+        "defaultTheme": "green",
+        "uploadLimitMb": 100,
+        "apiTimeoutSeconds": 15,
+        "dataRetentionDays": 365,
+        "tokenExpireSeconds": TOKEN_EXPIRE_SECONDS,
+        "wechatLoginEnabled": True,
+        "apiErrorRate": 0.004,
+        "storageUsage": "62%",
+    }
+
+
+def _typed_config_value(value, config_type=None):
+    text = "" if value is None else str(value)
+    ctype = str(config_type or "").lower()
+    if ctype in ("bool", "boolean"):
+        return text.lower() in ("1", "true", "yes", "on", "enabled")
+    if ctype in ("int", "integer", "number"):
+        return _int(text, 0)
+    if ctype in ("float", "decimal"):
+        return _float(text, 0.0)
+    return text
+
+
+def _infer_config_type(value):
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "float"
+    return "string"
+
+
+def _system_config_values(defaults=None):
+    data = dict(defaults or {})
+    rows = mysql_all(
+        """
+        SELECT config_key, config_value, config_type
+        FROM system_config
+        WHERE COALESCE(editable, 1) <> 0
+        ORDER BY config_id ASC
+        """
+    )
+    for row in rows:
+        key = row.get("config_key")
+        if not key:
+            continue
+        data[key] = _typed_config_value(row.get("config_value"), row.get("config_type"))
+    return data
+
+
+def _save_system_config_value(key, value, group_name="system", config_name=None):
+    config_type = _infer_config_type(value)
+    stored_value = "1" if isinstance(value, bool) and value else "0" if isinstance(value, bool) else str(value)
+    updated = mysql_exec(
+        """
+        UPDATE system_config
+        SET config_value=%s, config_type=%s, config_group=%s,
+            config_name=COALESCE(NULLIF(%s, ''), config_name),
+            updated_at=NOW()
+        WHERE config_key=%s
+        """,
+        (stored_value, config_type, group_name, config_name or "", key),
+    )
+    if updated:
+        return True
+    inserted = mysql_exec(
+        """
+        INSERT INTO system_config
+            (config_key, config_value, config_type, config_group, config_name, editable, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, 1, NOW(), NOW())
+        """,
+        (key, stored_value, config_type, group_name, config_name or key),
+    )
+    return bool(inserted)
+
+
+def _latest_firmware_version(default_version):
+    row = mysql_one(
+        """
+        SELECT version
+        FROM device_firmware
+        WHERE COALESCE(status, '') NOT IN ('deleted', 'disabled')
+        ORDER BY COALESCE(version_code, 0) DESC, updated_at DESC, created_at DESC, firmware_id DESC
+        LIMIT 1
+        """
+    )
+    return str(row.get("version") or default_version) if row else default_version
 
 
 def device_runtime_doc(device_id):
@@ -878,25 +975,16 @@ def sales_amount():
         WHERE pay_status IN ('paid', 'success', 'finished')
         """
     ) or {}
-    if not row.get("order_count"):
-        row = mysql_one(
-            """
-            SELECT COALESCE(SUM(total_sales_amount), 0) AS sales_amount,
-                   COALESCE(SUM(total_play_count), 0) AS order_count
-            FROM daily_stats
-            """
-        ) or {}
     return response_ok({"salesAmount": _float(row.get("sales_amount"), 0), "orderCount": _int(row.get("order_count"), 0)})
 
 
 @admin_bp.get("/super/overview/activity-rate")
 @require_admin("super", "boss")
 def activity_rate():
-    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
-    active = count_sql(
-        "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
-        fallback=380,
-    )
+    total = count_sql("SELECT COUNT(*) AS c FROM user_profile", fallback=0)
+    if not total:
+        total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
+    active = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
     return response_ok({"activeUserCount": active, "totalUserCount": total, "activityRate": round(active / max(total, 1), 4)})
 
 
@@ -926,11 +1014,10 @@ def user_heatmap():
 @admin_bp.get("/market/user-value/normal-users")
 @require_admin("super", "market", "boss")
 def normal_users():
-    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
-    high_active = count_sql(
-        "SELECT COUNT(*) AS c FROM (SELECT user_id FROM play_history GROUP BY user_id HAVING COUNT(*) >= 10) t",
-        fallback=260,
-    )
+    total = count_sql("SELECT COUNT(*) AS c FROM user_profile", fallback=0)
+    if not total:
+        total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
+    high_active = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
     return response_ok({"normalUserCount": max(total - high_active, 0)})
 
 
@@ -938,10 +1025,7 @@ def normal_users():
 @admin_bp.get("/market/user-value/high-active-users")
 @require_admin("super", "market", "boss")
 def high_active_users():
-    count = count_sql(
-        "SELECT COUNT(*) AS c FROM (SELECT user_id FROM play_history GROUP BY user_id HAVING COUNT(*) >= 10) t",
-        fallback=260,
-    )
+    count = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
     return response_ok({"highActiveUserCount": count})
 
 
@@ -1004,6 +1088,39 @@ def feedback_detail_route():
 @admin_bp.get("/market/top-songs")
 @require_admin("super", "market", "boss")
 def top_songs():
+    ranking_rows = mysql_all(
+        """
+        SELECT ranking_date, rank_no, target_id, target_name, target_category,
+               metric_value, metric_unit, scope_type
+        FROM hot_ranking_daily
+        WHERE ranking_type = 'song'
+          AND ranking_date = (
+              SELECT MAX(ranking_date)
+              FROM hot_ranking_daily
+              WHERE ranking_type = 'song'
+          )
+        ORDER BY rank_no ASC
+        LIMIT 10
+        """
+    )
+    if ranking_rows:
+        return response_ok({
+            "list": [
+                {
+                    "rank": _int(row.get("rank_no"), index + 1),
+                    "songName": row.get("target_name") or "未知歌曲",
+                    "artist": row.get("target_category") or "未知歌手",
+                    "platform": row.get("scope_type") or "global",
+                    "playCount": _int(row.get("metric_value"), 0),
+                    "userCount": 0,
+                    "rankingDate": str(row.get("ranking_date")),
+                    "targetId": row.get("target_id"),
+                    "metricUnit": row.get("metric_unit") or "plays",
+                }
+                for index, row in enumerate(ranking_rows)
+            ]
+        })
+
     rows = mysql_all(
         """
         SELECT
@@ -1097,13 +1214,14 @@ def market_profile():
 @require_admin("super", "operator")
 def firmware_version():
     device = current_device()
+    latest = _latest_firmware_version(os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"))
     return response_ok({
         "deviceId": device["deviceId"],
         "deviceName": device["deviceName"],
         "modelName": device["modelName"],
         "currentVersion": device["firmwareVersion"],
-        "latestVersion": os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"),
-        "needUpdate": device["firmwareVersion"] != os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"),
+        "latestVersion": latest,
+        "needUpdate": device["firmwareVersion"] != latest,
     })
 
 
@@ -1112,11 +1230,22 @@ def firmware_version():
 def update_firmware():
     body = request.get_json(silent=True) or {}
     device = current_device()
+    target_version = body.get("targetVersion") or _latest_firmware_version(os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"))
+    task_no = f"FWU-{datetime.now().strftime('%m%d%H%M%S')}"
+    inserted = mysql_exec(
+        """
+        INSERT INTO device_firmware_update_task
+            (task_no, device_id, current_version, target_version, status, progress, fail_reason, operator_name, started_at, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, 'pending', 0, '-', %s, NOW(), NOW(), NOW())
+        """,
+        (task_no, body.get("deviceId") or device["deviceId"], device["firmwareVersion"], target_version, g.admin.get("realName") or g.admin.get("username")),
+        fetch_last_id=True,
+    )
     return response_ok(
         {
-            "taskId": int(datetime.now().strftime("%m%d%H%M%S")),
+            "taskId": inserted or task_no,
             "deviceId": body.get("deviceId") or device["deviceId"],
-            "targetVersion": body.get("targetVersion") or os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"),
+            "targetVersion": target_version,
             "status": "pending",
         },
         "固件更新任务已创建",
@@ -1634,6 +1763,9 @@ def merged_role_rows():
 @admin_bp.get("/super/system/config")
 @require_admin("super")
 def system_config():
+    defaults = admin_state_section("systemConfig", _config_default())
+    return response_ok(_system_config_values(defaults))
+
     return response_ok(
         admin_state_section(
             "systemConfig",
@@ -1655,6 +1787,17 @@ def system_config():
 @require_admin("super")
 def update_system_config():
     body = request.get_json(silent=True) or {}
+    saved_to_db = False
+    for key, value in body.items():
+        if value is None:
+            continue
+        saved_to_db = _save_system_config_value(key, value, "system", key) or saved_to_db
+
+    current = admin_state_section("systemConfig", {})
+    current.update({key: value for key, value in body.items() if value is not None})
+    fallback = save_admin_state_section("systemConfig", current)
+    return response_ok(_system_config_values(fallback) if saved_to_db else fallback, "system config saved")
+
     current = admin_state_section("systemConfig", {})
     current.update({key: value for key, value in body.items() if value is not None})
     return response_ok(save_admin_state_section("systemConfig", current), "系统配置已保存")
@@ -1816,6 +1959,29 @@ def update_role_permissions():
 @admin_bp.get("/super/security/logs")
 @require_admin("super")
 def security_logs():
+    db_rows = mysql_all(
+        """
+        SELECT log_id, action, module, operation_name, path, request_method,
+               ip_address, result_status, error_message, created_at
+        FROM admin_operation_log
+        ORDER BY created_at DESC, log_id DESC
+        LIMIT 50
+        """
+    )
+    if db_rows:
+        rows = [
+            {
+                "logId": row.get("log_id"),
+                "level": "warning" if row.get("error_message") or str(row.get("result_status") or "").lower() not in ("", "success", "ok") else "info",
+                "event": row.get("operation_name") or row.get("action") or row.get("module") or row.get("path") or "-",
+                "actor": row.get("module") or row.get("action") or "-",
+                "ip": row.get("ip_address") or "-",
+                "createdAt": fmt_dt(row.get("created_at")),
+            }
+            for row in db_rows
+        ]
+        return response_ok({"total": len(rows), "list": rows})
+
     rows = [
         {"logId": "SEC-001", "level": "info", "event": "管理员登录", "actor": "admin", "ip": "127.0.0.1", "createdAt": "2026-05-29 09:30:00"},
         {"logId": "SEC-002", "level": "warning", "event": "设备固件任务下发", "actor": g.admin["username"], "ip": "127.0.0.1", "createdAt": "2026-05-29 10:12:00"},
@@ -1831,6 +1997,7 @@ def system_monitor():
     total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
     online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=320)
     feedback_total = len(feedback_rows())
+    monitor_config = _system_config_values({"apiErrorRate": 0.004, "storageUsage": "62%"})
     return response_ok(
         {
             "services": [
@@ -1843,8 +2010,8 @@ def system_monitor():
                 "totalDevices": total_devices,
                 "onlineDevices": online_devices,
                 "feedbackTotal": feedback_total,
-                "apiErrorRate": 0.004,
-                "storageUsage": "62%",
+                "apiErrorRate": _float(monitor_config.get("apiErrorRate"), 0.004),
+                "storageUsage": str(monitor_config.get("storageUsage") or "62%"),
             },
             "exceptions": [
                 {"code": "DEVICE_OFFLINE_SPIKE", "title": "设备离线率上升", "count": max(total_devices - online_devices, 0), "level": "warning"},
@@ -1857,6 +2024,30 @@ def system_monitor():
 @admin_bp.get("/super/notices")
 @require_admin("super")
 def admin_notices():
+    db_rows = mysql_all(
+        """
+        SELECT config_id, config_key, config_value, config_type, config_name,
+               description, created_at, updated_at
+        FROM system_config
+        WHERE config_group IN ('notice', 'notices', 'system_notice')
+           OR config_key LIKE 'notice.%'
+        ORDER BY updated_at DESC, created_at DESC, config_id DESC
+        LIMIT 50
+        """
+    )
+    if db_rows:
+        notices = [
+            {
+                "noticeId": row.get("config_key") or f"N-{row.get('config_id')}",
+                "title": row.get("config_name") or row.get("config_value") or "-",
+                "type": row.get("config_type") or "notice",
+                "status": row.get("description") or "published",
+                "createdAt": fmt_dt(row.get("created_at") or row.get("updated_at")),
+            }
+            for row in db_rows
+        ]
+        return response_ok({"total": len(notices), "list": notices})
+
     notices = admin_state_section(
         "notices",
         [
@@ -1871,6 +2062,23 @@ def admin_notices():
 @require_admin("super")
 def create_admin_notice():
     body = request.get_json(silent=True) or {}
+    title = body.get("title") or "新的系统公告"
+    notice_key = f"notice.{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    saved = _save_system_config_value(notice_key, title, "notice", title)
+    if saved:
+        notice = {
+            "noticeId": notice_key,
+            "title": title,
+            "type": body.get("type") or "notice",
+            "status": body.get("status") or "draft",
+            "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        mysql_exec(
+            "UPDATE system_config SET config_type=%s, description=%s WHERE config_key=%s",
+            (notice["type"], notice["status"], notice_key),
+        )
+        return response_ok(notice, "notice created")
+
     notices = admin_state_section("notices", [])
     notice = {
         "noticeId": f"N-{len(notices) + 1:03d}",
@@ -1930,6 +2138,43 @@ def admin_reports():
 @admin_bp.get("/market/segments")
 @require_admin("super", "market")
 def market_segments():
+    rows = mysql_all(
+        """
+        SELECT stat_date, segment_code, segment_name, user_count, active_user_count,
+               avg_play_count, avg_pay_amount, retention_rate
+        FROM user_value_segment_daily
+        WHERE stat_date = (SELECT MAX(stat_date) FROM user_value_segment_daily)
+        ORDER BY user_count DESC, segment_code ASC
+        """
+    )
+    if rows:
+        return response_ok({
+            "total": len(rows),
+            "list": [
+                {
+                    "name": row.get("segment_name") or row.get("segment_code"),
+                    "rule": f"{row.get('stat_date')} / {row.get('segment_code')}",
+                    "count": _int(row.get("user_count"), 0),
+                    "activeUserCount": _int(row.get("active_user_count"), 0),
+                    "avgPlayCount": _float(row.get("avg_play_count"), 0),
+                    "avgPayAmount": _float(row.get("avg_pay_amount"), 0),
+                    "retentionRate": _float(row.get("retention_rate"), 0),
+                    "action": "按日报分群运营",
+                }
+                for row in rows
+            ],
+        })
+
+    total = count_sql("SELECT COUNT(*) AS c FROM user_profile", fallback=0)
+    high = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
+    return response_ok({
+        "total": 2,
+        "list": [
+            {"name": "High Activity", "rule": "user_profile.active_level = high", "count": high, "action": "重点运营"},
+            {"name": "Normal", "rule": "user_profile.active_level != high", "count": max(total - high, 0), "action": "常规运营"},
+        ],
+    })
+
     total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
     active = count_sql(
         "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
@@ -1955,9 +2200,7 @@ def market_insights():
     new_users = count_sql("SELECT COUNT(*) AS c FROM `user` WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")
     bound_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM user_device_binding")
     first_play_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM play_history")
-    retained_users = count_sql(
-        "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
-    )
+    retained_users = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'")
     base = max(new_users, bound_users, first_play_users, retained_users, 1)
     return response_ok(
         {
@@ -2001,6 +2244,30 @@ def device_groups():
 @admin_bp.get("/operator/device/alerts")
 @require_admin("super", "operator")
 def device_alerts():
+    db_rows = mysql_all(
+        """
+        SELECT log_id, log_level, title, content, device_name, online_status, created_at
+        FROM device_log
+        WHERE COALESCE(log_type, '') IN ('alert', 'warning', 'error')
+           OR COALESCE(log_level, '') IN ('warning', 'error', 'critical')
+        ORDER BY created_at DESC, log_id DESC
+        LIMIT 50
+        """
+    )
+    if db_rows:
+        rows = [
+            {
+                "alertId": row.get("log_id"),
+                "level": row.get("log_level") or "warning",
+                "title": row.get("title") or row.get("content") or "-",
+                "deviceName": row.get("device_name") or "-",
+                "status": row.get("online_status") or "open",
+                "createdAt": fmt_dt(row.get("created_at")),
+            }
+            for row in db_rows
+        ]
+        return response_ok({"total": len(rows), "list": rows})
+
     device = current_device()
     rows = [
         {"alertId": "A-001", "level": "warning", "title": "设备离线过久", "deviceName": device["deviceName"], "status": "open", "createdAt": "2026-05-29 08:12:00"},
@@ -2013,6 +2280,31 @@ def device_alerts():
 @admin_bp.get("/operator/device/firmware-packages")
 @require_admin("super", "operator")
 def firmware_packages():
+    db_rows = mysql_all(
+        """
+        SELECT firmware_id, model_name, version, version_code, file_size,
+               description, status, created_at, updated_at
+        FROM device_firmware
+        WHERE COALESCE(status, '') NOT IN ('deleted', 'disabled')
+        ORDER BY COALESCE(version_code, 0) DESC, updated_at DESC, created_at DESC, firmware_id DESC
+        LIMIT 50
+        """
+    )
+    if db_rows:
+        rows = [
+            {
+                "packageId": f"FW-{row.get('firmware_id')}",
+                "version": row.get("version") or "-",
+                "modelName": row.get("model_name") or "-",
+                "status": row.get("status") or "stable",
+                "sizeMb": round(_float(row.get("file_size"), 0) / 1024 / 1024, 2) if row.get("file_size") else 0,
+                "uploadedAt": fmt_dt(row.get("updated_at") or row.get("created_at")),
+                "releaseNote": row.get("description") or "",
+            }
+            for row in db_rows
+        ]
+        return response_ok({"total": len(rows), "list": rows})
+
     device = current_device()
     rows = [
         {"packageId": "FW-105", "version": os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"), "modelName": device["modelName"], "status": "gray", "sizeMb": 42, "uploadedAt": "2026-05-29 09:00:00"},
@@ -2043,7 +2335,9 @@ def firmware_upload_catalog():
 @require_admin("super", "operator")
 def firmware_upload_options():
     catalog = firmware_upload_catalog()
-    uploaded_ids = {pkg.get("packageId") for pkg in admin_state_section("firmwarePackages", [])}
+    db_uploaded = mysql_all("SELECT firmware_id FROM device_firmware")
+    uploaded_ids = {f"FW-{row.get('firmware_id')}" for row in db_uploaded}
+    uploaded_ids.update({pkg.get("packageId") for pkg in admin_state_section("firmwarePackages", [])})
     options = [{**item, "uploaded": item["packageId"] in uploaded_ids} for item in catalog]
     return response_ok({"total": len(options), "list": options})
 
@@ -2062,6 +2356,36 @@ def upload_firmware_package():
     uploaded = list(admin_state_section("firmwarePackages", []))
     if any(pkg.get("packageId") == package_id for pkg in uploaded):
         return response_error(409, f"固件包 {chosen['version']} 已上传，请勿重复上传")
+
+    inserted = mysql_exec(
+        """
+        INSERT INTO device_firmware
+            (model_name, version, version_code, file_size, description, force_update, status, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, 0, %s, NOW(), NOW())
+        """,
+        (
+            chosen["modelName"],
+            chosen["version"],
+            _int("".join(ch for ch in chosen["version"] if ch.isdigit()), 0),
+            int(_float(chosen["sizeMb"], 0) * 1024 * 1024),
+            chosen.get("releaseNote") or "",
+            chosen["channel"],
+        ),
+        fetch_last_id=True,
+    )
+    if inserted:
+        package = {
+            "packageId": f"FW-{inserted}",
+            "version": chosen["version"],
+            "modelName": chosen["modelName"],
+            "status": chosen["channel"],
+            "sizeMb": chosen["sizeMb"],
+            "checksum": chosen["checksum"],
+            "releaseNote": chosen["releaseNote"],
+            "uploadedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "uploadedBy": g.admin["roleName"],
+        }
+        return response_ok(package, f"firmware package {chosen['version']} uploaded")
 
     package = {
         "packageId": chosen["packageId"],
@@ -2082,6 +2406,31 @@ def upload_firmware_package():
 @admin_bp.get("/operator/device/firmware-tasks")
 @require_admin("super", "operator")
 def firmware_tasks():
+    db_rows = mysql_all(
+        """
+        SELECT task_id, task_no, device_id, current_version, target_version,
+               status, progress, fail_reason, started_at, created_at, updated_at
+        FROM device_firmware_update_task
+        ORDER BY created_at DESC, updated_at DESC, task_id DESC
+        LIMIT 50
+        """
+    )
+    if db_rows:
+        tasks = [
+            {
+                "taskId": row.get("task_no") or row.get("task_id"),
+                "targetVersion": row.get("target_version") or "-",
+                "targetScope": f"device {row.get('device_id')}" if row.get("device_id") else "全部设备",
+                "status": row.get("status") or "pending",
+                "successCount": _int(row.get("progress"), 0),
+                "failCount": 0 if not row.get("fail_reason") or row.get("fail_reason") == "-" else 1,
+                "failureReason": row.get("fail_reason") or "-",
+                "createdAt": fmt_dt(row.get("created_at") or row.get("started_at") or row.get("updated_at")),
+            }
+            for row in db_rows
+        ]
+        return response_ok({"total": len(tasks), "list": tasks})
+
     device = current_device()
     tasks = admin_state_section(
         "firmwareTasks",
@@ -2097,6 +2446,31 @@ def firmware_tasks():
 @require_admin("super", "operator")
 def create_firmware_task():
     body = request.get_json(silent=True) or {}
+    device = current_device()
+    task_no = f"FWU-{datetime.now().strftime('%m%d%H%M%S')}"
+    target_version = body.get("targetVersion") or _latest_firmware_version(os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"))
+    inserted = mysql_exec(
+        """
+        INSERT INTO device_firmware_update_task
+            (task_no, device_id, current_version, target_version, status, progress, fail_reason, operator_name, started_at, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, 'pending', 0, '-', %s, NOW(), NOW(), NOW())
+        """,
+        (task_no, body.get("deviceId") or device["deviceId"], device["firmwareVersion"], target_version, g.admin.get("realName") or g.admin.get("username")),
+        fetch_last_id=True,
+    )
+    if inserted:
+        task = {
+            "taskId": task_no,
+            "targetVersion": target_version,
+            "targetScope": body.get("targetScope") or "选中设备",
+            "status": "pending",
+            "successCount": 0,
+            "failCount": 0,
+            "failureReason": "-",
+            "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        return response_ok(task, "firmware task created")
+
     tasks = admin_state_section("firmwareTasks", [])
     task = {
         "taskId": f"FWU-{datetime.now().strftime('%m%d%H%M%S')}",

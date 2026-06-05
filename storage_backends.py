@@ -352,7 +352,7 @@ def normalize_metric_type(metric_type):
 
 
 DAILY_STATS_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS Daily_Stats (
+CREATE TABLE IF NOT EXISTS daily_stats (
     stat_date DATE NOT NULL COMMENT '统计日期',
     total_play_count INT NOT NULL DEFAULT 0 COMMENT '当日总播放次数',
     unique_song_count INT NOT NULL DEFAULT 0 COMMENT '当日播放过的去重歌曲数',
