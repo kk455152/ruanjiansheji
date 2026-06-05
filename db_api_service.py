@@ -903,7 +903,7 @@ def get_config_or_error(table_key):
 
 def column_meta(table_key, config):
     pk = set(config["pk"])
-    insertable = set(config["insert_columns"])
+    insertable = set(create_columns(config))
     updatable = set(config["update_columns"])
     meta = []
     for column in config["columns"]:
@@ -926,10 +926,21 @@ def schema_payload(table_key, config):
         "label": TABLE_LABELS.get(table_key, table_key),
         "pk": config["pk"],
         "columns": config["columns"],
-        "insertColumns": config["insert_columns"],
+        "insertColumns": create_columns(config),
         "updateColumns": config["update_columns"],
         "columnMeta": column_meta(table_key, config),
     }
+
+
+def create_columns(config):
+    explicit = set(config["insert_columns"])
+    pk = set(config["pk"])
+    columns = []
+    for column in config["columns"]:
+        if len(pk) == 1 and column in pk and column not in explicit:
+            continue
+        columns.append(column)
+    return columns
 
 
 def quote_identifier(name):
@@ -1216,15 +1227,18 @@ def mock_value_for_column(cursor, table_key, config, column, used_values):
 
 def build_mock_record(cursor, table_key, config):
     data = existing_record_seed(cursor, config)
-    for column in config["insert_columns"]:
+    for column in create_columns(config):
         if column not in data or data[column] is None:
             data[column] = mock_value_for_column(cursor, table_key, config, column, data)
     normalize_mock_record(cursor, table_key, data)
+    for column in create_columns(config):
+        if column not in data or data[column] is None:
+            data[column] = mock_value_for_column(cursor, table_key, config, column, data)
     return data
 
 
 def existing_record_seed(cursor, config):
-    columns = config["insert_columns"]
+    columns = create_columns(config)
     if not columns:
         return {}
     column_sql = ", ".join(quote_identifier(column) for column in columns)
@@ -1243,12 +1257,12 @@ def normalize_mock_record(cursor, table_key, data):
         data.update({
             "username": f"user_mock_{suffix}@smart-speaker.local",
             "password_hash": uuid.uuid4().hex,
-            "phone": None,
-            "nickname": None,
-            "avatar": None,
-            "email": None,
-            "status": None,
-            "last_login_at": None,
+            "phone": f"13{random.randint(100000000, 999999999)}",
+            "nickname": f"模拟用户{random.randint(100, 999)}",
+            "avatar": data.get("avatar") or "https://cdn.example.com/avatar/default.png",
+            "email": f"mock_{suffix}@example.com",
+            "status": data.get("status") or "active",
+            "last_login_at": random_datetime(15),
         })
         return
 
@@ -1276,11 +1290,11 @@ def normalize_mock_record(cursor, table_key, data):
         amount = random_choice([899, 999, 1299, 1599, 1999])
         paid = random.random() >= 0.15
         regions = [
-            ("110000", "Beijing", "110100", "Beijing City"),
-            ("310000", "Shanghai", "310100", "Shanghai City"),
-            ("440000", "Guangdong", "440100", "Guangzhou City"),
-            ("330000", "Zhejiang", "330100", "Hangzhou City"),
-            ("500000", "Chongqing", "500100", "Chongqing City"),
+            ("110000", "北京", "110100", "北京市"),
+            ("310000", "上海", "310100", "上海市"),
+            ("440000", "广东", "440100", "广州市"),
+            ("330000", "浙江", "330100", "杭州市"),
+            ("500000", "重庆", "500100", "重庆市"),
         ]
         province_code, province_name, city_code, city_name = random_choice(regions)
         data.update({
@@ -1304,6 +1318,13 @@ def normalize_mock_record(cursor, table_key, data):
         active_devices = random.randint(10, max(10, min(total_devices or 180, 60)))
         total_plays = random.randint(active_users, active_users * 3)
         duration = total_plays * random.randint(160, 260)
+        hottest_song, hottest_artist = random_choice([
+            ("稻香", "周杰伦"),
+            ("晴天", "周杰伦"),
+            ("夜曲", "周杰伦"),
+            ("红豆", "王菲"),
+            ("可惜没如果", "林俊杰"),
+        ])
         hottest_song, hottest_artist = random_choice([
             ("稻香", "周杰伦"),
             ("晴天", "周杰伦"),
@@ -1343,6 +1364,16 @@ def normalize_mock_record(cursor, table_key, data):
         next_rank = int((cursor.fetchone() or {}).get("value") or 1)
         if next_rank > 10:
             next_rank = random.randint(1, 10)
+        song_name, artist = random_choice([
+            ("稻香", "周杰伦"),
+            ("晴天", "周杰伦"),
+            ("夜曲", "周杰伦"),
+            ("红豆", "王菲"),
+            ("可惜没如果", "林俊杰"),
+            ("孤勇者", "陈奕迅"),
+            ("光年之外", "邓紫棋"),
+            ("一路向北", "周杰伦"),
+        ])
         song_name, artist = random_choice([
             ("稻香", "周杰伦"),
             ("晴天", "周杰伦"),
@@ -1768,7 +1799,7 @@ def create_record(table_key):
         return error("请求体必须是 JSON 对象", 400)
 
     table = config["table"]
-    insert_columns = config["insert_columns"]
+    insert_columns = create_columns(config)
 
     data = pick_allowed_fields(body, insert_columns)
 

@@ -323,6 +323,10 @@ def count_sql(sql, params=(), fallback=0):
     return cached_value(("count", sql, tuple(params), fallback), loader)
 
 
+def quote_identifier(name):
+    return "`" + str(name).replace("`", "``") + "`"
+
+
 def cached_mysql_all(sql, params=(), fallback=None):
     return cached_value(
         ("all", sql, tuple(params)),
@@ -870,7 +874,10 @@ def _fallback_feedback_rows():
 
 
 def feedback_detail(feedback_id):
-    row = next((item for item in feedback_rows() if str(item["feedbackId"]) == str(feedback_id)), feedback_rows()[0])
+    rows = feedback_rows()
+    if not rows:
+        return {}
+    row = next((item for item in rows if str(item["feedbackId"]) == str(feedback_id)), rows[0])
     return {
         "feedbackId": row["feedbackId"],
         "userInfo": {
@@ -965,16 +972,16 @@ def logout():
 @admin_bp.get("/super/overview/user-count")
 @require_admin("super", "boss")
 def user_count():
-    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
-    new_count = count_sql("SELECT COUNT(*) AS c FROM `user` WHERE created_at >= CURDATE()", fallback=35)
+    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
+    new_count = count_sql("SELECT COUNT(*) AS c FROM `user` WHERE created_at >= CURDATE()", fallback=0)
     return response_ok({"userCount": total, "newUserCount": new_count})
 
 
 @admin_bp.get("/super/overview/device-count")
 @require_admin("super", "boss")
 def device_count():
-    total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
-    online = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=320)
+    total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
+    online = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=0)
     return response_ok({"deviceCount": total, "onlineDeviceCount": online, "offlineDeviceCount": max(total - online, 0)})
 
 
@@ -1007,7 +1014,26 @@ def activity_rate():
 def growth_trend():
     metric_type = request.args.get("type", "user")
     dimension = request.args.get("dimension", "day")
-    return response_ok({"type": metric_type, "dimension": dimension, "list": fallback_series(metric_type, dimension)})
+    metric_columns = {
+        "user": "new_user_count",
+        "device": "new_device_count",
+        "sales": "total_sales_amount",
+        "retention": "active_user_count",
+    }
+    column = metric_columns.get(metric_type, "new_user_count")
+    rows = mysql_all(
+        f"""
+        SELECT stat_date, {quote_identifier(column)} AS value
+        FROM daily_stats
+        ORDER BY stat_date DESC
+        LIMIT 14
+        """
+    )
+    data = [
+        {"date": str(row.get("stat_date")), "value": _float(row.get("value"), 0) if metric_type == "sales" else _int(row.get("value"), 0)}
+        for row in reversed(rows)
+    ]
+    return response_ok({"type": metric_type, "dimension": dimension, "list": data})
 
 
 @admin_bp.get("/super/region/sales-heatmap")
@@ -1134,6 +1160,8 @@ def top_songs():
                 for index, row in enumerate(ranking_rows)
             ]
         })
+
+    return response_ok({"list": []})
 
     rows = mysql_all(
         """
@@ -1730,6 +1758,29 @@ def role_rows():
         if rows:
             return rows
 
+    db_roles = mysql_all(
+        """
+        SELECT role, COUNT(*) AS user_count
+        FROM admin_user
+        WHERE role IS NOT NULL AND role <> ''
+        GROUP BY role
+        ORDER BY role ASC
+        """
+    )
+    if db_roles:
+        return [
+            {
+                "role": row.get("role"),
+                "roleName": row.get("role"),
+                "description": "",
+                "permissions": [],
+                "userCount": _int(row.get("user_count"), 0),
+            }
+            for row in db_roles
+        ]
+
+    return []
+
     return [
         {
             "role": "super_admin",
@@ -2019,6 +2070,8 @@ def security_logs():
         ]
         return response_ok({"total": len(rows), "list": rows})
 
+    return response_ok({"total": 0, "list": []})
+
     rows = [
         {"logId": "SEC-001", "level": "info", "event": "管理员登录", "actor": "admin", "ip": "127.0.0.1", "createdAt": "2026-05-29 09:30:00"},
         {"logId": "SEC-002", "level": "warning", "event": "设备固件任务下发", "actor": g.admin["username"], "ip": "127.0.0.1", "createdAt": "2026-05-29 10:12:00"},
@@ -2030,9 +2083,45 @@ def security_logs():
 @admin_bp.get("/super/monitor")
 @require_admin("super", "boss")
 def system_monitor():
-    total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
-    total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
-    online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=320)
+    total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
+    total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
+    online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=0)
+    feedback_total = len(feedback_rows())
+    monitor_config = _system_config_values({"apiErrorRate": 0, "storageUsage": ""})
+    services = [
+        {
+            "name": row.get("config_name") or row.get("config_key") or "-",
+            "status": row.get("config_value") or "",
+            "latencyMs": _int(row.get("description"), 0),
+        }
+        for row in _system_config_group_rows("monitor_service", 20)
+    ]
+    exceptions = [
+        {
+            "code": row.get("config_key") or f"EX-{row.get('config_id')}",
+            "title": row.get("config_name") or row.get("config_value") or "-",
+            "count": _int(row.get("description"), 0),
+            "level": row.get("config_type") or "",
+        }
+        for row in _system_config_group_rows("monitor_exception", 20)
+    ]
+    return response_ok({
+        "services": services,
+        "metrics": {
+            "totalUsers": total_users,
+            "totalDevices": total_devices,
+            "onlineDevices": online_devices,
+            "feedbackTotal": feedback_total,
+            "apiErrorRate": _float(monitor_config.get("apiErrorRate"), 0),
+            "storageUsage": str(monitor_config.get("storageUsage") or ""),
+        },
+        "exceptions": exceptions,
+    })
+
+    """Legacy fallback disabled.
+    total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
+    total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
+    online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=0)
     feedback_total = len(feedback_rows())
     monitor_config = _system_config_values({"apiErrorRate": 0.004, "storageUsage": "62%"})
     service_rows = _system_config_group_rows("monitor_service", 20)
@@ -2056,7 +2145,7 @@ def system_monitor():
     ]
     return response_ok(
         {
-            "services": services or [
+            "services": services,
                 {"name": "Web API", "status": "healthy", "latencyMs": 46},
                 {"name": "MySQL", "status": "healthy", "latencyMs": 28},
                 {"name": "MongoDB", "status": "connected", "latencyMs": 62},
@@ -2069,7 +2158,7 @@ def system_monitor():
                 "apiErrorRate": _float(monitor_config.get("apiErrorRate"), 0.004),
                 "storageUsage": str(monitor_config.get("storageUsage") or "62%"),
             },
-            "exceptions": exceptions or [
+            "exceptions": exceptions,
                 {"code": "DEVICE_OFFLINE_SPIKE", "title": "设备离线率上升", "count": max(total_devices - online_devices, 0), "level": "warning"},
                 {"code": "FEEDBACK_PENDING", "title": "待处理反馈", "count": feedback_total, "level": "info"},
             ],
@@ -2077,6 +2166,7 @@ def system_monitor():
     )
 
 
+    """
 @admin_bp.get("/super/notices")
 @require_admin("super")
 def admin_notices():
@@ -2103,6 +2193,8 @@ def admin_notices():
             for row in db_rows
         ]
         return response_ok({"total": len(notices), "list": notices})
+
+    return response_ok({"total": 0, "list": []})
 
     notices = admin_state_section(
         "notices",
@@ -2135,6 +2227,8 @@ def create_admin_notice():
         )
         return response_ok(notice, "notice created")
 
+    return response_error(500, "公告创建失败", "system_config 表不可写或不存在")
+
     notices = admin_state_section("notices", [])
     notice = {
         "noticeId": f"N-{len(notices) + 1:03d}",
@@ -2163,6 +2257,18 @@ def decision_summary():
         }
         for row in risk_rows
     ]
+    return response_ok({
+        "cards": [
+            {"label": "播放次数", "value": _int(latest.get("total_play_count"), 0), "trend": ""},
+            {"label": "活跃用户", "value": _int(latest.get("unique_user_count"), 0), "trend": ""},
+            {"label": "活跃设备", "value": _int(latest.get("unique_device_count"), 0), "trend": ""},
+            {"label": "平均播放时长", "value": f"{_int(latest.get('avg_play_duration_seconds'), 0)} 秒", "trend": ""},
+        ],
+        "trend": stats,
+        "risks": risks,
+    })
+
+    """Legacy fallback disabled.
     return response_ok(
         {
             "cards": [
@@ -2172,7 +2278,7 @@ def decision_summary():
                 {"label": "平均播放时长", "value": f"{_int(latest.get('avg_play_duration_seconds'), 0)} 秒", "trend": "+3%"},
             ],
             "trend": stats,
-            "risks": risks or [
+            "risks": risks,
                 {"name": "设备离线异常", "level": "warning", "value": "需关注"},
                 {"name": "差评突增", "level": "normal", "value": "稳定"},
                 {"name": "销售下降", "level": "normal", "value": "未触发"},
@@ -2181,6 +2287,7 @@ def decision_summary():
     )
 
 
+    """
 @admin_bp.get("/super/reports")
 @admin_bp.get("/market/reports")
 @require_admin("super", "market")
@@ -2230,22 +2337,14 @@ def market_segments():
             ],
         })
 
-    total = count_sql("SELECT COUNT(*) AS c FROM user_profile", fallback=0)
-    high = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
-    return response_ok({
-        "total": 2,
-        "list": [
-            {"name": "High Activity", "rule": "user_profile.active_level = high", "count": high, "action": "重点运营"},
-            {"name": "Normal", "rule": "user_profile.active_level != high", "count": max(total - high, 0), "action": "常规运营"},
-        ],
-    })
+    return response_ok({"total": 0, "list": []})
 
-    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=1280)
+    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
     active = count_sql(
         "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
-        fallback=380,
+        fallback=0,
     )
-    device_total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=860)
+    device_total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
     return response_ok(
         {
             "total": 4,
@@ -2273,6 +2372,17 @@ def market_insights():
         for row in recommendation_rows
         if row.get("config_value") or row.get("config_name") or row.get("description")
     ]
+    return response_ok({
+        "funnels": [
+            {"label": "新增用户", "value": new_users, "rate": round(new_users / base, 4)},
+            {"label": "绑定设备", "value": bound_users, "rate": round(bound_users / base, 4)},
+            {"label": "完成首播", "value": first_play_users, "rate": round(first_play_users / base, 4)},
+            {"label": "7 日活跃", "value": retained_users, "rate": round(retained_users / base, 4)},
+        ],
+        "recommendations": recommendations,
+    })
+
+    """Legacy fallback disabled.
     return response_ok(
         {
             "funnels": [
@@ -2281,7 +2391,7 @@ def market_insights():
                 {"label": "完成首播", "value": first_play_users, "rate": round(first_play_users / base, 4)},
                 {"label": "7 日活跃", "value": retained_users, "rate": round(retained_users / base, 4)},
             ],
-            "recommendations": recommendations or [
+            "recommendations": recommendations,
                 "针对潜在流失用户推送热门歌单",
                 "广东、重庆地区适合投放设备升级活动",
                 "提升固件升级成功率可降低售后反馈量",
@@ -2290,6 +2400,7 @@ def market_insights():
     )
 
 
+    """
 @admin_bp.get("/operator/device/groups")
 @require_admin("super", "operator")
 def device_groups():
@@ -2339,6 +2450,8 @@ def device_alerts():
         ]
         return response_ok({"total": len(rows), "list": rows})
 
+    return response_ok({"total": 0, "list": []})
+
     device = current_device()
     rows = [
         {"alertId": "A-001", "level": "warning", "title": "设备离线过久", "deviceName": device["deviceName"], "status": "open", "createdAt": "2026-05-29 08:12:00"},
@@ -2376,6 +2489,8 @@ def firmware_packages():
         ]
         return response_ok({"total": len(rows), "list": rows})
 
+    return response_ok({"total": 0, "list": []})
+
     device = current_device()
     rows = [
         {"packageId": "FW-105", "version": os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"), "modelName": device["modelName"], "status": "gray", "sizeMb": 42, "uploadedAt": "2026-05-29 09:00:00"},
@@ -2405,12 +2520,7 @@ def firmware_upload_catalog():
 @admin_bp.get("/operator/device/firmware-upload-options")
 @require_admin("super", "operator")
 def firmware_upload_options():
-    catalog = firmware_upload_catalog()
-    db_uploaded = mysql_all("SELECT firmware_id FROM device_firmware")
-    uploaded_ids = {f"FW-{row.get('firmware_id')}" for row in db_uploaded}
-    uploaded_ids.update({pkg.get("packageId") for pkg in admin_state_section("firmwarePackages", [])})
-    options = [{**item, "uploaded": item["packageId"] in uploaded_ids} for item in catalog]
-    return response_ok({"total": len(options), "list": options})
+    return response_ok({"total": 0, "list": []})
 
 
 @admin_bp.post("/operator/device/firmware-upload")
@@ -2458,6 +2568,8 @@ def upload_firmware_package():
         }
         return response_ok(package, f"firmware package {chosen['version']} uploaded")
 
+    return response_error(500, "固件包上传失败", "device_firmware 表不可写或不存在")
+
     package = {
         "packageId": chosen["packageId"],
         "version": chosen["version"],
@@ -2502,6 +2614,8 @@ def firmware_tasks():
         ]
         return response_ok({"total": len(tasks), "list": tasks})
 
+    return response_ok({"total": 0, "list": []})
+
     device = current_device()
     tasks = admin_state_section(
         "firmwareTasks",
@@ -2541,6 +2655,8 @@ def create_firmware_task():
             "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         return response_ok(task, "firmware task created")
+
+    return response_error(500, "固件任务创建失败", "device_firmware_update_task 表不可写或不存在")
 
     tasks = admin_state_section("firmwareTasks", [])
     task = {
