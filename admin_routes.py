@@ -659,33 +659,6 @@ def distribution_data(kind):
     )
     return [{"service": row.get("service"), "serviceName": service_text(row.get("service")), "count": _int(row.get("count"), 0)} for row in rows]
 
-    # Legacy demo data below is intentionally unreachable.
-    if kind == "age":
-        return [
-            {"ageRange": "18-25", "count": 320},
-            {"ageRange": "26-35", "count": 460},
-            {"ageRange": "36-45", "count": 260},
-            {"ageRange": "46+", "count": 120},
-        ]
-    if kind == "region":
-        return [
-            {"regionName": "广东省", "count": 500},
-            {"regionName": "重庆市", "count": 260},
-            {"regionName": "四川省", "count": 220},
-            {"regionName": "浙江省", "count": 180},
-        ]
-    if kind == "activity":
-        return [
-            {"level": "high", "levelName": "高活跃", "count": 260},
-            {"level": "normal", "levelName": "普通用户", "count": 900},
-            {"level": "silent", "levelName": "沉默用户", "count": 120},
-        ]
-    return [
-        {"service": "qq", "serviceName": "QQ音乐", "count": 300},
-        {"service": "netease", "serviceName": "网易云音乐", "count": 260},
-        {"service": "kuwo", "serviceName": "酷我音乐", "count": 90},
-    ]
-
 
 def heatmap(kind):
     rows = mysql_all(
@@ -717,17 +690,6 @@ def heatmap(kind):
         }
         for row in rows
     ]
-
-    # Legacy demo data below is intentionally unreachable.
-    rows = [
-        ("440000", "广东省", 65000, 50, 520, 180),
-        ("500000", "重庆市", 42000, 32, 260, 92),
-        ("510000", "四川省", 38000, 28, 220, 76),
-        ("330000", "浙江省", 35000, 25, 180, 66),
-    ]
-    if kind == "sales":
-        return [{"regionCode": code, "regionName": name, "salesAmount": sales, "orderCount": orders} for code, name, sales, orders, _, _ in rows]
-    return [{"regionCode": code, "regionName": name, "userCount": users, "activeUserCount": active} for code, name, _, _, users, active in rows]
 
 
 def feedback_rows():
@@ -805,72 +767,6 @@ def feedback_rows():
         return result
 
     return []
-
-
-_FEEDBACK_SEEDS = [
-    ("张三", 10086, "138****8888", "bug", "问题反馈",
-     "登录时偶尔提示网络异常，但网络是正常的。", "pending", "待处理", "normal", "普通", 4),
-    ("李雷", 10087, "139****6666", "suggestion", "意见建议",
-     "希望数据分析页面增加更多图表。", "processing", "处理中", "high", "高", 5),
-    ("韩梅梅", 10088, "137****1234", "suggestion", "意见建议",
-     "音箱能不能支持自定义唤醒词？现在的唤醒词太长了。", "pending", "待处理", "normal", "普通", 4),
-    ("王芳", 10089, "135****5678", "bug", "问题反馈",
-     "升级到最新固件后，蓝牙连接经常自动断开。", "pending", "待处理", "high", "高", 2),
-    ("赵磊", 10090, "136****4321", "suggestion", "意见建议",
-     "建议增加儿童模式，能限制播放内容和使用时长。", "processing", "处理中", "normal", "普通", 5),
-    ("陈静", 10091, "133****8765", "praise", "表扬建议",
-     "音质很棒，语音识别也很准，整体体验非常满意！", "processed", "已处理", "low", "低", 5),
-    ("刘洋", 10092, "188****2468", "bug", "问题反馈",
-     "多设备组网后，客厅和卧室的音箱播放不同步，有回声。", "pending", "待处理", "high", "高", 3),
-    ("孙悦", 10093, "189****1357", "suggestion", "意见建议",
-     "希望 App 能查看历史播放记录，方便找回喜欢的歌。", "pending", "待处理", "normal", "普通", 4),
-    ("周杰", 10094, "150****9090", "bug", "问题反馈",
-     "闹钟设置后偶尔不响，错过了好几次上班时间。", "processing", "处理中", "high", "高", 2),
-    ("吴敏", 10095, "151****3030", "suggestion", "意见建议",
-     "能不能接入更多音乐平台？现在曲库里有些歌找不到。", "pending", "待处理", "normal", "普通", 4),
-    ("郑爽", 10096, "152****6060", "praise", "表扬建议",
-     "客服响应很快，上次反馈的问题第二天就修复了，点赞。", "processed", "已处理", "low", "低", 5),
-    ("冯刚", 10097, "153****7070", "bug", "问题反馈",
-     "语音助手有时会无故被触发，半夜突然说话吓人一跳。", "pending", "待处理", "high", "高", 2),
-]
-
-
-def _fallback_feedback_rows():
-    seeds = list(_FEEDBACK_SEEDS)
-    # 没有真实数据时，每次刷新随机抽取并打乱顺序，使刷新可见地更新反馈列表
-    random.shuffle(seeds)
-    count = random.randint(5, len(seeds))
-    seeds = seeds[:count]
-    rows = []
-    base = datetime.now()
-    for index, (nickname, user_id, phone, ftype, ftype_text, content,
-                status, status_text, priority, priority_text, rating) in enumerate(seeds):
-        created = base - timedelta(hours=index * 6 + random.randint(0, 5),
-                                   minutes=random.randint(0, 59))
-        rows.append({
-            "feedbackId": f"FB{created.strftime('%Y%m%d')}{user_id}{index:02d}",
-            "userId": user_id,
-            "nickname": nickname,
-            "avatar": f"https://example.com/avatar/{user_id}.png",
-            "phone": phone,
-            "feedbackType": ftype,
-            "feedbackTypeText": ftype_text,
-            "content": content,
-            "images": [],
-            "contact": phone.replace("****", "0000"),
-            "status": status,
-            "statusText": status_text,
-            "priority": priority,
-            "priorityText": priority_text,
-            "rating": rating,
-            "ratingText": f"{rating}星",
-            "handlerId": 3 if status != "pending" else None,
-            "handlerName": "普通管理员" if status != "pending" else None,
-            "replyContent": "已记录，将在下个版本优化" if status == "processed" else None,
-            "handledAt": created.strftime("%Y-%m-%d %H:%M:%S") if status != "pending" else None,
-            "createdAt": created.strftime("%Y-%m-%d %H:%M:%S"),
-        })
-    return rows
 
 
 def feedback_detail(feedback_id):
@@ -1121,7 +1017,7 @@ def feedback_list():
 @admin_bp.get("/operator/feedback/detail")
 @require_admin("super", "operator", "boss")
 def feedback_detail_route():
-    feedback_id = request.args.get("feedbackId", "FB202501310001")
+    feedback_id = request.args.get("feedbackId", "")
     return response_ok(feedback_detail(feedback_id), "获取成功")
 
 
@@ -1162,43 +1058,6 @@ def top_songs():
         })
 
     return response_ok({"list": []})
-
-    rows = mysql_all(
-        """
-        SELECT
-            mm.song_title,
-            mm.artist,
-            MIN(COALESCE(ph.source_platform, mm.platform)) AS platform,
-            COUNT(*) AS play_count,
-            COUNT(DISTINCT ph.user_id) AS user_count
-        FROM play_history ph
-        JOIN media_mapping mm ON mm.mapping_id=ph.mapping_id
-        WHERE mm.song_title IS NOT NULL AND mm.song_title <> ''
-        GROUP BY mm.song_title, mm.artist
-        ORDER BY play_count DESC, user_count DESC, mm.song_title ASC
-        LIMIT 10
-        """
-    )
-    if rows:
-        data = [
-            {
-                "rank": index + 1,
-                "songName": row.get("song_title") or "未知歌曲",
-                "artist": row.get("artist") or "未知歌手",
-                "platform": platform_text(row.get("platform")),
-                "playCount": _int(row.get("play_count"), 0),
-                "userCount": _int(row.get("user_count"), 0),
-            }
-            for index, row in enumerate(rows)
-        ]
-    else:
-        data = [
-            {"rank": 1, "songName": "城市夜航", "artist": "Luna Echo", "platform": "qq", "playCount": 128, "userCount": 60},
-            {"rank": 2, "songName": "雨后电台", "artist": "阿青", "platform": "netease", "playCount": 96, "userCount": 44},
-        ]
-    if not rows:
-        data = []
-    return response_ok({"list": data})
 
 
 @admin_bp.get("/market/retention/device-purchase")
@@ -1294,36 +1153,6 @@ def update_firmware():
     )
 
 
-DEMO_DEVICE_NAMES = [
-    "客厅音箱", "卧室音箱", "书房音箱", "厨房音箱", "儿童房音箱",
-    "主卧音箱", "客房音箱", "阳台音箱", "茶室音箱", "玄关音箱", "办公室音箱",
-]
-DEMO_DEVICE_OWNERS = [
-    "张三", "李娜", "王强", "刘芳", "陈杰", "赵敏",
-    "孙磊", "周婷", "吴昊", "郑爽", "钱伟",
-]
-
-
-def pad_operator_devices(devices, target=11):
-    """补足设备列表到 target 台（演示用），保持已有真实设备在前。"""
-    return list(devices or [])
-    result = list(devices or [])
-    existing = len(result)
-    for i in range(existing, target):
-        result.append({
-            "deviceId": f"demo_{i + 1:03d}",
-            "deviceSn": f"SHMINI-A1-{i + 1:04d}",
-            "deviceName": DEMO_DEVICE_NAMES[i % len(DEMO_DEVICE_NAMES)],
-            "modelName": "SH-Mini A1",
-            "ownerName": DEMO_DEVICE_OWNERS[i % len(DEMO_DEVICE_OWNERS)],
-            "userId": "",
-            "online": True,
-            "firmwareVersion": "1.0.3",
-            "lastOnlineAt": "2026-06-02 05:28:00",
-        })
-    return result[:target] if target else result
-
-
 @admin_bp.get("/operator/device/list")
 @require_admin("super", "operator")
 def operator_device_list():
@@ -1365,7 +1194,6 @@ def operator_device_list():
     else:
         devices = []
 
-    # 演示数据：补足到 11 台设备，使设备总数/在线率/设备运行概览保持一致
     return response_ok({"total": len(devices), "list": devices})
 
 
@@ -1445,27 +1273,7 @@ def operator_device_bound_user():
         }
         return response_ok(data)
 
-    # 兜底：无绑定记录或未连库时返回演示用户
-    return response_ok({
-        "userId": "1001",
-        "nickname": "张三",
-        "username": "zhangsan",
-        "phone": "138****8888",
-        "email": "zhangsan@example.com",
-        "gender": "男",
-        "age": 29,
-        "ageRange": "26-35",
-        "region": "广东省 · 深圳市",
-        "activeLevel": "高活跃",
-        "valueLevel": "高价值",
-        "status": "正常",
-        "registerTime": "2024-08-12 09:30:20",
-        "lastLoginAt": "2026-06-02 04:10:52",
-        "deviceSn": "SHMINI-A1-0001",
-        "deviceName": "客厅音箱",
-        "defaultRoom": "客厅",
-        "bindTime": "2024-08-12 10:05:00",
-    })
+    return response_ok({})
 
 
 @admin_bp.get("/operator/device/runtime-status")
@@ -1479,9 +1287,9 @@ def runtime_status():
         "online": device["online"],
         "battery": device["battery"],
         "volume": device["volume"],
-        "currentSong": playing.get("song_title") or "暂无播放记录",
-        "currentArtist": playing.get("artist") or "未知歌手",
-        "lastHeartbeat": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "currentSong": playing.get("song_title") or "",
+        "currentArtist": playing.get("artist") or "",
+        "lastHeartbeat": device.get("lastOnlineAt") or "",
     })
 
 
@@ -1537,54 +1345,54 @@ def device_logs():
 
     return response_ok({"total": 0, "list": []})
 
-    device = current_device()
-    rows = [
-        {"logId": 1, "deviceId": device["deviceId"], "deviceName": device["deviceName"], "logType": "online", "content": "设备上线", "createdAt": "2026-05-20 10:00:00"},
-        {"logId": 2, "deviceId": device["deviceId"], "deviceName": device["deviceName"], "logType": "firmware", "content": "固件升级任务已下发", "createdAt": "2026-05-20 10:30:00"},
-    ]
-    return response_ok({"total": len(rows), "list": rows})
-
 
 @admin_bp.get("/operator/device/log-detail")
 @require_admin("super", "operator")
 def device_log_detail():
-    device = current_device()
-    return response_ok(
-        {
-            "logId": _int(request.args.get("logId"), 900001),
-            "deviceId": device["deviceId"],
-            "deviceSn": device["deviceSn"],
-            "deviceName": device["deviceName"],
-            "deviceType": "speaker",
-            "deviceTypeText": "智能音箱",
-            "deviceModel": device["modelName"],
-            "logType": "firmware",
-            "logTypeText": "固件日志",
-            "logLevel": "info",
-            "logLevelText": "普通信息",
-            "title": "固件升级任务已下发",
-            "content": "设备接收到固件升级任务，目标版本：1.3.0",
-            "eventCode": "FIRMWARE_UPDATE_ISSUED",
-            "traceId": "TRACE202501310001",
-            "taskId": "FWU202501310001",
-            "firmwareVersion": "1.3.0",
-            "onlineStatus": "online" if device["online"] else "offline",
-            "onlineStatusText": "在线" if device["online"] else "离线",
-            "ipAddress": "192.168.1.100",
-            "networkType": "wifi",
-            "location": "客厅",
-            "extra": {
-                "currentVersion": device["firmwareVersion"],
-                "targetVersion": "1.3.0",
-                "batteryLevel": device["battery"],
-                "signalStrength": device["signalStrength"],
-            },
-            "stackTrace": None,
-            "requestInfo": {"method": "POST", "path": "/api/admin/operator/device/update-firmware"},
-            "createdAt": "2026-05-20 10:30:00",
-        },
-        "获取成功",
-    )
+    log_id = request.args.get("logId")
+    row = None
+    if log_id:
+        row = mysql_one(
+            """
+            SELECT log_id, device_id, device_name, log_type, log_level, title, content,
+                   event_code, online_status, ip_address, network_type, created_at
+            FROM device_log
+            WHERE CAST(log_id AS CHAR)=%s
+            LIMIT 1
+            """,
+            (str(log_id),),
+        )
+    if not row:
+        return response_ok({})
+
+    return response_ok({
+        "logId": row.get("log_id"),
+        "deviceId": str(row.get("device_id") or ""),
+        "deviceSn": "",
+        "deviceName": row.get("device_name") or "",
+        "deviceType": "",
+        "deviceTypeText": "",
+        "deviceModel": "",
+        "logType": row.get("log_type") or "",
+        "logTypeText": row.get("log_type") or "",
+        "logLevel": row.get("log_level") or "",
+        "logLevelText": row.get("log_level") or "",
+        "title": row.get("title") or row.get("content") or "",
+        "content": row.get("content") or "",
+        "eventCode": row.get("event_code") or "",
+        "traceId": "",
+        "taskId": "",
+        "firmwareVersion": "",
+        "onlineStatus": row.get("online_status") or "",
+        "onlineStatusText": row.get("online_status") or "",
+        "ipAddress": row.get("ip_address") or "",
+        "networkType": row.get("network_type") or "",
+        "location": "",
+        "extra": {},
+        "stackTrace": None,
+        "requestInfo": {},
+        "createdAt": fmt_dt(row.get("created_at")),
+    })
 
 
 def admin_state_section(name, default):
@@ -1618,22 +1426,6 @@ def daily_stats_rows(limit=12):
         return list(reversed(rows))
 
     return []
-
-    today = datetime.now().date()
-    return [
-        {
-            "stat_date": (today - timedelta(days=limit - index - 1)).isoformat(),
-            "total_play_count": 1200 + index * 86,
-            "unique_user_count": 180 + index * 9,
-            "unique_device_count": 96 + index * 5,
-            "total_play_duration_seconds": 180000 + index * 7600,
-            "avg_play_duration_seconds": 188 + index,
-            "hottest_song_name": "城市夜航",
-            "hottest_artist": "Luna Echo",
-            "hottest_play_count": 96 + index * 6,
-        }
-        for index in range(limit)
-    ]
 
 
 def admin_users_data():
@@ -1718,19 +1510,7 @@ def device_admin_rows():
             for row in rows
         ]
 
-    device = current_device()
-    return [
-        {
-            "deviceId": device["deviceId"],
-            "deviceSn": device["deviceSn"],
-            "deviceName": device["deviceName"],
-            "modelName": device["modelName"],
-            "ownerName": device["ownerName"],
-            "online": device["online"],
-            "firmwareVersion": device["firmwareVersion"],
-            "lastOnlineAt": device["lastOnlineAt"],
-        }
-    ]
+    return []
 
 
 def role_rows():
@@ -1854,21 +1634,7 @@ def system_config():
     defaults = admin_state_section("systemConfig", _config_default())
     return response_ok(_system_config_values(defaults))
 
-    return response_ok(
-        admin_state_section(
-            "systemConfig",
-            {
-                "systemName": "声盒 Mini 后台管理系统",
-                "logoText": "Mini",
-                "defaultTheme": "green",
-                "uploadLimitMb": 100,
-                "apiTimeoutSeconds": 15,
-                "dataRetentionDays": 365,
-                "tokenExpireSeconds": TOKEN_EXPIRE_SECONDS,
-                "wechatLoginEnabled": True,
-            },
-        )
-    )
+
 
 
 @admin_bp.post("/super/system/config")
@@ -2072,13 +1838,6 @@ def security_logs():
 
     return response_ok({"total": 0, "list": []})
 
-    rows = [
-        {"logId": "SEC-001", "level": "info", "event": "管理员登录", "actor": "admin", "ip": "127.0.0.1", "createdAt": "2026-05-29 09:30:00"},
-        {"logId": "SEC-002", "level": "warning", "event": "设备固件任务下发", "actor": g.admin["username"], "ip": "127.0.0.1", "createdAt": "2026-05-29 10:12:00"},
-        {"logId": "SEC-003", "level": "info", "event": "查看用户画像报表", "actor": "market", "ip": "127.0.0.1", "createdAt": "2026-05-29 10:35:00"},
-    ]
-    return response_ok({"total": len(rows), "list": rows})
-
 
 @admin_bp.get("/super/monitor")
 @require_admin("super", "boss")
@@ -2118,55 +1877,6 @@ def system_monitor():
         "exceptions": exceptions,
     })
 
-    """Legacy fallback disabled.
-    total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
-    total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
-    online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=0)
-    feedback_total = len(feedback_rows())
-    monitor_config = _system_config_values({"apiErrorRate": 0.004, "storageUsage": "62%"})
-    service_rows = _system_config_group_rows("monitor_service", 20)
-    services = [
-        {
-            "name": row.get("config_name") or row.get("config_key") or "-",
-            "status": row.get("config_value") or "healthy",
-            "latencyMs": _int(row.get("description"), 0),
-        }
-        for row in service_rows
-    ]
-    exception_rows = _system_config_group_rows("monitor_exception", 20)
-    exceptions = [
-        {
-            "code": row.get("config_key") or f"EX-{row.get('config_id')}",
-            "title": row.get("config_name") or row.get("config_value") or "-",
-            "count": _int(row.get("description"), 0),
-            "level": row.get("config_type") or "info",
-        }
-        for row in exception_rows
-    ]
-    return response_ok(
-        {
-            "services": services,
-                {"name": "Web API", "status": "healthy", "latencyMs": 46},
-                {"name": "MySQL", "status": "healthy", "latencyMs": 28},
-                {"name": "MongoDB", "status": "connected", "latencyMs": 62},
-            ],
-            "metrics": {
-                "totalUsers": total_users,
-                "totalDevices": total_devices,
-                "onlineDevices": online_devices,
-                "feedbackTotal": feedback_total,
-                "apiErrorRate": _float(monitor_config.get("apiErrorRate"), 0.004),
-                "storageUsage": str(monitor_config.get("storageUsage") or "62%"),
-            },
-            "exceptions": exceptions,
-                {"code": "DEVICE_OFFLINE_SPIKE", "title": "设备离线率上升", "count": max(total_devices - online_devices, 0), "level": "warning"},
-                {"code": "FEEDBACK_PENDING", "title": "待处理反馈", "count": feedback_total, "level": "info"},
-            ],
-        }
-    )
-
-
-    """
 @admin_bp.get("/super/notices")
 @require_admin("super")
 def admin_notices():
@@ -2196,21 +1906,13 @@ def admin_notices():
 
     return response_ok({"total": 0, "list": []})
 
-    notices = admin_state_section(
-        "notices",
-        [
-            {"noticeId": "N-001", "title": "固件 1.0.5 灰度发布", "type": "upgrade", "status": "published", "createdAt": "2026-05-29 09:00:00"},
-            {"noticeId": "N-002", "title": "本周后台维护窗口", "type": "maintenance", "status": "draft", "createdAt": "2026-05-28 18:00:00"},
-        ],
-    )
-    return response_ok({"total": len(notices), "list": notices})
 
 
 @admin_bp.post("/super/notices")
 @require_admin("super")
 def create_admin_notice():
     body = request.get_json(silent=True) or {}
-    title = body.get("title") or "新的系统公告"
+    title = body.get("title") or ""
     notice_key = f"notice.{datetime.now().strftime('%Y%m%d%H%M%S')}"
     saved = _save_system_config_value(notice_key, title, "notice", title)
     if saved:
@@ -2227,19 +1929,7 @@ def create_admin_notice():
         )
         return response_ok(notice, "notice created")
 
-    return response_error(500, "公告创建失败", "system_config 表不可写或不存在")
-
-    notices = admin_state_section("notices", [])
-    notice = {
-        "noticeId": f"N-{len(notices) + 1:03d}",
-        "title": body.get("title") or "新的系统公告",
-        "type": body.get("type") or "notice",
-        "status": body.get("status") or "draft",
-        "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    notices.insert(0, notice)
-    save_admin_state_section("notices", notices)
-    return response_ok(notice, "公告已创建")
+    return response_error(500, "notice create failed", "system_config is not writable")
 
 
 @admin_bp.get("/super/decision/summary")
@@ -2268,26 +1958,6 @@ def decision_summary():
         "risks": risks,
     })
 
-    """Legacy fallback disabled.
-    return response_ok(
-        {
-            "cards": [
-                {"label": "播放次数", "value": _int(latest.get("total_play_count"), 0), "trend": "+12%"},
-                {"label": "活跃用户", "value": _int(latest.get("unique_user_count"), 0), "trend": "+8%"},
-                {"label": "活跃设备", "value": _int(latest.get("unique_device_count"), 0), "trend": "+6%"},
-                {"label": "平均播放时长", "value": f"{_int(latest.get('avg_play_duration_seconds'), 0)} 秒", "trend": "+3%"},
-            ],
-            "trend": stats,
-            "risks": risks,
-                {"name": "设备离线异常", "level": "warning", "value": "需关注"},
-                {"name": "差评突增", "level": "normal", "value": "稳定"},
-                {"name": "销售下降", "level": "normal", "value": "未触发"},
-            ],
-        }
-    )
-
-
-    """
 @admin_bp.get("/super/reports")
 @admin_bp.get("/market/reports")
 @require_admin("super", "market")
@@ -2339,23 +2009,6 @@ def market_segments():
 
     return response_ok({"total": 0, "list": []})
 
-    total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
-    active = count_sql(
-        "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
-        fallback=0,
-    )
-    device_total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
-    return response_ok(
-        {
-            "total": 4,
-            "list": [
-                {"name": "高活跃用户", "rule": "近 7 天播放 >= 10 次", "count": active, "action": "推送会员权益"},
-                {"name": "潜在流失用户", "rule": "近 14 天无播放", "count": max(total - active, 0), "action": "召回提醒"},
-                {"name": "新购设备用户", "rule": "设备绑定 <= 30 天", "count": max(device_total // 5, 1), "action": "新手引导"},
-                {"name": "音乐平台深度用户", "rule": "绑定 QQ/网易云", "count": max(total // 3, 1), "action": "歌单推荐"},
-            ],
-        }
-    )
 
 
 @admin_bp.get("/market/insights")
@@ -2382,25 +2035,6 @@ def market_insights():
         "recommendations": recommendations,
     })
 
-    """Legacy fallback disabled.
-    return response_ok(
-        {
-            "funnels": [
-                {"label": "新增用户", "value": new_users, "rate": round(new_users / base, 4)},
-                {"label": "绑定设备", "value": bound_users, "rate": round(bound_users / base, 4)},
-                {"label": "完成首播", "value": first_play_users, "rate": round(first_play_users / base, 4)},
-                {"label": "7 日活跃", "value": retained_users, "rate": round(retained_users / base, 4)},
-            ],
-            "recommendations": recommendations,
-                "针对潜在流失用户推送热门歌单",
-                "广东、重庆地区适合投放设备升级活动",
-                "提升固件升级成功率可降低售后反馈量",
-            ],
-        }
-    )
-
-
-    """
 @admin_bp.get("/operator/device/groups")
 @require_admin("super", "operator")
 def device_groups():
@@ -2452,13 +2086,6 @@ def device_alerts():
 
     return response_ok({"total": 0, "list": []})
 
-    device = current_device()
-    rows = [
-        {"alertId": "A-001", "level": "warning", "title": "设备离线过久", "deviceName": device["deviceName"], "status": "open", "createdAt": "2026-05-29 08:12:00"},
-        {"alertId": "A-002", "level": "info", "title": "固件升级失败重试", "deviceName": device["deviceName"], "status": "processing", "createdAt": "2026-05-29 09:25:00"},
-        {"alertId": "A-003", "level": "normal", "title": "低电量提醒", "deviceName": device["deviceName"], "status": "closed", "createdAt": "2026-05-28 21:30:00"},
-    ]
-    return response_ok({"total": len(rows), "list": rows})
 
 
 @admin_bp.get("/operator/device/firmware-packages")
@@ -2491,30 +2118,9 @@ def firmware_packages():
 
     return response_ok({"total": 0, "list": []})
 
-    device = current_device()
-    rows = [
-        {"packageId": "FW-105", "version": os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"), "modelName": device["modelName"], "status": "gray", "sizeMb": 42, "uploadedAt": "2026-05-29 09:00:00"},
-        {"packageId": "FW-103", "version": device["firmwareVersion"], "modelName": device["modelName"], "status": "stable", "sizeMb": 39, "uploadedAt": "2026-05-18 18:20:00"},
-        {"packageId": "FW-100", "version": "1.0.0", "modelName": device["modelName"], "status": "rollback", "sizeMb": 35, "uploadedAt": "2026-05-01 10:00:00"},
-    ]
-    # 合并管理员后续「上传」入库的固件包
-    uploaded = admin_state_section("firmwarePackages", [])
-    existing_ids = {row["packageId"] for row in rows}
-    for pkg in uploaded:
-        if pkg.get("packageId") not in existing_ids:
-            rows.insert(0, pkg)
-    return response_ok({"total": len(rows), "list": rows})
 
-
-# 固定生成的、允许上传入库的固件包候选（不接受任意文件，只能从此列表上传）
 def firmware_upload_catalog():
-    device = current_device()
-    model = device["modelName"]
-    return [
-        {"packageId": "FW-106", "version": "1.0.6", "modelName": model, "channel": "gray", "sizeMb": 44, "checksum": "a1b2c3d4", "releaseNote": "优化语音唤醒灵敏度"},
-        {"packageId": "FW-110", "version": "1.1.0", "modelName": model, "channel": "stable", "sizeMb": 47, "checksum": "e5f6a7b8", "releaseNote": "新增多设备组网与音效均衡"},
-        {"packageId": "FW-201", "version": "2.0.1-beta", "modelName": model, "channel": "gray", "sizeMb": 51, "checksum": "c9d0e1f2", "releaseNote": "实验版：本地大模型语音助手"},
-    ]
+    return []
 
 
 @admin_bp.get("/operator/device/firmware-upload-options")
@@ -2526,64 +2132,7 @@ def firmware_upload_options():
 @admin_bp.post("/operator/device/firmware-upload")
 @require_admin("super", "operator")
 def upload_firmware_package():
-    body = request.get_json(silent=True) or {}
-    package_id = body.get("packageId")
-
-    catalog = {item["packageId"]: item for item in firmware_upload_catalog()}
-    if package_id not in catalog:
-        return response_error(400, "只能上传系统预置的固件包")
-
-    chosen = catalog[package_id]
-    uploaded = list(admin_state_section("firmwarePackages", []))
-    if any(pkg.get("packageId") == package_id for pkg in uploaded):
-        return response_error(409, f"固件包 {chosen['version']} 已上传，请勿重复上传")
-
-    inserted = mysql_exec(
-        """
-        INSERT INTO device_firmware
-            (model_name, version, version_code, file_size, description, force_update, status, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, 0, %s, NOW(), NOW())
-        """,
-        (
-            chosen["modelName"],
-            chosen["version"],
-            _int("".join(ch for ch in chosen["version"] if ch.isdigit()), 0),
-            int(_float(chosen["sizeMb"], 0) * 1024 * 1024),
-            chosen.get("releaseNote") or "",
-            chosen["channel"],
-        ),
-        fetch_last_id=True,
-    )
-    if inserted:
-        package = {
-            "packageId": f"FW-{inserted}",
-            "version": chosen["version"],
-            "modelName": chosen["modelName"],
-            "status": chosen["channel"],
-            "sizeMb": chosen["sizeMb"],
-            "checksum": chosen["checksum"],
-            "releaseNote": chosen["releaseNote"],
-            "uploadedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "uploadedBy": g.admin["roleName"],
-        }
-        return response_ok(package, f"firmware package {chosen['version']} uploaded")
-
-    return response_error(500, "固件包上传失败", "device_firmware 表不可写或不存在")
-
-    package = {
-        "packageId": chosen["packageId"],
-        "version": chosen["version"],
-        "modelName": chosen["modelName"],
-        "status": chosen["channel"],
-        "sizeMb": chosen["sizeMb"],
-        "checksum": chosen["checksum"],
-        "releaseNote": chosen["releaseNote"],
-        "uploadedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "uploadedBy": g.admin["roleName"],
-    }
-    uploaded.insert(0, package)
-    save_admin_state_section("firmwarePackages", uploaded)
-    return response_ok(package, f"固件包 {chosen['version']} 上传成功")
+    return response_error(400, "firmware upload catalog is empty")
 
 
 @admin_bp.get("/operator/device/firmware-tasks")
@@ -2616,16 +2165,6 @@ def firmware_tasks():
 
     return response_ok({"total": 0, "list": []})
 
-    device = current_device()
-    tasks = admin_state_section(
-        "firmwareTasks",
-        [
-            {"taskId": "FWU-001", "targetVersion": "1.0.5", "targetScope": "灰度 20%", "status": "processing", "successCount": 18, "failCount": 2, "failureReason": "2 台设备离线", "createdAt": "2026-05-29 09:15:00"},
-            {"taskId": "FWU-000", "targetVersion": device["firmwareVersion"], "targetScope": "全部设备", "status": "success", "successCount": 86, "failCount": 0, "failureReason": "-", "createdAt": "2026-05-20 10:30:00"},
-        ],
-    )
-    return response_ok({"total": len(tasks), "list": tasks})
-
 
 @admin_bp.post("/operator/device/firmware-task")
 @require_admin("super", "operator")
@@ -2647,7 +2186,7 @@ def create_firmware_task():
         task = {
             "taskId": task_no,
             "targetVersion": target_version,
-            "targetScope": body.get("targetScope") or "选中设备",
+            "targetScope": body.get("targetScope") or "",
             "status": "pending",
             "successCount": 0,
             "failCount": 0,
@@ -2656,22 +2195,7 @@ def create_firmware_task():
         }
         return response_ok(task, "firmware task created")
 
-    return response_error(500, "固件任务创建失败", "device_firmware_update_task 表不可写或不存在")
-
-    tasks = admin_state_section("firmwareTasks", [])
-    task = {
-        "taskId": f"FWU-{datetime.now().strftime('%m%d%H%M%S')}",
-        "targetVersion": body.get("targetVersion") or os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"),
-        "targetScope": body.get("targetScope") or "选中设备",
-        "status": "pending",
-        "successCount": 0,
-        "failCount": 0,
-        "failureReason": "-",
-        "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    tasks.insert(0, task)
-    save_admin_state_section("firmwareTasks", tasks)
-    return response_ok(task, "固件升级任务已创建")
+    return response_error(500, "firmware task create failed", "device_firmware_update_task is not writable")
 
 
 @admin_bp.post("/operator/feedback/handle")

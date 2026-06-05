@@ -1,7 +1,5 @@
 # db_api_service.py
-import random
-import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 
 from flask import Blueprint, jsonify, request
@@ -993,249 +991,6 @@ def parse_mongo_id(value):
     return value
 
 
-def random_suffix():
-    return f"{datetime.now().strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
-
-
-def random_datetime(days_back=30):
-    value = datetime.now() - timedelta(
-        days=random.randint(0, days_back),
-        hours=random.randint(0, 23),
-        minutes=random.randint(0, 59),
-        seconds=random.randint(0, 59),
-    )
-    return value.strftime("%Y-%m-%d %H:%M:%S")
-
-
-def random_date(days_back=60):
-    return (date.today() - timedelta(days=random.randint(0, days_back))).isoformat()
-
-
-def fetch_random_id(cursor, table_name, column_name):
-    cursor.execute(
-        f"SELECT {quote_identifier(column_name)} AS value "
-        f"FROM {quote_identifier(table_name)} "
-        f"ORDER BY RAND() LIMIT 1"
-    )
-    row = cursor.fetchone() or {}
-    return row.get("value")
-
-
-def next_numeric_id(cursor, table_name, column_name):
-    cursor.execute(
-        f"SELECT COALESCE(MAX({quote_identifier(column_name)}), 0) + 1 AS value "
-        f"FROM {quote_identifier(table_name)}"
-    )
-    row = cursor.fetchone() or {}
-    return int(row.get("value") or 1)
-
-
-REFERENCE_COLUMNS = {
-    "user_id": ("user", "user_id"),
-    "user_id_1": ("user", "user_id"),
-    "user_id_2": ("user", "user_id"),
-    "device_id": ("device", "device_id"),
-    "mapping_id": ("media_mapping", "mapping_id"),
-    "admin_id": ("admin_user", "admin_id"),
-    "updated_by": ("admin_user", "admin_id"),
-    "firmware_id": ("device_firmware", "firmware_id"),
-    "release_device_id": ("device_firmware_release_device", "id"),
-}
-
-
-def random_choice(values):
-    return random.choice(values)
-
-
-def mock_value_for_column(cursor, table_key, config, column, used_values):
-    suffix = random_suffix()
-    table_name = config["table"]
-
-    if column == "user_id_2":
-        value = fetch_random_id(cursor, "user", "user_id")
-        if value == used_values.get("user_id_1"):
-            cursor.execute(
-                "SELECT user_id AS value FROM `user` WHERE user_id <> %s ORDER BY RAND() LIMIT 1",
-                (used_values.get("user_id_1"),),
-            )
-            value = (cursor.fetchone() or {}).get("value")
-        return value or used_values.get("user_id_1")
-
-    if column in config["pk"] or column.endswith("_id") and column in config["insert_columns"]:
-        if column in REFERENCE_COLUMNS:
-            ref_table, ref_column = REFERENCE_COLUMNS[column]
-            value = fetch_random_id(cursor, ref_table, ref_column)
-            if value is not None:
-                return value
-        if column in config["pk"] or table_key == "action_dict":
-            return next_numeric_id(cursor, table_name, column)
-
-    if "date" in column and not column.endswith("_at"):
-        if table_key == "daily_stats" and column == "stat_date":
-            for _ in range(20):
-                value = random_date(365)
-                cursor.execute("SELECT 1 FROM daily_stats WHERE stat_date = %s LIMIT 1", (value,))
-                if not cursor.fetchone():
-                    return value
-        return random_date()
-
-    if column.endswith("_at") or column in {"created_at", "updated_at", "last_active", "bind_time"}:
-        return random_datetime()
-
-    if column in {"username"}:
-        return f"mock_user_{suffix}"
-    if column in {"password_hash"}:
-        return f"mock_pwd_{random.randint(100000, 999999)}"
-    if column in {"phone", "contact"}:
-        return f"13{random.randint(100000000, 999999999)}"
-    if column == "email":
-        return f"mock_{suffix}@example.com"
-    if column in {"nickname", "real_name", "operator_name", "handler_name"}:
-        return random_choice(["模拟用户", "测试管理员", "数据维护员"]) + str(random.randint(1, 99))
-    if column == "avatar":
-        return f"https://example.com/avatar/{suffix}.png"
-    if column in {"status", "order_status", "pay_status", "result_status"}:
-        return random_choice(["active", "enabled", "success", "finished", "pending"])
-    if column in {"role"}:
-        return random_choice(["operator_admin", "market_admin"])
-    if column in {"is_super_admin", "is_primary", "editable", "force_update"}:
-        return random.randint(0, 1)
-    if column in {"device_number", "device_sn"}:
-        return f"SHMINI-A1-{random.randint(1000, 9999)}"
-    if column in {"model_name", "device_model", "target_model_name"}:
-        return random_choice(["SH-Mini A1", "SH-Home Pro", "SH-Lite"])
-    if column in {"device_name", "custom_device_name"}:
-        return random_choice(["客厅音箱", "卧室音箱", "书房音箱"]) + str(random.randint(1, 20))
-    if column in {"device_type", "target_device_type"}:
-        return "speaker"
-    if column in {"firmware_version", "current_version", "target_version", "version"}:
-        return f"v{random.randint(1, 3)}.{random.randint(0, 9)}.{random.randint(0, 9)}"
-    if column == "version_code":
-        return random.randint(100, 999)
-    if column == "hardware_version" or column == "target_hardware_version":
-        return f"HW-{random.randint(1, 3)}"
-    if column == "online_status":
-        return random_choice(["online", "offline"])
-    if column == "ip_address":
-        return f"192.168.{random.randint(0, 10)}.{random.randint(2, 254)}"
-    if column in {"location", "province_name", "city_name", "region_name"}:
-        return random_choice(["北京", "上海", "广州", "深圳", "杭州"])
-    if column in {"province_code", "city_code", "region_code", "scope_code"}:
-        return str(random.randint(100000, 999999))
-    if column in {"song_title", "hottest_song_name", "target_name"}:
-        return random_choice(["晴天", "稻香", "夜曲", "七里香", "青花瓷"])
-    if column in {"artist", "hottest_artist", "target_category"}:
-        return random_choice(["周杰伦", "陈奕迅", "林俊杰", "邓紫棋"])
-    if column in {"platform", "platform_type", "source"}:
-        return random_choice(["netease", "qq", "wechat_mini"])
-    if column in {"external_id", "hottest_song_external_id", "target_id"}:
-        return f"song_{suffix}"
-    if column == "cover_url":
-        return f"https://example.com/covers/{suffix}.jpg"
-    if column in {"action_code", "event_code"}:
-        return f"mock_action_{suffix}"
-    if column in {"action_name", "operation_name"}:
-        return random_choice(["播放歌曲", "设备上线", "数据维护"])
-    if column in {"category", "config_group"}:
-        return random_choice(["music", "device", "system"])
-    if column == "style":
-        return random_choice(["pop", "rock", "classic", "jazz"])
-    if column in {"content", "description", "reply_content", "error_message", "params"}:
-        return f"随机模拟数据 {suffix}"
-    if column in {"feedback_no", "order_no", "release_no", "task_no", "request_id", "trace_id"}:
-        return f"MOCK-{suffix}"
-    if column == "feedback_type":
-        return random_choice(["bug", "suggestion", "praise"])
-    if column == "priority":
-        return random_choice(["low", "normal", "high"])
-    if column == "rating_tags":
-        return random_choice(["音质好,响应快", "连接稳定", "界面清晰"])
-    if column == "title":
-        return random_choice(["模拟反馈", "模拟日志", "模拟任务"])
-    if column == "device_info":
-        return '{"source":"mock"}'
-    if column == "gender":
-        return random_choice(["male", "female", "unknown"])
-    if column == "age":
-        return random.randint(18, 60)
-    if column == "age_range":
-        return random_choice(["18-25", "26-35", "36-45", "46-60"])
-    if column in {"active_level", "value_level"}:
-        return random_choice(["high", "medium", "low", "normal"])
-    if column == "bound_platforms":
-        return random_choice(["netease,qq", "wechat_mini", "qq"])
-    if column in {"region_level"}:
-        return random_choice(["province", "city"])
-    if column in {"ranking_type"}:
-        return random_choice(["song", "artist"])
-    if column in {"scope_type"}:
-        return random_choice(["global", "province"])
-    if column == "metric_unit":
-        return "plays"
-    if column == "segment_code":
-        return f"seg_{random.randint(1, 9)}"
-    if column == "segment_name":
-        return random_choice(["高活跃用户", "普通用户", "低活跃用户"])
-    if column in {"log_type"}:
-        return random_choice(["online", "offline", "firmware"])
-    if column in {"log_level"}:
-        return random_choice(["info", "warning", "error"])
-    if column == "network_type":
-        return random_choice(["wifi", "4g"])
-    if column == "request_url" or column == "path":
-        return "/api/mock"
-    if column == "request_method":
-        return random_choice(["GET", "POST", "PUT"])
-    if column == "response_message":
-        return "success"
-    if column == "operator_type":
-        return random_choice(["admin", "system", "user"])
-    if column == "file_url":
-        return f"https://example.com/firmware/{suffix}.bin"
-    if column == "file_md5":
-        return uuid.uuid4().hex
-    if column == "config_key":
-        return f"mock.config.{suffix}"
-    if column == "config_value":
-        return str(random.randint(1, 100))
-    if column == "config_type":
-        return random_choice(["string", "number", "boolean"])
-    if column == "config_name":
-        return "模拟配置"
-    if column == "module":
-        return random_choice(["device", "user", "database"])
-    if column == "action":
-        return random_choice(["create", "update", "delete"])
-    if column == "user_agent":
-        return "MockAgent/1.0"
-    if column in {"play_duration", "total_play_count", "unique_song_count", "unique_user_count",
-                  "active_user_count", "online_device_count", "platform_wechat_count",
-                  "platform_qq_count", "unique_device_count", "hottest_play_count",
-                  "new_user_count", "new_device_count", "user_count", "device_count",
-                  "order_count", "rank_no", "metric_value", "progress", "response_code",
-                  "total_device_count", "success_device_count", "fail_device_count"}:
-        return random.randint(1, 500)
-    if column in {"total_play_duration_seconds", "file_size"}:
-        return random.randint(1000, 5000000)
-    if column in {"avg_play_duration_seconds", "total_sales_amount", "sales_amount",
-                  "order_amount", "pay_amount", "avg_play_count", "avg_pay_amount",
-                  "retention_rate"}:
-        return round(random.uniform(1, 999), 2)
-
-    return f"mock_{suffix}"
-
-
-def build_mock_record(cursor, table_key, config):
-    data = existing_record_seed(cursor, config)
-    for column in create_columns(config):
-        if column not in data or data[column] is None:
-            data[column] = mock_value_for_column(cursor, table_key, config, column, data)
-    normalize_mock_record(cursor, table_key, data)
-    for column in create_columns(config):
-        if column not in data or data[column] is None:
-            data[column] = mock_value_for_column(cursor, table_key, config, column, data)
-    return data
-
 
 def existing_record_seed(cursor, config):
     columns = create_columns(config)
@@ -1250,290 +1005,17 @@ def existing_record_seed(cursor, config):
     return {column: row.get(column) for column in columns if column in row}
 
 
-def normalize_mock_record(cursor, table_key, data):
-    suffix = random_suffix()
-
-    if table_key == "user":
-        data.update({
-            "username": f"user_mock_{suffix}@smart-speaker.local",
-            "password_hash": uuid.uuid4().hex,
-            "phone": f"13{random.randint(100000000, 999999999)}",
-            "nickname": f"模拟用户{random.randint(100, 999)}",
-            "avatar": data.get("avatar") or "https://cdn.example.com/avatar/default.png",
-            "email": f"mock_{suffix}@example.com",
-            "status": data.get("status") or "active",
-            "last_login_at": random_datetime(15),
-        })
-        return
-
-    if table_key == "device":
-        next_id = next_numeric_id(cursor, "device", "device_id")
-        room = random_choice(["客厅", "卧室", "书房", "厨房", "阅读角", "健身房"])
-        model = random_choice(["SH-Mini A1", "SH-Family Max", "SH-Lite"])
-        data.update({
-            "device_number": f"SHSPEAKER-{next_id:05d}",
-            "model_name": model,
-            "status": 1,
-            "firmware_version": random_choice(["1.0.5", "1.1.0", "1.2.0"]),
-            "last_active": random_datetime(7),
-            "device_name": f"{room}音箱 {next_id % 1000}",
-            "device_type": "speaker",
-            "online_status": random_choice(["online", "offline"]),
-            "ip_address": f"10.{random.randint(1, 30)}.{random.randint(1, 30)}.{random.randint(2, 240)}",
-            "hardware_version": random_choice(["hw-1.0", "hw-2.0", "hw-2.1"]),
-            "location": room,
-        })
-        return
-
-    if table_key == "sales_order":
-        next_id = next_numeric_id(cursor, "sales_order", "order_id")
-        amount = random_choice([899, 999, 1299, 1599, 1999])
-        paid = random.random() >= 0.15
-        regions = [
-            ("110000", "北京", "110100", "北京市"),
-            ("310000", "上海", "310100", "上海市"),
-            ("440000", "广东", "440100", "广州市"),
-            ("330000", "浙江", "330100", "杭州市"),
-            ("500000", "重庆", "500100", "重庆市"),
-        ]
-        province_code, province_name, city_code, city_name = random_choice(regions)
-        data.update({
-            "order_no": f"ORD202606{next_id:06d}",
-            "order_amount": amount,
-            "pay_amount": amount if paid else 0,
-            "order_status": "finished" if paid else "pending",
-            "pay_status": random_choice(["paid", "success", "finished"]) if paid else "unpaid",
-            "province_code": province_code,
-            "province_name": province_name,
-            "city_code": city_code,
-            "city_name": city_name,
-            "paid_at": random_datetime(30) if paid else None,
-        })
-        return
-
-    if table_key == "daily_stats":
-        total_devices = count_table(cursor, "device")
-        total_users = count_table(cursor, "user")
-        active_users = random.randint(20, max(20, min(total_users or 120, 80)))
-        active_devices = random.randint(10, max(10, min(total_devices or 180, 60)))
-        total_plays = random.randint(active_users, active_users * 3)
-        duration = total_plays * random.randint(160, 260)
-        hottest_song, hottest_artist = random_choice([
-            ("稻香", "周杰伦"),
-            ("晴天", "周杰伦"),
-            ("夜曲", "周杰伦"),
-            ("红豆", "王菲"),
-            ("可惜没如果", "林俊杰"),
-        ])
-        hottest_song, hottest_artist = random_choice([
-            ("稻香", "周杰伦"),
-            ("晴天", "周杰伦"),
-            ("夜曲", "周杰伦"),
-            ("红豆", "王菲"),
-            ("可惜没如果", "林俊杰"),
-        ])
-        data.update({
-            "stat_date": date.today().isoformat(),
-            "total_play_count": total_plays,
-            "unique_song_count": random.randint(8, min(20, total_plays)),
-            "unique_user_count": active_users,
-            "active_user_count": active_users,
-            "online_device_count": random.randint(active_devices, max(active_devices, min(total_devices or 180, 180))),
-            "platform_wechat_count": active_users // 3,
-            "platform_qq_count": active_users // 3,
-            "unique_device_count": active_devices,
-            "total_play_duration_seconds": duration,
-            "avg_play_duration_seconds": round(duration / max(total_plays, 1), 2),
-            "hottest_song_external_id": f"song_{random.randint(30001, 30020)}",
-            "hottest_song_name": hottest_song,
-            "hottest_artist": hottest_artist,
-            "hottest_play_count": random.randint(5, max(5, min(total_plays, 30))),
-            "new_user_count": random.randint(0, min(10, active_users)),
-            "new_device_count": random.randint(0, min(5, active_devices)),
-            "total_sales_amount": random_choice([0, 899, 1299, 2598, 3998, 5997]),
-            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        })
-        return
-
-    if table_key == "hot_ranking_daily":
-        cursor.execute(
-            "SELECT COALESCE(MAX(rank_no), 0) + 1 AS value "
-            "FROM hot_ranking_daily WHERE ranking_date = CURDATE() AND ranking_type = 'song'"
-        )
-        next_rank = int((cursor.fetchone() or {}).get("value") or 1)
-        if next_rank > 10:
-            next_rank = random.randint(1, 10)
-        song_name, artist = random_choice([
-            ("稻香", "周杰伦"),
-            ("晴天", "周杰伦"),
-            ("夜曲", "周杰伦"),
-            ("红豆", "王菲"),
-            ("可惜没如果", "林俊杰"),
-            ("孤勇者", "陈奕迅"),
-            ("光年之外", "邓紫棋"),
-            ("一路向北", "周杰伦"),
-        ])
-        song_name, artist = random_choice([
-            ("稻香", "周杰伦"),
-            ("晴天", "周杰伦"),
-            ("夜曲", "周杰伦"),
-            ("红豆", "王菲"),
-            ("可惜没如果", "林俊杰"),
-            ("孤勇者", "陈奕迅"),
-            ("光年之外", "邓紫棋"),
-            ("一路向北", "周杰伦"),
-        ])
-        data.update({
-            "ranking_date": date.today().isoformat(),
-            "ranking_type": "song",
-            "scope_type": "global",
-            "scope_code": "all",
-            "rank_no": next_rank,
-            "target_id": f"song_{random.randint(30001, 39999)}",
-            "target_name": song_name,
-            "target_category": artist,
-            "metric_value": random.randint(400, 1200),
-            "metric_unit": "plays",
-        })
-        return
-
-    if table_key == "region_stats_daily":
-        users = random.randint(40, 120)
-        devices = random.randint(max(20, users - 20), users + 40)
-        orders = random.randint(0, min(devices, 18))
-        data.update({
-            "stat_date": date.today().isoformat(),
-            "region_level": "city",
-            "user_count": users,
-            "active_user_count": random.randint(10, users),
-            "device_count": devices,
-            "order_count": orders,
-            "sales_amount": orders * random_choice([899, 1299, 1999]),
-        })
-        return
-
-    if table_key == "user_value_segment_daily":
-        users = random.randint(20, 90)
-        segment_code, segment_name = random_choice([
-            ("high_value", "High Value"),
-            ("normal", "Normal"),
-            ("low_activity", "Low Activity"),
-        ])
-        data.update({
-            "stat_date": date.today().isoformat(),
-            "segment_code": segment_code,
-            "segment_name": segment_name,
-            "user_count": users,
-            "active_user_count": random.randint(0, users),
-            "avg_play_count": round(random.uniform(3, 40), 2),
-            "avg_pay_amount": round(random.uniform(100, 1800), 2),
-            "retention_rate": round(random.uniform(0.2, 0.9), 4),
-        })
-        return
-
-    if table_key == "user_profile":
-        active_level = random_choice(["high", "normal", "silent"])
-        value_level = "high" if active_level == "high" else random_choice(["normal", "low"])
-        data.update({
-            "gender": random_choice(["male", "female", "unknown"]),
-            "age": random.randint(18, 55),
-            "age_range": random_choice(["18-25", "26-35", "36-45", "46+"]),
-            "province_name": random_choice(["Beijing", "Shanghai", "Guangdong", "Zhejiang", "Chongqing"]),
-            "city_name": random_choice(["Beijing City", "Shanghai City", "Guangzhou City", "Hangzhou City", "Chongqing City"]),
-            "active_level": active_level,
-            "value_level": value_level,
-            "bound_platforms": random_choice(["qq", "netease", "qq,netease"]),
-            "user_status": random_choice(["active", "normal"]),
-        })
-        return
-
-    if table_key == "play_history":
-        data.update({
-            "play_duration": random.randint(30, 260),
-            "style": random_choice(["normal", "ambient", "podcast", "pop"]),
-            "created_at": random_datetime(30),
-        })
-        return
-
-    if table_key == "user_feedback":
-        next_id = next_numeric_id(cursor, "user_feedback", "feedback_id")
-        feedback_type = random_choice(["bug", "suggestion", "praise"])
-        data.update({
-            "feedback_no": f"FB202606{next_id:06d}",
-            "feedback_type": feedback_type,
-            "title": random_choice(["配网到最后一步失败", "希望增加睡眠定时入口", "蓝牙重连后音量偏大"]),
-            "content": random_choice([
-                "家里 5G Wi-Fi 可以搜到，但输入密码后一直停在 90%。",
-                "晚上听播客时希望更容易设置 30 分钟自动关闭。",
-                "蓝牙断开后重新连接，音箱音量会突然变大。",
-            ]),
-            "contact": f"138****{random.randint(1000, 9999)}",
-            "device_info": f"SHSPEAKER-{random.randint(1, 180):05d} / 微信小程序 1.2.5",
-            "status": random_choice(["open", "processing", "processed"]),
-            "priority": "high" if feedback_type == "bug" else "normal",
-            "star_rating": random.randint(2, 5),
-            "rating_tags": random_choice(["配网,Wi-Fi", "播放器,定时", "蓝牙,音量"]),
-        })
+def build_sample_record(cursor, config):
+    return existing_record_seed(cursor, config)
 
 
-def count_table(cursor, table_name):
-    cursor.execute(f"SELECT COUNT(*) AS value FROM {quote_identifier(table_name)}")
-    row = cursor.fetchone() or {}
-    return int(row.get("value") or 0)
-
-
-def build_mock_mongo_document(collection_name):
-    now_text = random_datetime()
-    suffix = random_suffix()
-    samples = {
-        "device_runtime": {
-            "device_id": random.randint(10000, 99999),
-            "deviceId": str(random.randint(10000, 99999)),
-            "device_number": f"SHMINI-A1-{random.randint(1000, 9999)}",
-            "online": random.choice([True, False]),
-            "battery": random.randint(10, 100),
-            "volume": random.randint(0, 100),
-            "signalStrength": random.randint(-90, -35),
-            "networkType": random.choice(["wifi", "4g"]),
-        },
-        "player_state": {
-            "device_id": random.randint(10000, 99999),
-            "isPlaying": random.choice([True, False]),
-            "songId": f"song_{suffix}",
-            "songName": random.choice(["晴天", "稻香", "夜曲", "七里香"]),
-            "artist": random.choice(["周杰伦", "陈奕迅", "林俊杰"]),
-            "source": random.choice(["netease", "qq"]),
-            "playTime": random.randint(0, 240),
-        },
-        "play_queue": {
-            "device_id": random.randint(10000, 99999),
-            "queue": [
-                {"songId": f"song_{suffix}", "songName": random.choice(["晴天", "稻香"]), "artist": "周杰伦"}
-            ],
-        },
-        "operation_logs": {
-            "requestId": f"REQ{suffix}",
-            "device_id": random.randint(10000, 99999),
-            "action": random.choice(["play", "pause", "volume"]),
-            "source": "mock",
-            "result": random.choice(["success", "failed"]),
-        },
-        "media_metadata": {
-            "song_id": f"song_{suffix}",
-            "external_id": f"song_{suffix}",
-            "name": random.choice(["晴天", "稻香", "夜曲", "七里香"]),
-            "artist": random.choice(["周杰伦", "陈奕迅", "林俊杰"]),
-            "cover_url": f"https://example.com/covers/{suffix}.jpg",
-            "duration": random.randint(160, 280),
-        },
-    }
-    document = dict(samples.get(collection_name, {"name": f"mock_{suffix}", "value": random.randint(1, 1000)}))
-    document["mock"] = True
-    document["created_at"] = now_text
-    document["updated_at"] = now_text
-    return document
-
+def sample_mongo_document_from_collection(collection):
+    doc = collection.find_one(sort=[("_id", -1)])
+    if not doc:
+        return {}
+    doc = dict(doc)
+    doc.pop("_id", None)
+    return doc
 
 def mongo_collection_or_error(collection_name):
     db = mongo_db()
@@ -1653,12 +1135,7 @@ def create_mock_mongo_document(collection_name):
     collection, err = mongo_collection_or_error(collection_name)
     if err:
         return err
-    body = build_mock_mongo_document(collection_name)
-    result = collection.insert_one(body)
-    return success({
-        "id": str(result.inserted_id),
-        "inserted": json_safe(body),
-    }, "随机模拟数据已新增")
+    return error("mock data generation is disabled; use the create form for real data", 400)
 
 
 @db_api.route("/mongo/<collection_name>/sample", methods=["GET"])
@@ -1666,7 +1143,7 @@ def sample_mongo_document(collection_name):
     collection, err = mongo_collection_or_error(collection_name)
     if err:
         return err
-    return success(build_mock_mongo_document(collection_name), "随机模拟数据已生成")
+    return success(json_safe(sample_mongo_document_from_collection(collection)), "real sample loaded")
 
 
 @db_api.route("/mongo/<collection_name>/<doc_id>", methods=["PUT", "PATCH"])
@@ -1852,40 +1329,7 @@ def create_mock_record(table_key):
     config, err = get_config_or_error(table_key)
     if err:
         return err
-
-    table = config["table"]
-    conn = None
-    try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            data = build_mock_record(cursor, table_key, config)
-
-            if not data:
-                return error("当前表没有可新增字段", 400)
-
-            columns = list(data.keys())
-            values = [data[column] for column in columns]
-            column_sql = ", ".join(quote_identifier(column) for column in columns)
-            placeholder_sql = ", ".join(["%s"] * len(columns))
-            sql = (
-                f"INSERT INTO {quote_identifier(table)} "
-                f"({column_sql}) VALUES ({placeholder_sql})"
-            )
-            cursor.execute(sql, values)
-            new_id = cursor.lastrowid
-
-        conn.commit()
-        return success({
-            "id": new_id,
-            "inserted": serialize_row(data),
-        }, "随机模拟数据已新增")
-    except Exception as exc:
-        if conn:
-            conn.rollback()
-        return error(f"随机新增失败: {exc}", 500)
-    finally:
-        if conn:
-            conn.close()
+    return error("mock data generation is disabled; use the create form for real data", 400)
 
 
 @db_api.route("/<table_key>/sample", methods=["GET"])
@@ -1898,21 +1342,14 @@ def sample_record(table_key):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
-            data = build_mock_record(cursor, table_key, config)
-        return success(serialize_row(data), "随机模拟数据已生成")
+            data = build_sample_record(cursor, config)
+        return success(serialize_row(data), "real sample loaded")
     except Exception as exc:
-        return error(f"随机数据生成失败: {exc}", 500)
+        return error(f"real sample load failed: {exc}", 500)
     finally:
         if conn:
             conn.close()
 
-
-# =========================================================
-# 单主键表：查询单条
-# GET /api/db/user/1
-# GET /api/db/device/1
-# GET /api/db/Daily_Stats/2026-04-29
-# =========================================================
 
 @db_api.route("/<table_key>/<path:pk_value>", methods=["GET"])
 def get_record(table_key, pk_value):
