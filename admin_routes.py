@@ -1036,7 +1036,7 @@ def top_songs():
               FROM hot_ranking_daily
               WHERE ranking_type = 'song'
           )
-        ORDER BY rank_no ASC
+        ORDER BY metric_value DESC, rank_no ASC, target_name ASC
         LIMIT 10
         """
     )
@@ -1044,7 +1044,7 @@ def top_songs():
         return response_ok({
             "list": [
                 {
-                    "rank": _int(row.get("rank_no"), index + 1),
+                    "rank": index + 1,
                     "songName": row.get("target_name") or "未知歌曲",
                     "artist": row.get("target_category") or "未知歌手",
                     "platform": row.get("scope_type") or "global",

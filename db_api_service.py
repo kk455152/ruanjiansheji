@@ -1,6 +1,7 @@
 # db_api_service.py
 from datetime import date, datetime
 from decimal import Decimal
+import time
 
 from flask import Blueprint, jsonify, request
 
@@ -909,7 +910,7 @@ FRONT_DATA_CATALOG = [
     {"group": "用户画像", "title": "绑定软件占比", "frontend": "用户画像 / 绑定软件饼图", "api": "/api/admin/super/user-profile/music-service-distribution", "table": "user_profile", "fields": ["bound_platforms"], "operation": "占比由 bound_platforms 分组计数决定；填写 qq、netease、wechat 或逗号组合。"},
     {"group": "用户价值", "title": "普通用户 / 高活用户环图", "frontend": "用户价值 / valueDonut", "api": "/api/admin/super/user-value/*", "table": "user_profile", "fields": ["active_level", "value_level"], "operation": "高活用户是 active_level='high' 的数量；普通用户是总画像数减高活用户数。"},
     {"group": "用户分群", "title": "分群人数 / 留存 / 均值", "frontend": "用户分群 / segmentPie 和表格", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "fields": ["stat_date", "segment_name", "user_count", "active_user_count", "avg_play_count", "avg_pay_amount", "retention_rate"], "operation": "修改最新 stat_date 下的分群行；新增分群需新增唯一 segment_code。"},
-    {"group": "热歌排行", "title": "热歌播放量 / 名次", "frontend": "热歌排行 / state.songs", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "fields": ["ranking_date", "rank_no", "target_name", "target_category", "metric_value"], "operation": "修改最新 ranking_date 下 ranking_type='song' 的 rank_no 和 metric_value；metric_value 越大可在每日任务中排得越靠前。"},
+    {"group": "热歌排行", "title": "热歌播放量 / 名次", "frontend": "热歌排行 / state.songs", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "fields": ["ranking_date", "rank_no", "target_name", "target_category", "metric_value"], "operation": "修改最新 ranking_date 下 ranking_type='song' 的 target_name、target_category 和 metric_value；保存后系统会按 metric_value 从高到低自动重排名次。"},
     {"group": "留存", "title": "购买后 1/7/30 日留存", "frontend": "趋势分析 / 市场角色留存趋势", "api": "/api/admin/market/retention/device-purchase", "table": "sales_order", "fields": ["user_id", "pay_status", "created_at"], "operation": "购买人数来自已支付订单的 user_id；留存人数来自 play_history 中购买后对应日期范围内仍有播放的用户。"},
     {"group": "留存", "title": "播放留存来源", "frontend": "趋势分析 / 留存计算", "api": "/api/admin/market/retention/device-purchase", "table": "play_history", "fields": ["user_id", "created_at", "play_duration"], "operation": "给购买用户新增购买日后 1/7/30 天之后的播放记录，会提高对应留存计数。"},
     {"group": "运营管理", "title": "反馈总数 / 待处理数 / 评分", "frontend": "用户反馈", "api": "/api/admin/*/feedback/list", "table": "user_feedback", "fields": ["feedback_type", "status", "priority", "star_rating", "created_at"], "operation": "新增反馈行增加总数；status 改为 pending/open 会增加待处理，改为 processed/closed 会减少。"},
@@ -1008,6 +1009,18 @@ def quote_identifier(name):
     return f"`{name}`"
 
 
+def build_insert_statement(table, data):
+    columns = list(data.keys())
+    values = [data[column] for column in columns]
+    column_sql = ", ".join(quote_identifier(column) for column in columns)
+    placeholder_sql = ", ".join(["%s"] * len(columns))
+    sql = (
+        f"INSERT INTO {quote_identifier(table)} "
+        f"({column_sql}) VALUES ({placeholder_sql})"
+    )
+    return columns, values, sql
+
+
 def build_where_by_pk(config, values):
     pk_columns = config["pk"]
     if len(pk_columns) != len(values):
@@ -1043,6 +1056,164 @@ def pick_allowed_fields(body, allowed_columns):
         for key in allowed_columns
         if key in body
     }
+
+
+def age_range_for_age(age):
+    try:
+        value = int(age)
+    except (TypeError, ValueError):
+        return None
+    if value < 18:
+        return "18-"
+    if value <= 25:
+        return "18-25"
+    if value <= 35:
+        return "26-35"
+    if value <= 45:
+        return "36-45"
+    return "46+"
+
+
+def normalize_record(table_key, data):
+    normalized = dict(data or {})
+    if table_key == "user_profile" and normalized.get("age") not in (None, ""):
+        fixed_range = age_range_for_age(normalized.get("age"))
+        if fixed_range:
+            normalized["age_range"] = fixed_range
+    return normalized
+
+
+UNIQUE_SAMPLE_FIELDS = {
+    "user": ["username", "phone", "email"],
+    "device": ["device_number"],
+    "action_dict": ["action_code"],
+    "admin_user": ["username", "job_no", "phone", "email", "wechat_open_id"],
+    "auth_token": ["access_token", "refresh_token"],
+    "media_mapping": ["external_id"],
+    "sales_order": ["order_no"],
+    "user_feedback": ["feedback_no"],
+    "device_firmware_release": ["release_no"],
+    "device_firmware_update_task": ["task_no"],
+    "system_config": ["config_key"],
+}
+
+
+def unique_sample_suffix():
+    return datetime.now().strftime("%m%d%H%M%S") + str(int(time.time() * 1000))[-3:]
+
+
+def uniquify_sample_record(table_key, data):
+    sample = dict(data or {})
+    suffix = unique_sample_suffix()
+    for field in UNIQUE_SAMPLE_FIELDS.get(table_key, []):
+        value = sample.get(field)
+        if value in (None, ""):
+            continue
+        text = str(value)
+        if field == "email" and "@" in text:
+            name, domain = text.split("@", 1)
+            sample[field] = f"{name}+{suffix}@{domain}"
+        elif field == "phone":
+            sample[field] = f"139{suffix[-8:]}"[:11]
+        else:
+            sample[field] = f"{text}-{suffix}"[:250]
+    return normalize_record(table_key, sample)
+
+
+def reorder_hot_ranking(cursor, ranking_date, ranking_type="song", scope_type="global", scope_code="global"):
+    if not ranking_date:
+        return
+    cursor.execute(
+        """
+        SELECT ranking_id
+        FROM hot_ranking_daily
+        WHERE ranking_date=%s AND ranking_type=%s AND scope_type=%s AND scope_code=%s
+        ORDER BY metric_value DESC, rank_no ASC, target_name ASC, ranking_id ASC
+        """,
+        (ranking_date, ranking_type, scope_type, scope_code),
+    )
+    rows = cursor.fetchall() or []
+    if not rows:
+        return
+    ids = [row["ranking_id"] for row in rows]
+    placeholders = ", ".join(["%s"] * len(ids))
+    cursor.execute(
+        f"UPDATE hot_ranking_daily SET rank_no = -ranking_id WHERE ranking_id IN ({placeholders})",
+        ids,
+    )
+    for index, ranking_id in enumerate(ids, start=1):
+        cursor.execute(
+            "UPDATE hot_ranking_daily SET rank_no=%s WHERE ranking_id=%s",
+            (index, ranking_id),
+        )
+
+
+def hot_ranking_group(record):
+    if not record:
+        return None
+    ranking_date = record.get("ranking_date")
+    if isinstance(ranking_date, (datetime, date)):
+        ranking_date = ranking_date.isoformat()
+    return (
+        ranking_date,
+        record.get("ranking_type") or "song",
+        record.get("scope_type") or "global",
+        record.get("scope_code") or "global",
+    )
+
+
+def fetch_hot_ranking_group(cursor, ranking_id):
+    cursor.execute(
+        """
+        SELECT ranking_date, ranking_type, scope_type, scope_code
+        FROM hot_ranking_daily
+        WHERE ranking_id=%s
+        """,
+        (ranking_id,),
+    )
+    return hot_ranking_group(cursor.fetchone())
+
+
+def next_hot_rank_no(cursor, group):
+    if not group or not group[0]:
+        return 1
+    cursor.execute(
+        """
+        SELECT COALESCE(MAX(rank_no), 0) + 1 AS next_rank
+        FROM hot_ranking_daily
+        WHERE ranking_date=%s AND ranking_type=%s AND scope_type=%s AND scope_code=%s
+        """,
+        group,
+    )
+    row = cursor.fetchone() or {}
+    return int(row.get("next_rank") or 1)
+
+
+def temporary_hot_rank_no(pk_value):
+    try:
+        value = abs(int(pk_value))
+    except (TypeError, ValueError):
+        value = int(time.time() * 1000)
+    return -max(value, 1)
+
+
+def prepare_hot_ranking_create(cursor, data):
+    if not data.get("ranking_date"):
+        data["ranking_date"] = date.today().isoformat()
+    data["ranking_type"] = data.get("ranking_type") or "song"
+    data["scope_type"] = data.get("scope_type") or "global"
+    data["scope_code"] = data.get("scope_code") or "global"
+    data["metric_unit"] = data.get("metric_unit") or "plays"
+    data["rank_no"] = next_hot_rank_no(cursor, hot_ranking_group(data))
+
+
+def reorder_hot_ranking_groups(cursor, *groups):
+    seen = set()
+    for group in groups:
+        if not group or not group[0] or group in seen:
+            continue
+        seen.add(group)
+        reorder_hot_ranking(cursor, *group)
 
 
 def parse_mongo_id(value):
@@ -1164,11 +1335,162 @@ def list_mysql_tables():
     return list_supported_tables()
 
 
+def scalar_value(cursor, sql, params=(), default=0):
+    cursor.execute(sql, params)
+    row = cursor.fetchone() or {}
+    value = next(iter(row.values()), default)
+    return value if value is not None else default
+
+
+def front_catalog_snapshot():
+    snapshot = {}
+    conn = None
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
+            user_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM `user`")
+            new_user_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM `user` WHERE DATE(created_at)=CURDATE()")
+            device_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM device")
+            online_device_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0)=1")
+            sales_amount = scalar_value(cursor, "SELECT COALESCE(SUM(pay_amount),0) AS c FROM sales_order WHERE pay_status IN ('paid','success','finished')")
+            order_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM sales_order WHERE pay_status IN ('paid','success','finished')")
+            high_active = scalar_value(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE active_level='high'")
+            profile_total = scalar_value(cursor, "SELECT COUNT(*) AS c FROM user_profile")
+            age_bad = scalar_value(
+                cursor,
+                """
+                SELECT COUNT(*) AS c
+                FROM user_profile
+                WHERE age IS NOT NULL
+                  AND COALESCE(age_range, '') <> CASE
+                    WHEN age < 18 THEN '18-'
+                    WHEN age <= 25 THEN '18-25'
+                    WHEN age <= 35 THEN '26-35'
+                    WHEN age <= 45 THEN '36-45'
+                    ELSE '46+'
+                  END
+                """,
+            )
+            cursor.execute(
+                """
+                SELECT COALESCE(age_range, 'unknown') AS label, COUNT(*) AS count_value
+                FROM user_profile
+                GROUP BY COALESCE(age_range, 'unknown')
+                ORDER BY count_value DESC
+                LIMIT 4
+                """
+            )
+            age_rows = cursor.fetchall() or []
+            cursor.execute(
+                """
+                SELECT target_name, metric_value
+                FROM hot_ranking_daily
+                WHERE ranking_type='song'
+                  AND ranking_date=(SELECT MAX(ranking_date) FROM hot_ranking_daily WHERE ranking_type='song')
+                ORDER BY metric_value DESC, rank_no ASC, target_name ASC
+                LIMIT 1
+                """
+            )
+            top_song = cursor.fetchone() or {}
+            cursor.execute(
+                """
+                SELECT segment_name, user_count
+                FROM user_value_segment_daily
+                WHERE stat_date=(SELECT MAX(stat_date) FROM user_value_segment_daily)
+                ORDER BY user_count DESC
+                LIMIT 1
+                """
+            )
+            top_segment = cursor.fetchone() or {}
+            snapshot.update({
+                "user": f"{int(user_count or 0)} 人，今日新增 {int(new_user_count or 0)}",
+                "device": f"{int(device_count or 0)} 台，在线 {int(online_device_count or 0)}",
+                "sales_order": f"{float(sales_amount or 0):.2f} 元，{int(order_count or 0)} 笔已支付订单",
+                "activity": f"{int(high_active or 0)} 个高活画像 / 共 {int(profile_total or 0)} 个画像",
+                "daily_stats": "最新日报趋势来自 daily_stats，改完基础表后请点“运行每日汇总”",
+                "region_stats_daily": "地区热力读取最新 stat_date 的地区行",
+                "user_profile_age": "；".join(f"{row.get('label')}: {int(row.get('count_value') or 0)}" for row in age_rows) or "暂无年龄分布",
+                "user_profile_age_bad": f"{int(age_bad or 0)} 条年龄段不一致",
+                "user_profile": f"{int(profile_total or 0)} 个画像，{int(age_bad or 0)} 条年龄段不一致",
+                "user_value_segment_daily": f"最大分群：{top_segment.get('segment_name') or '-'} {int(top_segment.get('user_count') or 0)} 人",
+                "hot_ranking_daily": f"当前第 1：{top_song.get('target_name') or '-'}，播放 {int(top_song.get('metric_value') or 0)}",
+                "user_feedback": f"{int(scalar_value(cursor, 'SELECT COUNT(*) AS c FROM user_feedback') or 0)} 条反馈",
+                "device_log": f"{int(scalar_value(cursor, 'SELECT COUNT(*) AS c FROM device_log') or 0)} 条日志",
+                "play_history": f"{int(scalar_value(cursor, 'SELECT COUNT(*) AS c FROM play_history') or 0)} 条播放记录",
+                "media_mapping": f"{int(scalar_value(cursor, 'SELECT COUNT(*) AS c FROM media_mapping') or 0)} 首歌曲映射",
+            })
+    except Exception as exc:
+        snapshot["error"] = f"当前值读取失败：{exc}"
+    finally:
+        if conn:
+            conn.close()
+    return snapshot
+
+
+def attach_catalog_current_values(items):
+    snapshot = front_catalog_snapshot()
+    enriched = []
+    for item in items:
+        copy = dict(item)
+        table = copy.get("table")
+        title = copy.get("title") or ""
+        if title == "年龄占比":
+            copy["current"] = snapshot.get("user_profile_age")
+            copy["warning"] = snapshot.get("user_profile_age_bad")
+        elif title in ("普通用户 / 高活用户环图", "活跃度 / 活跃用户"):
+            copy["current"] = snapshot.get("activity")
+        else:
+            copy["current"] = snapshot.get(table) or snapshot.get("error") or "暂无当前值"
+        enriched.append(copy)
+    return enriched
+
+
+@db_api.route("/maintenance/fix-logical-data", methods=["POST"])
+def fix_logical_data():
+    conn = None
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE user_profile
+                SET age_range = CASE
+                    WHEN age IS NULL THEN age_range
+                    WHEN age < 18 THEN '18-'
+                    WHEN age <= 25 THEN '18-25'
+                    WHEN age <= 35 THEN '26-35'
+                    WHEN age <= 45 THEN '36-45'
+                    ELSE '46+'
+                END,
+                updated_at = NOW()
+                WHERE age IS NOT NULL
+                  AND COALESCE(age_range, '') <> CASE
+                    WHEN age < 18 THEN '18-'
+                    WHEN age <= 25 THEN '18-25'
+                    WHEN age <= 35 THEN '26-35'
+                    WHEN age <= 45 THEN '36-45'
+                    ELSE '46+'
+                  END
+                """
+            )
+            fixed_age_ranges = cursor.rowcount
+        conn.commit()
+        return success({"fixedAgeRanges": fixed_age_ranges}, "逻辑数据修复完成")
+    except Exception as exc:
+        if conn:
+            conn.rollback()
+        return error(f"逻辑数据修复失败: {exc}", 500)
+    finally:
+        if conn:
+            conn.close()
+
+
 @db_api.route("/front-data-catalog", methods=["GET"])
 def front_data_catalog():
+    items = attach_catalog_current_values(FRONT_DATA_CATALOG)
     return success({
-        "total": len(FRONT_DATA_CATALOG),
-        "list": FRONT_DATA_CATALOG,
+        "total": len(items),
+        "list": items,
     })
 
 
@@ -1320,14 +1642,18 @@ def list_records(table_key):
     if where_parts:
         where_sql = " WHERE " + " AND ".join(where_parts)
 
-    pk_order = ", ".join(quote_identifier(column) for column in config["pk"])
+    if table_key == "hot_ranking_daily":
+        order_sql = "`ranking_date` DESC, `metric_value` DESC, `rank_no` ASC, `target_name` ASC, `ranking_id` ASC"
+    else:
+        pk_order = ", ".join(quote_identifier(column) for column in config["pk"])
+        order_sql = f"{pk_order} DESC"
     column_sql = ", ".join(quote_identifier(column) for column in columns)
 
     sql = (
         f"SELECT {column_sql} "
         f"FROM {quote_identifier(table)} "
         f"{where_sql} "
-        f"ORDER BY {pk_order} DESC "
+        f"ORDER BY {order_sql} "
         f"LIMIT %s OFFSET %s"
     )
 
@@ -1381,21 +1707,12 @@ def create_record(table_key):
     table = config["table"]
     insert_columns = create_columns(config)
 
-    data = pick_allowed_fields(body, insert_columns)
+    data = normalize_record(table_key, pick_allowed_fields(body, insert_columns))
 
     if not data:
         return error("没有可新增的字段", 400)
 
-    columns = list(data.keys())
-    values = [data[column] for column in columns]
-
-    column_sql = ", ".join(quote_identifier(column) for column in columns)
-    placeholder_sql = ", ".join(["%s"] * len(columns))
-
-    sql = (
-        f"INSERT INTO {quote_identifier(table)} "
-        f"({column_sql}) VALUES ({placeholder_sql})"
-    )
+    columns, values, sql = build_insert_statement(table, data)
     if table_key == "daily_stats" and "stat_date" in columns:
         update_columns = [column for column in columns if column != "stat_date"]
         if update_columns:
@@ -1409,8 +1726,13 @@ def create_record(table_key):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
+            if table_key == "hot_ranking_daily":
+                prepare_hot_ranking_create(cursor, data)
+                columns, values, sql = build_insert_statement(table, data)
             cursor.execute(sql, values)
             new_id = cursor.lastrowid
+            if table_key == "hot_ranking_daily":
+                reorder_hot_ranking_groups(cursor, hot_ranking_group(data))
 
         conn.commit()
 
@@ -1445,7 +1767,7 @@ def sample_record(table_key):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
-            data = build_sample_record(cursor, config)
+            data = uniquify_sample_record(table_key, build_sample_record(cursor, config))
         return success(serialize_row(data), "real sample loaded")
     except Exception as exc:
         return error(f"real sample load failed: {exc}", 500)
@@ -1523,10 +1845,13 @@ def update_record(table_key, pk_value):
     pk_column = config["pk"][0]
     update_columns = config["update_columns"]
 
-    data = pick_allowed_fields(body, update_columns)
+    data = normalize_record(table_key, pick_allowed_fields(body, update_columns))
 
     if not data:
         return error("没有可修改的字段", 400)
+
+    if table_key == "hot_ranking_daily":
+        data["rank_no"] = temporary_hot_rank_no(pk_value)
 
     set_sql = ", ".join(
         f"{quote_identifier(column)} = %s"
@@ -1545,11 +1870,16 @@ def update_record(table_key, pk_value):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
+            old_hot_group = fetch_hot_ranking_group(cursor, pk_value) if table_key == "hot_ranking_daily" else None
             cursor.execute(sql, params)
 
             if cursor.rowcount == 0:
                 conn.rollback()
                 return error("数据不存在或内容未变化", 404)
+
+            if table_key == "hot_ranking_daily":
+                new_hot_group = fetch_hot_ranking_group(cursor, pk_value)
+                reorder_hot_ranking_groups(cursor, old_hot_group, new_hot_group)
 
         conn.commit()
         return success(data, "修改成功")
@@ -1593,11 +1923,15 @@ def delete_record(table_key, pk_value):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
+            old_hot_group = fetch_hot_ranking_group(cursor, pk_value) if table_key == "hot_ranking_daily" else None
             cursor.execute(sql, (pk_value,))
 
             if cursor.rowcount == 0:
                 conn.rollback()
                 return error("数据不存在", 404)
+
+            if table_key == "hot_ranking_daily":
+                reorder_hot_ranking_groups(cursor, old_hot_group)
 
         conn.commit()
         return success(None, "删除成功")

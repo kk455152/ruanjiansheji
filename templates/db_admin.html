@@ -169,6 +169,21 @@
       color: #52715e;
       font-size: 11px;
     }
+    .catalog-current {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-left: 3px solid #4f9f72;
+      border-radius: 6px;
+      background: #f2faf5;
+      color: #244b35;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .catalog-warning {
+      margin-top: 6px;
+      color: #a45f00;
+      font-size: 12px;
+    }
     .field-focus {
       outline: 2px solid #e3a338;
       outline-offset: -2px;
@@ -252,14 +267,43 @@
       font-family: Consolas, Monaco, monospace;
       font-size: 13px;
     }
+    body.catalog-mode main {
+      display: block;
+      min-height: calc(100vh - 61px);
+    }
+    body.catalog-mode aside {
+      display: none;
+    }
+    body.catalog-mode .data-section {
+      padding: 24px min(6vw, 72px);
+    }
+    body.catalog-mode .data-section > :not(.catalog) {
+      display: none;
+    }
+    body.catalog-mode .catalog {
+      margin: 0;
+    }
+    body.catalog-mode .catalog-list {
+      max-height: none;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    body.table-mode .catalog {
+      display: none;
+    }
+    body.table-mode main {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
       aside { max-height: 240px; }
       .form-grid { grid-template-columns: 1fr; }
+      body.catalog-mode .catalog-list { grid-template-columns: 1fr; }
+      body.table-mode main { grid-template-columns: 1fr; }
     }
   </style>
 </head>
-<body>
+<body class="catalog-mode">
   <header>
     <h1>数据库维护</h1>
     <span>维护 MySQL 表和 MongoDB 集合；play_history + media_mapping 会影响 Web 热歌排行，小程序播放后可刷新后台查看变化</span>
@@ -272,13 +316,14 @@
       </div>
       <div id="items"></div>
     </aside>
-    <section>
+    <section class="data-section">
       <div class="catalog">
         <div class="catalog-head">
           <h2>前端数据维护目录</h2>
           <div class="catalog-tools">
             <input id="catalogKeyword" placeholder="搜索页面、数字、表名或字段">
             <button id="catalogFilterBtn" class="secondary">搜索</button>
+            <button id="fixLogicBtn" class="secondary">修复逻辑数据</button>
             <button id="runDailyBtn">运行每日汇总</button>
           </div>
         </div>
@@ -292,6 +337,7 @@
         <button id="filterBtn">筛选</button>
       </div>
       <div class="toolbar">
+        <button id="backCatalogBtn" class="secondary">返回维护目录</button>
         <button id="reloadBtn" class="secondary">刷新</button>
         <button id="newBtn">新增</button>
       </div>
@@ -394,6 +440,10 @@
     function setStatus(text) { el("status").textContent = text; }
     function currentStore() { return state[state.source]; }
     function tableInfo(key) { return state.mysql.items.find((item) => item.key === key) || null; }
+    function setView(view) {
+      document.body.classList.toggle("catalog-mode", view === "catalog");
+      document.body.classList.toggle("table-mode", view === "table");
+    }
     function metaFor(column) {
       return (state.mysql.schema?.columnMeta || []).find((item) => item.name === column) || {
         name: column,
@@ -453,6 +503,8 @@
         <div class="catalog-card">
           <div>
             <strong>${escapeHtml(item.group)} / ${escapeHtml(item.title)}</strong>
+            <div class="catalog-current">当前前端值：${escapeHtml(item.current || "正在读取或暂无数据")}</div>
+            ${item.warning && !String(item.warning).startsWith("0 ") ? `<div class="catalog-warning">需要处理：${escapeHtml(item.warning)}</div>` : ""}
             <p>${escapeHtml(item.operation)}</p>
             <div class="catalog-meta">
               <span>${escapeHtml(item.frontend || "")}</span>
@@ -471,6 +523,7 @@
 
     async function openCatalogTarget(item) {
       if (!item?.table) return;
+      setView("table");
       state.focusFields = item.fields || [];
       if (state.source !== "mysql") setSource("mysql");
       state.mysql.current = item.table;
@@ -651,8 +704,21 @@
     }
 
     async function saveRow() {
-      if (state.source === "mysql") return saveMysqlRow();
-      return saveMongoRow();
+      el("saveBtn").disabled = true;
+      setStatus("正在保存...");
+      try {
+        if (state.source === "mysql") {
+          await saveMysqlRow();
+        } else {
+          await saveMongoRow();
+        }
+        setStatus("保存成功，列表已刷新");
+      } catch (err) {
+        setStatus(`保存失败：${err.message}`);
+        alert(`保存失败：${err.message}`);
+      } finally {
+        el("saveBtn").disabled = false;
+      }
     }
 
     async function saveMysqlRow() {
@@ -664,6 +730,9 @@
       }
       closeEditor();
       await loadRows();
+      const catalog = await api("/api/db/front-data-catalog");
+      state.catalog = catalog.list || [];
+      renderCatalog();
     }
 
     async function saveMongoRow() {
@@ -671,8 +740,7 @@
       try {
         data = JSON.parse(el("jsonText").value || "{}");
       } catch (err) {
-        alert("JSON 格式不正确");
-        return;
+        throw new Error("JSON 格式不正确");
       }
       if (state.mode === "create") {
         await api(`/api/db/mongo/${encodeURIComponent(state.mongo.current)}`, { method: "POST", body: data });
@@ -725,6 +793,24 @@
       }
     }
 
+    async function fixLogicalData() {
+      el("fixLogicBtn").disabled = true;
+      setStatus("正在修复年龄段等逻辑数据...");
+      try {
+        const data = await api("/api/db/maintenance/fix-logical-data", { method: "POST", body: {} });
+        setStatus(`逻辑数据修复完成：年龄段修复 ${data.fixedAgeRanges || 0} 条`);
+        const catalog = await api("/api/db/front-data-catalog");
+        state.catalog = catalog.list || [];
+        renderCatalog();
+        await loadRows();
+      } catch (err) {
+        setStatus(`逻辑数据修复失败：${err.message}`);
+        alert(`逻辑数据修复失败：${err.message}`);
+      } finally {
+        el("fixLogicBtn").disabled = false;
+      }
+    }
+
     el("mysqlTab").onclick = () => setSource("mysql");
     el("mongoTab").onclick = () => setSource("mongo");
     el("catalogFilterBtn").onclick = () => {
@@ -738,6 +824,13 @@
       }
     };
     el("runDailyBtn").onclick = runDailyStats;
+    el("fixLogicBtn").onclick = fixLogicalData;
+    el("backCatalogBtn").onclick = async () => {
+      setView("catalog");
+      const catalog = await api("/api/db/front-data-catalog");
+      state.catalog = catalog.list || [];
+      renderCatalog();
+    };
     el("filterBtn").onclick = loadRows;
     el("reloadBtn").onclick = loadRows;
     el("newBtn").onclick = openNew;

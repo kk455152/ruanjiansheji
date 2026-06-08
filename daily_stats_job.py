@@ -524,15 +524,7 @@ def refresh_hot_ranking(cursor, stat_date):
     )
     rows = cursor.fetchall() or []
     if not rows:
-        cursor.execute(
-            """
-            SELECT external_id AS target_id, song_title AS target_name, artist AS target_category, 0 AS play_count
-            FROM media_mapping
-            ORDER BY mapping_id ASC
-            LIMIT 10
-            """
-        )
-        rows = cursor.fetchall() or []
+        return
     for index, row in enumerate(rows, start=1):
         cursor.execute(
             """
