@@ -757,13 +757,14 @@ def distribution_data(kind):
 
 
 def heatmap(kind):
+    order_sql = "sales_amount DESC, order_count DESC, region_name ASC" if kind == "sales" else "user_count DESC, active_user_count DESC, region_name ASC"
     rows = mysql_all(
-        """
+        f"""
         SELECT region_code, region_name, sales_amount, order_count,
                user_count, active_user_count
         FROM region_stats_daily
         WHERE stat_date = (SELECT MAX(stat_date) FROM region_stats_daily)
-        ORDER BY sales_amount DESC, user_count DESC
+        ORDER BY {order_sql}
         LIMIT 20
         """
     )
@@ -2528,8 +2529,7 @@ def system_monitor():
 @admin_bp.get("/super/notices")
 @require_admin("super")
 def admin_notices():
-    db_rows = mysql_all(
-        """
+    notice_sql = """
         SELECT config_id, config_key, config_value, config_type, config_name,
                description, created_at, updated_at
         FROM system_config
@@ -2538,7 +2538,19 @@ def admin_notices():
         ORDER BY updated_at DESC, created_at DESC, config_id DESC
         LIMIT 50
         """
-    )
+    db_rows = mysql_all(notice_sql)
+    if not db_rows:
+        try:
+            from db_config import get_mysql_connection
+            conn = get_mysql_connection()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(notice_sql)
+                    db_rows = cursor.fetchall() or []
+            finally:
+                conn.close()
+        except Exception:
+            db_rows = []
     if db_rows:
         notices = [
             {
@@ -2743,23 +2755,29 @@ def market_insights():
 @admin_bp.get("/operator/device/groups")
 @require_admin("super", "operator")
 def device_groups():
-    devices = device_admin_rows()
-    groups = {}
-    for device in devices:
-        key = device.get("modelName") or "未知型号"
-        group = groups.setdefault(key, {"groupName": key, "deviceCount": 0, "onlineCount": 0, "firmwareVersions": set()})
-        group["deviceCount"] += 1
-        group["onlineCount"] += 1 if device.get("online") else 0
-        group["firmwareVersions"].add(device.get("firmwareVersion") or "-")
+    rows = mysql_all(
+        f"""
+        SELECT
+            COALESCE(model_name, '未知型号') AS group_name,
+            COUNT(*) AS device_count,
+            SUM(CASE WHEN {ONLINE_DEVICE_CONDITION} THEN 1 ELSE 0 END) AS online_count,
+            GROUP_CONCAT(DISTINCT COALESCE(firmware_version, '-') ORDER BY firmware_version SEPARATOR '、') AS firmware_versions
+        FROM device
+        GROUP BY COALESCE(model_name, '未知型号')
+        ORDER BY device_count DESC, group_name ASC
+        """
+    )
     result = [
         {
-            **group,
-            "firmwareVersions": "、".join(sorted(group["firmwareVersions"])),
-            "offlineCount": group["deviceCount"] - group["onlineCount"],
+            "groupName": row.get("group_name") or "未知型号",
+            "deviceCount": _int(row.get("device_count"), 0),
+            "onlineCount": _int(row.get("online_count"), 0),
+            "offlineCount": max(_int(row.get("device_count"), 0) - _int(row.get("online_count"), 0), 0),
+            "firmwareVersions": row.get("firmware_versions") or "-",
         }
-        for group in groups.values()
+        for row in rows
     ]
-    return response_ok({"total": len(devices), "groupTotal": len(result), "list": result})
+    return response_ok({"total": sum(item["deviceCount"] for item in result), "groupTotal": len(result), "list": result})
 
 
 @admin_bp.get("/operator/device/alerts")

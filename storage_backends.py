@@ -297,30 +297,6 @@ def ensure_mysql_schema():
         return
 
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(255) NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        )
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS user_preferences (
-                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                device_id VARCHAR(128) NOT NULL,
-                like_status TINYINT NOT NULL DEFAULT '0',
-                KEY idx_preferences_user_id (user_id),
-                CONSTRAINT fk_user_preferences_user
-                    FOREIGN KEY (user_id) REFERENCES users (user_id)
-                    ON DELETE RESTRICT ON UPDATE RESTRICT
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        )
         cursor.execute(DAILY_STATS_TABLE_SQL)
         ensure_member_b_relational_schema(cursor)
         ensure_mysql_column_capacity(cursor)
@@ -496,8 +472,6 @@ ACTION_DICT_ROWS = [
 
 def ensure_mysql_column_capacity(cursor):
     for statement in (
-        "ALTER TABLE users MODIFY username VARCHAR(255) NOT NULL",
-        "ALTER TABLE user_preferences MODIFY device_id VARCHAR(128) NOT NULL",
         "ALTER TABLE `user` MODIFY username VARCHAR(255) NOT NULL",
         "ALTER TABLE device MODIFY device_number VARCHAR(128) NOT NULL",
     ):
@@ -890,9 +864,7 @@ def persist_play_log_to_relational(play_log):
 
 
 def get_next_preference_id(cursor):
-    cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM user_preferences")
-    row = cursor.fetchone()
-    return int(row["next_id"])
+    return 1
 
 
 def upsert_user(account, password, device_id):
@@ -902,7 +874,7 @@ def upsert_user(account, password, device_id):
         cursor.execute(
             """
             SELECT user_id, password_hash
-            FROM users
+            FROM `user`
             WHERE username = %s
             ORDER BY user_id ASC
             LIMIT 1
@@ -913,15 +885,15 @@ def upsert_user(account, password, device_id):
         if row:
             if row["password_hash"] != password_hash:
                 cursor.execute(
-                    "UPDATE users SET password_hash = %s WHERE user_id = %s",
+                    "UPDATE `user` SET password_hash = %s WHERE user_id = %s",
                     (password_hash, row["user_id"]),
                 )
             return row["user_id"]
 
         cursor.execute(
             """
-            INSERT INTO users (username, password_hash)
-            VALUES (%s, %s)
+            INSERT INTO `user` (username, password_hash, created_at, status)
+            VALUES (%s, %s, NOW(), 'active')
             """,
             (account, password_hash),
         )
@@ -929,43 +901,7 @@ def upsert_user(account, password, device_id):
 
 
 def upsert_user_preference(payload, user_id):
-    connection = get_mysql_connection()
-    with connection.cursor() as cursor:
-        device_id = payload.get("device_id", "unknown_device")
-        cursor.execute(
-            """
-            SELECT id
-            FROM user_preferences
-            WHERE user_id = %s AND device_id = %s
-            LIMIT 1
-            """,
-            (user_id, device_id),
-        )
-        row = cursor.fetchone()
-        if row:
-            cursor.execute(
-                """
-                UPDATE user_preferences
-                SET like_status = %s
-                WHERE id = %s
-                """,
-                (1 if bool(payload.get("value")) else 0, row["id"]),
-            )
-            return
-
-        next_id = get_next_preference_id(cursor)
-        cursor.execute(
-            """
-            INSERT INTO user_preferences (id, user_id, device_id, like_status)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (
-                next_id,
-                user_id,
-                device_id,
-                1 if bool(payload.get("value")) else 0,
-            ),
-        )
+    return None
 
 
 def display_name_from_account(account):
@@ -1621,7 +1557,7 @@ def persist_payload(payload):
         upsert_user_preference(payload, user_id)
         persist_like_feedback_to_relational(payload, account, password)
         insert_user_feedback_document(payload, account)
-        return "mysql.user_preferences+mysql.user_feedback+mongodb.user_feedback"
+        return "mysql.user_feedback+mongodb.user_feedback"
 
     if metric_type == "song_info":
         song_document = upsert_song_info(payload, account, password)
@@ -1652,7 +1588,7 @@ def persist_payload(payload):
         upsert_music_sync_progress(payload)
         return "mongodb.music_sync_progress+mongodb.user_profiles"
 
-    return "mongodb.user_profiles+mysql.users"
+    return "mongodb.user_profiles+mysql.user"
 
 
 def get_metric_document(device_id):
@@ -1667,7 +1603,7 @@ def get_user_record(account):
     connection = get_mysql_connection()
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT user_id, username, password_hash FROM users WHERE username = %s ORDER BY user_id ASC LIMIT 1",
+            "SELECT user_id, username, password_hash FROM `user` WHERE username = %s ORDER BY user_id ASC LIMIT 1",
             (account,),
         )
         return cursor.fetchone()
@@ -1677,21 +1613,13 @@ def get_user_preference(device_id, account):
     connection = get_mysql_connection()
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT user_id FROM users WHERE username = %s ORDER BY user_id ASC LIMIT 1",
+            "SELECT user_id FROM `user` WHERE username = %s ORDER BY user_id ASC LIMIT 1",
             (account,),
         )
         user_row = cursor.fetchone()
         if not user_row:
             return None
-        cursor.execute(
-            """
-            SELECT id, user_id, device_id, like_status
-            FROM user_preferences
-            WHERE device_id = %s AND user_id = %s
-            """,
-            (device_id, user_row["user_id"]),
-        )
-        return cursor.fetchone()
+        return None
 
 
 # ---------------------------------------------------------------------------

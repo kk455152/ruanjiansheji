@@ -2,6 +2,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 import time
+import uuid
 
 from flask import Blueprint, jsonify, request
 
@@ -54,12 +55,12 @@ TABLE_LABELS = {
 FIELD_COMMENTS = {
     "id": ("ID", "系统自增主键。"),
     "user_id": ("用户ID", "关联 user 表的小程序用户主键。"),
-    "username": ("用户名", "登录名或业务用户账号，需唯一。"),
+    "username": ("用户名", "演示数据使用不带数字尾号的中文姓名，唯一性由生成批次控制。"),
     "password_hash": ("密码", "当前按要求直接存明文密码，方便维护页查看和修改。"),
     "phone": ("手机号", "用户或管理员联系电话。"),
     "created_at": ("创建时间", "记录创建时间，格式 YYYY-MM-DD HH:MM:SS。"),
     "updated_at": ("更新时间", "记录最后更新时间。"),
-    "nickname": ("昵称", "用户展示昵称。"),
+    "nickname": ("昵称", "用户展示称呼，使用自然简称或音乐化昵称，不直接照抄用户名。"),
     "avatar": ("头像", "头像图片地址，可为空。"),
     "email": ("邮箱", "邮箱地址。"),
     "status": ("状态", "业务状态，例如 1/0、active、paid、success。"),
@@ -72,13 +73,13 @@ FIELD_COMMENTS = {
     "wechat_open_id": ("微信OpenID", "微信快捷登录绑定标识，可为空。"),
     "is_super_admin": ("是否超级管理员", "1 表示超级管理员，0 表示普通管理员。"),
     "device_id": ("设备ID", "关联 device 表的设备主键。"),
-    "device_number": ("设备编号", "设备唯一 SN/编号，如 SHMINI-A1-0001。"),
+    "device_number": ("设备编号", "设备唯一 SN/编号，如 SPK-A1-0001。"),
     "device_sn": ("设备SN", "对外展示的设备序列号。"),
-    "model_name": ("设备型号", "设备型号，如 SH-Mini A1。"),
+    "model_name": ("设备型号", "演示数据只使用 A1、A2、B1 三种型号，方便筛选和记忆。"),
     "device_model": ("设备型号", "日志中记录的设备型号。"),
     "device_name": ("设备名称", "设备展示名称，如客厅音箱。"),
     "device_type": ("设备类型", "音箱填 speaker；真实表为必填字段。"),
-    "firmware_version": ("固件版本", "设备当前固件版本。"),
+    "firmware_version": ("固件版本", "演示数据只使用 v1.0.0、v1.0.1、v1.1.0。"),
     "last_active": ("最后活跃时间", "设备最后一次心跳或活跃时间。"),
     "online_status": ("在线状态", "online 或 offline。"),
     "ip_address": ("IP地址", "设备或操作来源 IP。"),
@@ -102,13 +103,14 @@ FIELD_COMMENTS = {
     "history_id": ("历史ID", "播放历史主键。"),
     "play_duration": ("播放时长", "播放时长，单位秒。"),
     "style": ("音乐风格", "歌曲或播放记录风格，如 pop、rock。"),
+    "source_platform": ("来源平台", "播放记录来源平台，如 网易云音乐、QQ音乐。"),
     "user_id_1": ("用户1", "好友关系中的第一个用户 ID。"),
     "user_id_2": ("用户2", "好友关系中的第二个用户 ID。"),
     "binding_id": ("绑定ID", "用户设备绑定表自增主键。"),
-    "custom_device_name": ("自定义设备名", "用户给设备设置的显示名称。"),
+    "custom_device_name": ("自定义设备名", "用户给设备设置的显示名称，演示数据按房间生成，如客厅音箱、书房播放器。"),
     "is_primary": ("是否主设备", "1 表示主设备，0 表示非主设备。"),
     "default_room": ("默认房间", "设备所在默认房间。"),
-    "current_network": ("当前网络", "设备当前连接的 Wi-Fi 名称。"),
+    "current_network": ("当前网络", "设备当前连接的真实风格 Wi-Fi SSID，如 ChinaNet-5G-A8F2、CMCC-Home-7C21。"),
     "bind_time": ("绑定时间", "用户绑定设备的时间。"),
     "feedback_id": ("反馈ID", "用户反馈主键。"),
     "feedback_no": ("反馈编号", "业务反馈编号。"),
@@ -428,6 +430,7 @@ TABLE_CONFIG = {
             "play_duration",
             "created_at",
             "style",
+            "source_platform",
         ],
         "insert_columns": [
             "device_id",
@@ -436,6 +439,7 @@ TABLE_CONFIG = {
             "play_duration",
             "created_at",
             "style",
+            "source_platform",
         ],
         "update_columns": [
             "device_id",
@@ -444,6 +448,7 @@ TABLE_CONFIG = {
             "play_duration",
             "created_at",
             "style",
+            "source_platform",
         ],
     },
 
@@ -929,7 +934,7 @@ FRONT_DATA_CATALOG = [
     {"group": "运营管理", "title": "设备日志数量 / 内容", "frontend": "设备日志", "api": "/api/admin/operator/device/logs", "table": "device_log", "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "新增日志行增加列表；修改 log_level/title/content 改变前端展示。"},
     {"group": "小程序播放", "title": "播放历史 / 歌曲名 / 播放次数", "frontend": "小程序播放历史、后台热歌来源", "api": "/api/play-history 与 /api/admin/market/top-songs", "table": "play_history", "fields": ["device_id", "user_id", "mapping_id", "play_duration", "created_at", "style"], "operation": "新增播放记录会增加播放历史；每日任务会把播放记录聚合到 hot_ranking_daily 和 daily_stats。"},
     {"group": "小程序播放", "title": "歌曲标题 / 歌手 / 平台", "frontend": "小程序当前歌曲、热歌排行", "api": "/api/song-info 与 /api/admin/market/top-songs", "table": "media_mapping", "fields": ["song_title", "artist", "platform", "external_id", "cover_url"], "operation": "修改 media_mapping 可改变歌曲名、歌手、平台和封面；play_history.mapping_id 关联到这张表。"},
-    {"group": "日报任务", "title": "每日自动汇总时间", "frontend": "所有日报型图表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["generated_at", "updated_at"], "operation": "“运行每日汇总”会聚合现有明细，并自动补齐上次汇总日期到今天之间漏掉的日期；“生成模拟数据并汇总”会先写入中文用户、中文昵称、网易云音乐/QQ音乐、订单和播放记录，再刷新日报表。"},
+    {"group": "日报任务", "title": "每日自动汇总时间", "frontend": "所有日报型图表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["generated_at", "updated_at"], "operation": "“运行每日汇总”只聚合现有明细，并自动补齐上次汇总日期到今天之间漏掉的日报；每日新增明细由后端自动任务生成。"},
 ]
 
 FRONT_DATA_CATALOG.extend([
@@ -960,18 +965,42 @@ FRONT_DATA_CATALOG.extend([
     {"group": "系统管理", "title": "角色权限矩阵", "frontend": "角色权限 / roles", "api": "/api/admin/super/roles", "table": "system_config", "fields": ["config_group", "config_key", "config_name", "description"], "operation": "角色权限可由 system_config 的 admin_role 配置覆盖；否则使用代码内默认角色目录。"},
     {"group": "系统管理", "title": "角色权限保存", "frontend": "角色权限 / 编辑权限", "api": "/api/admin/super/roles/permissions", "table": "system_config", "fields": ["config_group", "config_key", "description"], "operation": "保存权限会写入持久化 state 的 rolePermissions，不直接改前端菜单代码。"},
     {"group": "系统管理", "title": "系统配置", "frontend": "系统配置 / settings", "api": "/api/admin/super/system/config", "table": "system_config", "fields": ["config_key", "config_value", "config_type", "config_group", "config_name", "description"], "operation": "系统名称、主题、上传限制、接口超时、数据保留等来自 system_config；缺失时用后端默认值。"},
-    {"group": "系统监控", "title": "系统监控指标", "frontend": "系统监控 / metrics", "api": "/api/admin/super/monitor", "table": "user,device,user_feedback", "fields": ["user_id", "device_id", "online_status", "status", "feedback_id"], "operation": "totalUsers 来自 user，totalDevices/onlineDevices 来自 device，feedbackTotal 来自 user_feedback。"},
+    {"group": "系统监控", "title": "系统监控指标", "frontend": "系统监控 / metrics", "api": "/api/admin/super/monitor", "table": "user,device,user_feedback", "targetTable": "user", "relatedTables": ["device", "user_feedback"], "fields": ["user_id", "device_id", "online_status", "status", "feedback_id"], "targetFields": ["user_id", "status", "created_at"], "operation": "totalUsers 来自 user，totalDevices/onlineDevices 来自 device，feedbackTotal 来自 user_feedback。"},
     {"group": "系统监控", "title": "服务状态", "frontend": "系统监控 / services", "api": "/api/admin/super/monitor", "table": "system_config", "fields": ["config_group", "config_name", "config_value", "description"], "operation": "读取 config_group='monitor_service'；config_value 是状态，description 可填延迟毫秒。"},
     {"group": "系统监控", "title": "最近异常", "frontend": "系统监控 / exceptions", "api": "/api/admin/super/monitor", "table": "system_config", "fields": ["config_group", "config_key", "config_name", "config_type", "description"], "operation": "优先读取 monitor_exception 配置；为空时后端从离线设备、待处理反馈、失败固件任务动态生成异常。"},
     {"group": "系统公告", "title": "公告列表", "frontend": "系统公告 / notices", "api": "/api/admin/super/notices", "table": "system_config", "fields": ["config_group", "config_key", "config_value", "config_type", "config_name", "description"], "operation": "公告来自 notice/notices/system_notice 配置组或 notice.* key；新增公告会新增 system_config 行。"},
     {"group": "审计日志", "title": "后台操作审计", "frontend": "审计日志 / audit", "api": "/api/admin/super/security/logs", "table": "admin_operation_log", "fields": ["admin_id", "action", "module", "operation_name", "path", "request_method", "result_status", "error_message", "created_at"], "operation": "审计日志按 created_at/log_id 倒序；error_message 或非 success 状态会显示 warning。"},
     {"group": "账户信息", "title": "当前登录账号资料", "frontend": "个人信息 / account", "api": "/api/admin/profile", "table": "admin_user", "fields": ["username", "role", "real_name", "job_no", "position", "phone", "email", "wechat_open_id"], "operation": "登录 token 解析当前账号；资料来自 admin_user 或 DEFAULT_ADMINS 回退。"},
-    {"group": "模拟原始数据", "title": "中文模拟用户与画像", "frontend": "维护页 / 生成模拟数据并汇总", "api": "/api/db/daily-stats/run", "table": "user,user_profile,auth_token", "fields": ["username", "nickname", "age", "age_range", "province_name", "active_level", "value_level", "bound_platforms", "platform_type"], "operation": "生成模拟数据会写中文用户名、昵称、地区、年龄、活跃/价值等级；绑定平台只写网易云音乐或 QQ音乐。"},
-    {"group": "模拟原始数据", "title": "中文模拟设备与绑定", "frontend": "维护页 / 生成模拟数据并汇总", "api": "/api/db/daily-stats/run", "table": "device,user_device_binding", "fields": ["device_number", "model_name", "online_status", "firmware_version", "custom_device_name", "default_room", "bind_time"], "operation": "生成模拟设备会同步 status 与 online_status，并写用户设备绑定关系、房间和网络。"},
-    {"group": "模拟原始数据", "title": "中文模拟订单", "frontend": "维护页 / 生成模拟数据并汇总", "api": "/api/db/daily-stats/run", "table": "sales_order", "fields": ["order_no", "user_id", "device_id", "pay_amount", "pay_status", "province_name", "created_at"], "operation": "模拟订单 pay_status=paid，会进入销售额、订单数、区域销售、购买留存分母。"},
-    {"group": "模拟原始数据", "title": "中文模拟歌曲与播放", "frontend": "维护页 / 生成模拟数据并汇总", "api": "/api/db/daily-stats/run", "table": "media_mapping,play_history", "fields": ["song_title", "artist", "platform", "external_id", "play_duration", "source_platform", "created_at"], "operation": "模拟歌曲平台只用网易云音乐/QQ音乐；播放记录是热歌、播放总量、活跃用户、留存分子的原始来源。"},
+    {"group": "模拟原始数据", "title": "中文模拟用户与画像", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "user,user_profile,auth_token", "targetTable": "user_profile", "relatedTables": ["user", "auth_token"], "fields": ["username", "nickname", "age", "age_range", "province_name", "active_level", "value_level", "bound_platforms", "platform_type"], "targetFields": ["user_id", "nickname", "age", "age_range", "province_name", "active_level", "value_level", "bound_platforms"], "operation": "每日自动任务写入中文用户名、自然昵称、地区、年龄、活跃/价值等级；绑定平台只写网易云音乐或 QQ音乐。"},
+    {"group": "模拟原始数据", "title": "中文模拟设备与绑定", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "device,user_device_binding", "targetTable": "user_device_binding", "relatedTables": ["device"], "fields": ["device_number", "model_name", "online_status", "firmware_version", "custom_device_name", "default_room", "bind_time"], "targetFields": ["user_id", "device_id", "custom_device_name", "default_room", "current_network", "bind_time"], "operation": "每日自动任务同步 status 与 online_status，并写用户设备绑定关系、房间和真实风格 Wi-Fi。"},
+    {"group": "模拟原始数据", "title": "中文模拟订单", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "sales_order", "fields": ["order_no", "user_id", "device_id", "pay_amount", "pay_status", "province_name", "created_at"], "operation": "模拟订单 pay_status=paid，会进入销售额、订单数、区域销售、购买留存分母。"},
+    {"group": "模拟原始数据", "title": "中文模拟歌曲与播放", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "media_mapping,play_history", "targetTable": "play_history", "relatedTables": ["media_mapping"], "fields": ["song_title", "artist", "platform", "external_id", "play_duration", "source_platform", "created_at"], "targetFields": ["device_id", "user_id", "mapping_id", "play_duration", "source_platform", "created_at"], "operation": "播放记录是热歌、播放总量、活跃用户、留存分子的原始来源；改完明细后运行每日汇总重算。"},
     {"group": "汇总计算数据", "title": "日报主表计算结果", "frontend": "趋势/决策/报表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["total_play_count", "unique_user_count", "unique_device_count", "online_device_count", "new_user_count", "new_device_count", "total_sales_amount"], "operation": "daily_stats 是计算结果，不是原始数据；改原始 user/device/sales_order/play_history 后运行每日汇总重算。"},
-    {"group": "汇总计算数据", "title": "地区/热歌/分群/活跃日报", "frontend": "地区热力、热歌排行、用户分群", "api": "/api/db/daily-stats/run", "table": "region_stats_daily,hot_ranking_daily,user_value_segment_daily,user_activity_daily,analytics_metric_daily", "fields": ["stat_date", "ranking_date", "metric_date", "metric_value", "user_count", "sales_amount"], "operation": "这些表都由每日汇总从原始明细计算；需要改口径时改 daily_stats_job.py，维护表值只影响当前展示。"},
+    {"group": "汇总计算数据", "title": "地区/热歌/分群/活跃日报", "frontend": "地区热力、热歌排行、用户分群", "api": "/api/db/daily-stats/run", "table": "region_stats_daily,hot_ranking_daily,user_value_segment_daily,user_activity_daily,analytics_metric_daily", "targetTable": "region_stats_daily", "relatedTables": ["hot_ranking_daily", "user_value_segment_daily", "user_activity_daily", "analytics_metric_daily"], "fields": ["stat_date", "ranking_date", "metric_date", "metric_value", "user_count", "sales_amount"], "targetFields": ["stat_date", "region_name", "user_count", "active_user_count", "order_count", "sales_amount"], "operation": "这些表都由每日汇总从原始明细计算；需要改口径时改 daily_stats_job.py，维护表值只影响当前展示。"},
+])
+
+FRONT_DATA_CATALOG.extend([
+    {"group": "设备绑定与解绑", "title": "设备是否真的解绑", "frontend": "设备管理 / 解绑设备、绑定用户详情", "api": "/api/admin/operator/device/unbind；/api/admin/operator/device/bound-user", "table": "user_device_binding", "targetTable": "user_device_binding", "relatedTables": ["user", "user_profile", "device"], "fields": ["user_id", "device_id", "custom_device_name", "default_room", "current_network", "bind_time"], "operation": "要确认解绑是否真的生效，就到 user_device_binding 按 device_id 或 user_id 搜索；解绑成功后对应 user_id + device_id 这一行应该不存在。"},
+    {"group": "设备绑定与解绑", "title": "绑定用户资料来源", "frontend": "设备详情 / 当前绑定用户", "api": "/api/admin/operator/device/bound-user", "table": "user_device_binding", "targetTable": "user_device_binding", "relatedTables": ["user", "user_profile", "device"], "fields": ["user_id", "device_id", "bind_time"], "operation": "绑定关系在 user_device_binding；用户昵称、电话、地区、活跃/价值等级分别来自 user 和 user_profile；设备名来自 device。"},
+    {"group": "设备绑定与解绑", "title": "设备基础信息与归属", "frontend": "设备管理 / 设备列表", "api": "/api/admin/operator/device/list；/api/admin/operator/device/detail", "table": "device", "targetTable": "device", "relatedTables": ["user_device_binding"], "fields": ["device_id", "device_number", "device_name", "model_name", "online_status", "firmware_version"], "operation": "设备本体在 device；如果只删除 user_device_binding，设备仍存在，但绑定用户会消失。要删除设备本体才维护 device。"},
+    {"group": "MongoDB 运行态", "title": "设备实时状态", "frontend": "设备详情 / 音量、电量、信号、网络", "api": "/api/admin/operator/device/runtime-status", "table": "device_runtime", "source": "mongo", "collection": "device_runtime", "fields": ["device_id", "deviceId", "battery", "volume", "signalStrength", "networkType"], "operation": "运行态不是 MySQL；去 MongoDB 的 device_runtime 集合维护，device_id/deviceId 要能对应 MySQL device.device_id。"},
+    {"group": "MongoDB 运行态", "title": "播放器当前状态", "frontend": "播放状态、当前歌曲、播放进度", "api": "MongoDB runtime 读取", "table": "player_state", "source": "mongo", "collection": "player_state", "fields": ["device_id", "deviceId", "isPlaying", "songId", "songName", "artist", "playTime"], "operation": "当前播放态在 MongoDB player_state；它影响当前歌曲、播放/暂停状态和播放进度。"},
+    {"group": "MongoDB 运行态", "title": "播放队列", "frontend": "下一首、播放队列", "api": "MongoDB runtime 读取", "table": "play_queue", "source": "mongo", "collection": "play_queue", "fields": ["device_id", "deviceId", "queue"], "operation": "队列数据在 MongoDB play_queue；queue 里每首歌要包含 songId/songName/artist 等前端可读字段。"},
+    {"group": "MongoDB 运行态", "title": "运行操作日志", "frontend": "运行态操作记录", "api": "MongoDB operation_logs", "table": "operation_logs", "source": "mongo", "collection": "operation_logs", "fields": ["requestId", "device_id", "action", "result", "created_at"], "operation": "设备运行过程中的临时操作记录在 MongoDB operation_logs；后台审计日志仍在 MySQL admin_operation_log。"},
+    {"group": "MongoDB 运行态", "title": "歌曲元数据缓存", "frontend": "歌曲封面、歌手、时长缓存", "api": "MongoDB media_metadata", "table": "media_metadata", "source": "mongo", "collection": "media_metadata", "fields": ["song_id", "external_id", "name", "artist", "cover_url", "duration"], "operation": "歌曲缓存数据在 MongoDB media_metadata；正式热歌排行仍主要看 MySQL media_mapping、play_history、hot_ranking_daily。"},
+    {"group": "系统账号与权限", "title": "管理员和老板账号", "frontend": "用户管理 / 管理员与绑定用户", "api": "/api/admin/super/users", "table": "admin_user", "targetTable": "admin_user", "fields": ["admin_id", "username", "password_hash", "role", "status", "real_name", "job_no", "phone", "email", "last_login_at"], "operation": "用户管理页现在只显示管理员和老板账号；账号资料来自 admin_user，默认账号来自代码兜底，不再混入普通业务用户。"},
+    {"group": "系统账号与权限", "title": "超级管理员权限必须全选", "frontend": "角色权限矩阵 / 超级管理员", "api": "/api/admin/super/roles", "table": "system_config", "targetTable": "system_config", "fields": ["config_group", "config_key", "config_name", "description"], "operation": "角色权限保存覆盖在 system_config 或后台 state；但 super_admin 后端强制返回权限目录全集，旧配置不能裁剪超级管理员。"},
+    {"group": "系统账号与权限", "title": "后台登录与最近登录", "frontend": "登录页、个人信息、用户管理最近登录", "api": "/api/admin/login；/api/admin/profile", "table": "admin_user", "targetTable": "admin_user", "fields": ["username", "password_hash", "last_login_at", "status"], "operation": "登录成功会更新 admin_user.last_login_at；默认账号没有数据库行时，会从后端默认管理员配置回显。"},
+    {"group": "公告与审计", "title": "系统公告创建结果", "frontend": "系统公告 / 新建公告", "api": "/api/admin/super/notices", "table": "system_config", "targetTable": "system_config", "fields": ["config_key", "config_value", "config_type", "config_group", "config_name", "description", "created_at", "updated_at"], "operation": "公告写在 system_config，config_group 为 notice/notices/system_notice 或 config_key 以 notice. 开头；创建后应该能在这里查到新行。"},
+    {"group": "公告与审计", "title": "审计与安全日志", "frontend": "审计日志 / 操作日志、登录日志、安全事件", "api": "/api/admin/super/security/logs", "table": "admin_operation_log", "targetTable": "admin_operation_log", "fields": ["log_id", "admin_id", "action", "module", "operation_name", "path", "request_method", "ip_address", "result_status", "error_message", "created_at"], "operation": "真实后台操作写入 admin_operation_log；谁、什么时候、做了什么、对象、结果和 IP 都应能在这张表维护或核验。"},
+    {"group": "反馈与公告", "title": "用户反馈处理结果", "frontend": "用户反馈 / 处理反馈", "api": "/api/admin/operator/feedback/handle", "table": "user_feedback", "targetTable": "user_feedback", "fields": ["feedback_id", "feedback_no", "status", "handler_name", "reply_content", "handled_at", "closed_at"], "operation": "处理反馈会修改 user_feedback.status、handler_name、reply_content、handled_at；如果前端状态不对就查这些字段。"},
+    {"group": "设备固件与任务", "title": "固件包维护", "frontend": "设备固件 / 固件包列表", "api": "/api/admin/operator/device/firmware-packages", "table": "device_firmware", "targetTable": "device_firmware", "fields": ["firmware_id", "model_name", "version", "version_code", "file_size", "status", "created_at"], "operation": "固件包列表来自 device_firmware；status=deleted/disabled 的包不会显示。"},
+    {"group": "设备固件与任务", "title": "固件发布批次", "frontend": "设备固件 / 发布与灰度批次", "api": "/api/admin/operator/device/firmware-version", "table": "device_firmware_release", "targetTable": "device_firmware_release", "fields": ["release_id", "firmware_id", "release_no", "release_scope", "status", "created_at"], "operation": "固件发布批次在 device_firmware_release；它和单设备升级任务不是一张表。"},
+    {"group": "设备固件与任务", "title": "固件升级任务", "frontend": "任务中心 / 固件升级任务", "api": "/api/admin/operator/device/firmware-tasks；/api/admin/operator/device/firmware-task", "table": "device_firmware_update_task", "targetTable": "device_firmware_update_task", "fields": ["task_id", "task_no", "device_id", "current_version", "target_version", "status", "progress", "fail_reason", "created_at"], "operation": "下发灰度任务会写 device_firmware_update_task；失败原因、进度、状态都在这里核验。"},
+    {"group": "播放与趋势", "title": "每日播放次数趋势", "frontend": "趋势分析 / 每日播放次数趋势", "api": "/api/admin/super/trend/growth?type=play", "table": "daily_stats", "targetTable": "daily_stats", "relatedTables": ["play_history"], "fields": ["stat_date", "total_play_count", "total_play_duration_seconds", "unique_user_count", "unique_device_count"], "operation": "趋势图读 daily_stats.total_play_count；原始播放明细在 play_history，改原始明细后需要运行每日汇总。"},
+    {"group": "播放与趋势", "title": "播放原始明细", "frontend": "播放趋势、热歌、留存分子", "api": "/api/db/daily-stats/run", "table": "play_history", "targetTable": "play_history", "relatedTables": ["media_mapping", "daily_stats", "hot_ranking_daily"], "fields": ["history_id", "user_id", "device_id", "mapping_id", "play_duration", "source_platform", "created_at", "style"], "operation": "play_history 是播放次数、播放时长、活跃用户、留存分子的原始来源；删除这里的明细后要补跑 daily_stats。"},
+    {"group": "播放与趋势", "title": "歌曲映射与平台", "frontend": "热歌排行 / 平台来源", "api": "/api/admin/market/top-songs", "table": "media_mapping", "targetTable": "media_mapping", "relatedTables": ["play_history", "hot_ranking_daily"], "fields": ["mapping_id", "song_title", "artist", "platform", "external_id", "cover_url"], "operation": "歌曲名称、歌手、平台映射来自 media_mapping；播放记录 source_platform 和映射 platform 会共同影响热歌展示。"},
+    {"group": "关系与社交", "title": "好友关系", "frontend": "小程序好友关系、社交数据", "api": "/api/db/friendship/detail", "table": "friendship", "targetTable": "friendship", "fields": ["user_id_1", "user_id_2"], "operation": "friendship 是联合主键表；维护页现在会使用 detail 接口删除 user_id_1 + user_id_2 对应关系。"},
 ])
 
 
@@ -1161,7 +1190,64 @@ UNIQUE_SAMPLE_FIELDS = {
 
 
 def unique_sample_suffix():
-    return datetime.now().strftime("%m%d%H%M%S") + str(int(time.time() * 1000))[-3:]
+    return datetime.now().strftime("%m%d%H%M%S") + f"{uuid.uuid4().int % 100000000:08d}"
+
+
+SAMPLE_SURNAMES = [
+    "林", "陈", "周", "苏", "顾", "许", "沈", "陆", "赵", "唐", "宋", "何",
+    "韩", "梁", "程", "孟", "秦", "夏", "叶", "方", "罗", "白", "魏", "姜",
+]
+SAMPLE_GIVEN_NAMES = [
+    "清和", "知远", "安宁", "沐阳", "思语", "景行", "若溪", "星河", "云舒", "予安",
+    "听澜", "书白", "南风", "嘉树", "初夏", "青禾", "明川", "以宁", "念真", "晚晴",
+]
+SAMPLE_NICK_PREFIXES = [
+    "晨光", "晚风", "星河", "南山", "海盐", "青柠", "云朵", "月白", "竹影", "晴川",
+]
+SAMPLE_NICK_SUFFIXES = [
+    "电台", "歌单", "随身听", "音乐盒", "唱片架", "点歌台", "小屋", "频道",
+]
+
+
+def sample_index(suffix, offset=0):
+    try:
+        return int("".join(ch for ch in str(suffix) if ch.isdigit())[-8:]) + offset
+    except ValueError:
+        return int(time.time() * 1000) + offset
+
+
+def natural_user_fields(suffix):
+    index = sample_index(suffix)
+    surname = SAMPLE_SURNAMES[index % len(SAMPLE_SURNAMES)]
+    given = SAMPLE_GIVEN_NAMES[(index // len(SAMPLE_SURNAMES)) % len(SAMPLE_GIVEN_NAMES)]
+    username = f"{surname}{given}"
+    prefix = SAMPLE_NICK_PREFIXES[index % len(SAMPLE_NICK_PREFIXES)]
+    suffix_word = SAMPLE_NICK_SUFFIXES[(index // 3) % len(SAMPLE_NICK_SUFFIXES)]
+    nickname_options = [
+        f"{given[-1]}的{suffix_word}",
+        f"{given}{suffix_word}",
+        f"{prefix}{given[-1]}",
+        f"{given[-1]}在听歌",
+        f"{prefix}{suffix_word}",
+    ]
+    nickname = nickname_options[(index // 7) % len(nickname_options)]
+    if nickname == username:
+        nickname = f"{given[-1]}的歌单"
+    return username, nickname
+
+
+def ensure_unique_user_sample(cursor, sample):
+    if not sample.get("username"):
+        return sample
+    for attempt in range(12):
+        cursor.execute("SELECT 1 FROM `user` WHERE username=%s LIMIT 1", (sample["username"],))
+        if not cursor.fetchone():
+            return sample
+        username, nickname = natural_user_fields(f"{unique_sample_suffix()}{attempt}")
+        sample["username"] = username
+        sample["nickname"] = nickname
+        sample["email"] = f"user{unique_sample_suffix()}@smart-speaker.local"
+    return sample
 
 
 def uniquify_sample_record(table_key, data):
@@ -1172,13 +1258,31 @@ def uniquify_sample_record(table_key, data):
         if value in (None, ""):
             continue
         text = str(value)
-        if field == "email" and "@" in text:
+        if table_key == "device" and field == "device_number":
+            parts = text.split("-")
+            if len(parts) >= 3 and parts[-1].isdigit():
+                sample[field] = "-".join(parts[:-1] + [suffix[-4:]])
+            else:
+                sample[field] = f"{text}-{suffix[-4:]}"[:250]
+        elif field == "email" and "@" in text:
             name, domain = text.split("@", 1)
             sample[field] = f"{name}+{suffix}@{domain}"
         elif field == "phone":
             sample[field] = f"139{suffix[-8:]}"[:11]
         else:
             sample[field] = f"{text}-{suffix}"[:250]
+    if table_key == "user":
+        username, nickname = natural_user_fields(suffix)
+        sample["username"] = username
+        sample["nickname"] = nickname
+        sample["password_hash"] = "123456"
+        sample["status"] = sample.get("status") or "active"
+        if sample.get("email"):
+            sample["email"] = f"user{suffix}@smart-speaker.local"
+    if table_key == "user_profile":
+        _, nickname = natural_user_fields(suffix)
+        sample["nickname"] = nickname
+        sample["user_status"] = sample.get("user_status") or "active"
     return normalize_record(table_key, sample)
 
 
@@ -1481,6 +1585,58 @@ def front_catalog_snapshot():
                 "play_history": f"{int(scalar_value(cursor, 'SELECT COUNT(*) AS c FROM play_history') or 0)} 条播放记录",
                 "media_mapping": f"{int(scalar_value(cursor, 'SELECT COUNT(*) AS c FROM media_mapping') or 0)} 首歌曲映射",
             })
+            for table_name in [
+                "auth_token",
+                "user_device_binding",
+                "admin_user",
+                "system_config",
+                "admin_operation_log",
+                "region_stats_daily",
+                "user_activity_daily",
+                "user_value_segment_daily",
+                "analytics_metric_daily",
+                "device_firmware",
+                "device_firmware_release",
+                "device_firmware_update_task",
+                "friendship",
+            ]:
+                snapshot.setdefault(
+                    table_name,
+                    f"{int(scalar_value(cursor, f'SELECT COUNT(*) AS c FROM {quote_identifier(table_name)}') or 0)} 条记录",
+                )
+            cursor.execute(
+                """
+                SELECT stat_date, total_play_count, unique_user_count, unique_device_count,
+                       total_sales_amount
+                FROM daily_stats
+                ORDER BY stat_date DESC
+                LIMIT 1
+                """
+            )
+            latest_daily = cursor.fetchone() or {}
+            if latest_daily:
+                snapshot["daily_stats"] = (
+                    f"{latest_daily.get('stat_date')}：播放 {int(latest_daily.get('total_play_count') or 0)} 次，"
+                    f"活跃用户 {int(latest_daily.get('unique_user_count') or 0)}，"
+                    f"活跃设备 {int(latest_daily.get('unique_device_count') or 0)}，"
+                    f"销售额 {float(latest_daily.get('total_sales_amount') or 0):.2f}"
+                )
+        try:
+            db = mongo_db()
+            if db is not None:
+                for collection_name in [
+                    "device_runtime",
+                    "player_state",
+                    "play_queue",
+                    "operation_logs",
+                    "media_metadata",
+                    "song_info",
+                    "play_logs",
+                ]:
+                    if collection_name in db.list_collection_names():
+                        snapshot[collection_name] = f"{db[collection_name].count_documents({})} 个文档"
+        except Exception:
+            pass
     except Exception as exc:
         snapshot["error"] = f"当前值读取失败：{exc}"
     finally:
@@ -1502,49 +1658,11 @@ def attach_catalog_current_values(items):
         elif title in ("普通用户 / 高活用户环图", "活跃度 / 活跃用户"):
             copy["current"] = snapshot.get("activity")
         else:
-            copy["current"] = snapshot.get(table) or snapshot.get("error") or "暂无当前值"
+            target = copy.get("collection") or copy.get("targetTable") or table
+            first_table = str(target or "").split(",")[0].strip()
+            copy["current"] = snapshot.get(first_table) or snapshot.get(table) or snapshot.get("error") or "暂无当前值"
         enriched.append(copy)
     return enriched
-
-
-@db_api.route("/maintenance/fix-logical-data", methods=["POST"])
-def fix_logical_data():
-    conn = None
-    try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                UPDATE user_profile
-                SET age_range = CASE
-                    WHEN age IS NULL THEN age_range
-                    WHEN age < 18 THEN '18-'
-                    WHEN age <= 25 THEN '18-25'
-                    WHEN age <= 35 THEN '26-35'
-                    WHEN age <= 45 THEN '36-45'
-                    ELSE '46+'
-                END,
-                updated_at = NOW()
-                WHERE age IS NOT NULL
-                  AND COALESCE(age_range, '') <> CASE
-                    WHEN age < 18 THEN '18-'
-                    WHEN age <= 25 THEN '18-25'
-                    WHEN age <= 35 THEN '26-35'
-                    WHEN age <= 45 THEN '36-45'
-                    ELSE '46+'
-                  END
-                """
-            )
-            fixed_age_ranges = cursor.rowcount
-        conn.commit()
-        return success({"fixedAgeRanges": fixed_age_ranges}, "逻辑数据修复完成")
-    except Exception as exc:
-        if conn:
-            conn.rollback()
-        return error(f"逻辑数据修复失败: {exc}", 500)
-    finally:
-        if conn:
-            conn.close()
 
 
 @db_api.route("/front-data-catalog", methods=["GET"])
@@ -1830,6 +1948,8 @@ def sample_record(table_key):
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
             data = uniquify_sample_record(table_key, build_sample_record(cursor, config))
+            if table_key == "user":
+                data = ensure_unique_user_sample(cursor, data)
         return success(serialize_row(data), "real sample loaded")
     except Exception as exc:
         return error(f"real sample load failed: {exc}", 500)
