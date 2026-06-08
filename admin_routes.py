@@ -1871,36 +1871,7 @@ def daily_stats_rows(limit=12):
 
 
 def admin_users_data():
-    rows = cached_mysql_all(
-        """
-        SELECT u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username) AS display_name,
-               u.phone, u.status, u.created_at, u.last_login_at,
-               COUNT(DISTINCT b.device_id) AS bound_device_count,
-               GROUP_CONCAT(DISTINCT COALESCE(b.custom_device_name, d.device_name, d.device_number) SEPARATOR '、') AS bound_devices,
-               MAX(b.bind_time) AS last_bind_time
-        FROM user_device_binding b
-        JOIN `user` u ON u.user_id=b.user_id
-        LEFT JOIN user_profile p ON p.user_id=u.user_id
-        LEFT JOIN device d ON d.device_id=b.device_id
-        GROUP BY u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username),
-                 u.phone, u.status, u.created_at, u.last_login_at
-        ORDER BY MAX(b.bind_time) DESC, u.user_id ASC
-        LIMIT 20
-        """
-    )
-    if not rows:
-        rows = cached_mysql_all(
-            """
-            SELECT u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username) AS display_name,
-                   u.phone, u.status, u.created_at, u.last_login_at,
-                   0 AS bound_device_count, '' AS bound_devices, NULL AS last_bind_time
-            FROM `user` u
-            LEFT JOIN user_profile p ON p.user_id=u.user_id
-            ORDER BY u.user_id ASC
-            LIMIT 20
-            """
-        )
-    users = [
+    return [
         {
             "adminId": admin["adminId"],
             "username": admin["username"],
@@ -1917,27 +1888,6 @@ def admin_users_data():
         }
         for admin in all_admins().values()
     ]
-    for row in rows[:10]:
-        bound_count = _int(row.get("bound_device_count"), 0)
-        users.append(
-            {
-                "adminId": f"user-{row.get('user_id')}",
-                "username": row.get("username") or f"user{row.get('user_id')}",
-                "realName": row.get("display_name") or row.get("username") or "业务用户",
-                "role": "customer",
-                "roleName": "绑定用户",
-                "jobNo": f"绑定 {bound_count} 台" if bound_count else "未绑定设备",
-                "position": "智能音箱用户",
-                "phone": row.get("phone"),
-                "email": "",
-                "status": "active" if str(row.get("status") or "active").lower() in ("1", "active", "normal", "enabled") else "inactive",
-                "lastLoginAt": fmt_dt(row.get("last_login_at") or row.get("last_bind_time") or row.get("created_at")) or "-",
-                "boundDeviceCount": bound_count,
-                "boundDevices": row.get("bound_devices") or "",
-                "editable": False,
-            }
-        )
-    return users
 
 
 def device_admin_rows():
@@ -1997,7 +1947,7 @@ def role_rows():
                     "role": role,
                     "roleName": row.get("config_name") or role,
                     "description": row.get("config_value") or "",
-                    "permissions": permissions or DEFAULT_ROLE_PERMISSIONS.get(role, []),
+                    "permissions": role_permissions_for_display(role, permissions),
                     "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", (role,), fallback=0),
                 }
             )
@@ -2019,7 +1969,7 @@ def role_rows():
                 "role": row.get("role"),
                 "roleName": ROLE_NAME_MAP.get(row.get("role"), row.get("role")),
                 "description": DEFAULT_ROLE_DESCRIPTIONS.get(row.get("role"), ""),
-                "permissions": DEFAULT_ROLE_PERMISSIONS.get(row.get("role"), []),
+                "permissions": role_permissions_for_display(row.get("role")),
                 "userCount": _int(row.get("user_count"), 0),
             }
             for row in db_roles
@@ -2030,28 +1980,28 @@ def role_rows():
             "role": "super_admin",
             "roleName": ROLE_NAME_MAP.get("super_admin", "super_admin"),
             "description": DEFAULT_ROLE_DESCRIPTIONS["super_admin"],
-            "permissions": DEFAULT_ROLE_PERMISSIONS["super_admin"],
+            "permissions": role_permissions_for_display("super_admin"),
             "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("super_admin",), fallback=1),
         },
         {
             "role": "market_admin",
             "roleName": ROLE_NAME_MAP.get("market_admin", "market_admin"),
             "description": DEFAULT_ROLE_DESCRIPTIONS["market_admin"],
-            "permissions": DEFAULT_ROLE_PERMISSIONS["market_admin"],
+            "permissions": role_permissions_for_display("market_admin"),
             "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("market_admin",), fallback=1),
         },
         {
             "role": "operator_admin",
             "roleName": ROLE_NAME_MAP.get("operator_admin", "operator_admin"),
             "description": DEFAULT_ROLE_DESCRIPTIONS["operator_admin"],
-            "permissions": DEFAULT_ROLE_PERMISSIONS["operator_admin"],
+            "permissions": role_permissions_for_display("operator_admin"),
             "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("operator_admin",), fallback=1),
         },
         {
             "role": "boss",
             "roleName": ROLE_NAME_MAP.get("boss", "boss"),
             "description": DEFAULT_ROLE_DESCRIPTIONS["boss"],
-            "permissions": DEFAULT_ROLE_PERMISSIONS["boss"],
+            "permissions": role_permissions_for_display("boss"),
             "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("boss",), fallback=1),
         },
     ]
@@ -2100,6 +2050,13 @@ DEFAULT_ROLE_DESCRIPTIONS = {
 }
 
 
+def role_permissions_for_display(role, permissions=None):
+    if role == "super_admin":
+        return list(PERMISSION_CATALOG.keys())
+    cleaned = [p for p in (permissions or []) if p in PERMISSION_CATALOG]
+    return cleaned or DEFAULT_ROLE_PERMISSIONS.get(role, [])
+
+
 def merged_role_rows():
     """基础角色 + 已保存的权限覆盖。"""
     overrides = admin_state_section("rolePermissions", {})
@@ -2108,7 +2065,9 @@ def merged_role_rows():
         row = dict(base)
         saved = overrides.get(base["role"])
         if isinstance(saved, list):
-            row["permissions"] = [p for p in saved if p in PERMISSION_CATALOG]
+            row["permissions"] = role_permissions_for_display(base["role"], saved)
+        else:
+            row["permissions"] = role_permissions_for_display(base["role"], row.get("permissions"))
         rows.append(row)
     return rows
 
@@ -2288,7 +2247,7 @@ def update_role_permissions():
         return response_error(400, f"包含未知权限：{'、'.join(invalid)}")
 
     # 去重并按目录顺序归一化
-    cleaned = [key for key in PERMISSION_CATALOG if key in set(permissions)]
+    cleaned = list(PERMISSION_CATALOG.keys()) if role == "super_admin" else [key for key in PERMISSION_CATALOG if key in set(permissions)]
 
     overrides = dict(admin_state_section("rolePermissions", {}))
     overrides[role] = cleaned

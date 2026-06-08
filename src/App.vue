@@ -975,10 +975,16 @@ async function createNotice() {
       confirmButtonText: "创建",
       cancelButtonText: "取消",
     })
-    await api("/api/admin/super/notices", {
+    const notice = await api("/api/admin/super/notices", {
       method: "POST",
       body: { title: value, type: "notice", status: "draft" },
     })
+    if (notice?.noticeId) {
+      state.notices = {
+        total: (state.notices.total || 0) + 1,
+        list: [notice, ...(state.notices.list || []).filter((item) => item.noticeId !== notice.noticeId)],
+      }
+    }
     ElMessage.success("公告已创建")
     await loadNotices()
   } catch (error) {
@@ -1671,11 +1677,15 @@ onMounted(restoreSession)
         </div>
       </section>
 
-      <section v-if="state.active === 'audit'" class="panel full">
+      <section v-if="state.active === 'audit'" class="panel full audit-panel">
         <div class="panel-head"><div><h3>审计与安全日志</h3><p>操作日志、登录日志、安全事件</p></div><button class="ghost-button" @click="exportRows('audit.csv', state.audit.list)">导出</button></div>
         <div class="data-table">
-          <div v-for="log in state.audit.list" :key="log.logId" class="table-row">
-            <strong>{{ log.event }}</strong><span>{{ log.actor }} / {{ log.ip }}</span><em>{{ log.createdAt }}</em>
+          <div v-for="log in state.audit.list" :key="log.logId" class="table-row audit-row">
+            <div class="audit-main">
+              <strong>{{ log.event }}</strong>
+              <span>{{ log.operation }} / {{ log.actor }} / {{ log.ip }}</span>
+            </div>
+            <em>{{ log.createdAt }}</em>
           </div>
         </div>
       </section>
@@ -3159,6 +3169,42 @@ button {
   justify-self: end;
 }
 
+.audit-panel .panel-head {
+  align-items: flex-start;
+}
+
+.audit-panel .panel-head > div {
+  min-width: 0;
+}
+
+.audit-panel .panel-head p {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.audit-row {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  cursor: default;
+}
+
+.audit-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.audit-main strong,
+.audit-main span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.audit-row em {
+  align-self: start;
+  white-space: nowrap;
+}
+
 .segmented {
   display: flex;
   gap: 6px;
@@ -3602,6 +3648,10 @@ button {
   .device-row,
   .device-row > button {
     grid-template-columns: 1fr;
+  }
+
+  .audit-row em {
+    justify-self: start;
   }
 
   .row-actions {
