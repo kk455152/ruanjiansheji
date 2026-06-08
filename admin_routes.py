@@ -2219,6 +2219,18 @@ def market_insights():
         for row in recommendation_rows
         if row.get("config_value") or row.get("config_name") or row.get("description")
     ]
+    if not recommendations:
+        if new_users and bound_users < new_users:
+            recommendations.append("新增用户中仍有未绑定设备用户，优先推送配网和绑定引导。")
+        if bound_users and first_play_users < bound_users:
+            recommendations.append("已绑定设备但未完成首播的用户，需要用欢迎歌单和使用教程促进首播。")
+        if first_play_users and retained_users < first_play_users:
+            recommendations.append("首播用户最近 7 天活跃不足，建议推送个性化歌单和定时播放提醒。")
+        high_active_users = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level='high'")
+        if high_active_users:
+            recommendations.append("高活跃用户适合会员权益、复购活动和高频歌单推荐。")
+        if not recommendations:
+            recommendations.append("当前数据量不足，先生成模拟数据并运行每日汇总，再观察新增、绑定、首播和活跃漏斗。")
     return response_ok({
         "funnels": [
             {"label": "新增用户", "value": new_users, "rate": ratio(new_users, base)},
