@@ -1523,8 +1523,7 @@ def unbind_device():
 def device_logs():
     page = max(_int(request.args.get("page"), 1), 1)
     page_size = min(max(_int(request.args.get("pageSize"), 20), 1), 100)
-    offset = (page - 1) * page_size
-    total = count_sql("SELECT COUNT(*) AS c FROM device_log", fallback=0)
+    db_total = count_sql("SELECT COUNT(*) AS c FROM device_log", fallback=0)
     rows = mysql_all(
         """
         SELECT
@@ -1543,31 +1542,212 @@ def device_logs():
         FROM device_log dl
         LEFT JOIN device d ON d.device_id = dl.device_id
         ORDER BY dl.created_at DESC, dl.log_id DESC
-        LIMIT %s OFFSET %s
+        LIMIT 100
         """,
-        (page_size, offset),
     )
-    if rows:
-        result = [
-            {
-                "logId": row.get("log_id"),
-                "deviceId": str(row.get("device_id") or ""),
-                "deviceSn": row.get("device_sn") or "",
-                "deviceName": row.get("device_name") or "",
-                "deviceModel": row.get("device_model") or "",
-                "logType": row.get("log_type") or "",
-                "logLevel": row.get("log_level") or "",
-                "title": row.get("title") or row.get("content") or "",
-                "content": row.get("content") or "",
-                "eventCode": row.get("event_code") or "",
-                "traceId": row.get("trace_id") or "",
-                "createdAt": str(row.get("created_at") or ""),
-            }
-            for row in rows
-        ]
-        return response_ok({"total": total or len(result), "page": page, "pageSize": page_size, "list": result})
+    result = [format_device_log_row(row) for row in rows]
+    synthetic_rows = synthetic_device_log_rows()
+    result.extend(synthetic_rows)
+    result = sorted(result, key=lambda item: item.get("createdAt") or "", reverse=True)
+    start = (page - 1) * page_size
+    visible = result[start:start + page_size]
+    total = (db_total or len(rows)) + len(synthetic_rows)
+    return response_ok({"total": total or len(result), "page": page, "pageSize": page_size, "list": visible})
 
-    return response_ok({"total": total, "page": page, "pageSize": page_size, "list": []})
+
+def format_device_log_row(row):
+    return {
+        "logId": row.get("log_id"),
+        "deviceId": str(row.get("device_id") or ""),
+        "deviceSn": row.get("device_sn") or "",
+        "deviceName": row.get("device_name") or "",
+        "deviceModel": row.get("device_model") or "",
+        "logType": row.get("log_type") or "",
+        "logLevel": row.get("log_level") or "",
+        "title": row.get("title") or row.get("content") or "",
+        "content": row.get("content") or "",
+        "eventCode": row.get("event_code") or "",
+        "traceId": row.get("trace_id") or "",
+        "createdAt": str(row.get("created_at") or ""),
+    }
+
+
+def synthetic_device_log_rows():
+    rows = []
+    device_rows = mysql_all(
+        """
+        SELECT device_id, device_number, device_name, model_name, online_status,
+               status, firmware_version, ip_address, location, last_active
+        FROM device
+        ORDER BY last_active DESC, device_id DESC
+        LIMIT 20
+        """
+    )
+    for row in device_rows:
+        online = device_online(row)
+        title = "设备上线" if online else "设备离线"
+        created_at = fmt_dt(row.get("last_active"))
+        device_name = row.get("device_name") or row.get("device_number") or f"device {row.get('device_id')}"
+        rows.append({
+            "logId": f"device-state-{row.get('device_id')}",
+            "deviceId": str(row.get("device_id") or ""),
+            "deviceSn": row.get("device_number") or "",
+            "deviceName": device_name,
+            "deviceModel": row.get("model_name") or "",
+            "logType": "online" if online else "offline",
+            "logLevel": "info" if online else "warning",
+            "title": title,
+            "content": f"{device_name} 当前{'在线' if online else '离线'}，最近活跃时间：{created_at or '-'}",
+            "eventCode": "DEVICE_ONLINE" if online else "DEVICE_OFFLINE",
+            "traceId": f"device-{row.get('device_id')}-{str(created_at).replace(' ', '-')}",
+            "createdAt": created_at,
+        })
+
+    task_rows = mysql_all(
+        """
+        SELECT t.task_id, t.task_no, t.device_id, t.current_version, t.target_version,
+               t.status, t.progress, t.fail_reason, t.started_at, t.finished_at,
+               t.created_at, t.updated_at,
+               d.device_number, d.device_name, d.model_name, d.ip_address, d.location
+        FROM device_firmware_update_task t
+        LEFT JOIN device d ON d.device_id=t.device_id
+        ORDER BY t.created_at DESC, t.updated_at DESC, t.task_id DESC
+        LIMIT 20
+        """
+    )
+    for row in task_rows:
+        status = str(row.get("status") or "pending")
+        fail_reason = "" if row.get("fail_reason") in ("", "-") else row.get("fail_reason") or ""
+        if fail_reason or status in ("failed", "fail", "error"):
+            title = "固件升级失败"
+            level = "error"
+        elif status in ("success", "finished", "completed"):
+            title = "固件升级完成"
+            level = "info"
+        elif status in ("running", "processing", "upgrading"):
+            title = "固件升级中"
+            level = "info"
+        else:
+            title = "固件升级任务创建"
+            level = "info"
+        device_name = row.get("device_name") or row.get("device_number") or f"device {row.get('device_id') or '-'}"
+        created_at = fmt_dt(row.get("updated_at") or row.get("created_at") or row.get("started_at"))
+        rows.append({
+            "logId": f"firmware-task-{row.get('task_id')}",
+            "deviceId": str(row.get("device_id") or ""),
+            "deviceSn": row.get("device_number") or "",
+            "deviceName": device_name,
+            "deviceModel": row.get("model_name") or "",
+            "logType": "firmware",
+            "logLevel": level,
+            "title": title,
+            "content": f"{device_name} 从 {row.get('current_version') or '-'} 升级到 {row.get('target_version') or '-'}，状态：{status}{'，失败原因：' + fail_reason if fail_reason else ''}",
+            "eventCode": "FIRMWARE_UPDATE_TASK",
+            "traceId": row.get("task_no") or f"firmware-task-{row.get('task_id')}",
+            "createdAt": created_at,
+        })
+    return rows
+
+
+def synthetic_device_log_detail(log_id):
+    text = str(log_id or "")
+    if text.startswith("device-state-"):
+        device_id = text.replace("device-state-", "", 1)
+        row = mysql_one(
+            """
+            SELECT device_id, device_number, device_name, device_type, model_name,
+                   online_status, status, firmware_version, ip_address, location,
+                   last_active
+            FROM device
+            WHERE CAST(device_id AS CHAR)=%s
+            LIMIT 1
+            """,
+            (device_id,),
+        )
+        if not row:
+            return {}
+        online = device_online(row)
+        created_at = fmt_dt(row.get("last_active"))
+        device_name = row.get("device_name") or row.get("device_number") or f"device {row.get('device_id')}"
+        return {
+            "logId": text,
+            "deviceId": str(row.get("device_id") or ""),
+            "deviceSn": row.get("device_number") or "",
+            "deviceName": device_name,
+            "deviceType": row.get("device_type") or "",
+            "deviceTypeText": row.get("device_type") or "",
+            "deviceModel": row.get("model_name") or "",
+            "logType": "online" if online else "offline",
+            "logTypeText": "设备上线" if online else "设备离线",
+            "logLevel": "info" if online else "warning",
+            "logLevelText": "info" if online else "warning",
+            "title": "设备上线" if online else "设备离线",
+            "content": f"{device_name} 当前{'在线' if online else '离线'}，最近活跃时间：{created_at or '-'}",
+            "eventCode": "DEVICE_ONLINE" if online else "DEVICE_OFFLINE",
+            "traceId": f"device-{row.get('device_id')}-{str(created_at).replace(' ', '-')}",
+            "taskId": "",
+            "firmwareVersion": row.get("firmware_version") or "",
+            "onlineStatus": row.get("online_status") or row.get("status") or "",
+            "onlineStatusText": "在线" if online else "离线",
+            "ipAddress": row.get("ip_address") or "",
+            "networkType": "",
+            "location": row.get("location") or "",
+            "extra": {},
+            "stackTrace": None,
+            "requestInfo": {"url": "", "method": "", "requestId": "", "responseCode": None, "responseMessage": ""},
+            "createdAt": created_at,
+        }
+    if text.startswith("firmware-task-"):
+        task_id = text.replace("firmware-task-", "", 1)
+        row = mysql_one(
+            """
+            SELECT t.task_id, t.task_no, t.device_id, t.current_version, t.target_version,
+                   t.status, t.progress, t.fail_reason, t.started_at, t.finished_at,
+                   t.created_at, t.updated_at,
+                   d.device_number, d.device_name, d.device_type, d.model_name,
+                   d.firmware_version, d.online_status, d.ip_address, d.location
+            FROM device_firmware_update_task t
+            LEFT JOIN device d ON d.device_id=t.device_id
+            WHERE CAST(t.task_id AS CHAR)=%s
+            LIMIT 1
+            """,
+            (task_id,),
+        )
+        if not row:
+            return {}
+        status = str(row.get("status") or "pending")
+        fail_reason = "" if row.get("fail_reason") in ("", "-") else row.get("fail_reason") or ""
+        title = "固件升级失败" if fail_reason or status in ("failed", "fail", "error") else "固件升级任务"
+        device_name = row.get("device_name") or row.get("device_number") or f"device {row.get('device_id') or '-'}"
+        return {
+            "logId": text,
+            "deviceId": str(row.get("device_id") or ""),
+            "deviceSn": row.get("device_number") or "",
+            "deviceName": device_name,
+            "deviceType": row.get("device_type") or "",
+            "deviceTypeText": row.get("device_type") or "",
+            "deviceModel": row.get("model_name") or "",
+            "logType": "firmware",
+            "logTypeText": "固件升级",
+            "logLevel": "error" if fail_reason else "info",
+            "logLevelText": "error" if fail_reason else "info",
+            "title": title,
+            "content": f"{device_name} 从 {row.get('current_version') or '-'} 升级到 {row.get('target_version') or '-'}，状态：{status}{'，失败原因：' + fail_reason if fail_reason else ''}",
+            "eventCode": "FIRMWARE_UPDATE_TASK",
+            "traceId": row.get("task_no") or text,
+            "taskId": row.get("task_no") or row.get("task_id") or "",
+            "firmwareVersion": row.get("firmware_version") or row.get("target_version") or "",
+            "onlineStatus": row.get("online_status") or "",
+            "onlineStatusText": row.get("online_status") or "",
+            "ipAddress": row.get("ip_address") or "",
+            "networkType": "",
+            "location": row.get("location") or "",
+            "extra": {"progress": row.get("progress"), "targetVersion": row.get("target_version")},
+            "stackTrace": fail_reason or None,
+            "requestInfo": {"url": "", "method": "", "requestId": row.get("task_no") or "", "responseCode": None, "responseMessage": fail_reason},
+            "createdAt": fmt_dt(row.get("updated_at") or row.get("created_at") or row.get("started_at")),
+        }
+    return {}
 
 
 @admin_bp.get("/operator/device/log-detail")
@@ -1619,7 +1799,7 @@ def device_log_detail():
             (str(log_id),),
         )
     if not row:
-        return response_ok({})
+        return response_ok(synthetic_device_log_detail(log_id))
 
     return response_ok({
         "logId": row.get("log_id"),
