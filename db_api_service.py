@@ -992,6 +992,36 @@ def parse_mongo_id(value):
 
 
 
+# 新增草稿里的时间列需要重置为“当前时间”，否则复制旧记录会把历史时间一起带入，
+# 导致维护页新增的数据时间不是现在。date 列填当前日期，datetime 列填当前时间戳。
+DATE_COLUMN_NAMES = {"stat_date", "ranking_date", "metric_date"}
+# not null 且无默认值的时间列：sample 时必须给当前时间，否则新增会因缺值失败
+EXTRA_DATETIME_COLUMNS = {"last_active", "bind_time", "generated_at"}
+
+
+def is_date_column(name):
+    return name in DATE_COLUMN_NAMES or name.endswith("_date")
+
+
+def is_datetime_column(name):
+    return name in EXTRA_DATETIME_COLUMNS or name.endswith("_at")
+
+
+def reset_sample_timestamps(data):
+    """把新增草稿中的时间列重置为当前时间，保证新增数据时间是现在。"""
+    if not data:
+        return data
+    now = datetime.now()
+    now_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+    now_date = now.strftime("%Y-%m-%d")
+    for key in list(data.keys()):
+        if is_date_column(key):
+            data[key] = now_date
+        elif is_datetime_column(key):
+            data[key] = now_datetime
+    return data
+
+
 def existing_record_seed(cursor, config):
     columns = create_columns(config)
     if not columns:
@@ -1006,7 +1036,8 @@ def existing_record_seed(cursor, config):
 
 
 def build_sample_record(cursor, config):
-    return existing_record_seed(cursor, config)
+    # 复制一条真实记录做草稿，但时间列重置为当前时间，避免带入历史时间
+    return reset_sample_timestamps(existing_record_seed(cursor, config))
 
 
 def sample_mongo_document_from_collection(collection):
@@ -1015,7 +1046,8 @@ def sample_mongo_document_from_collection(collection):
         return {}
     doc = dict(doc)
     doc.pop("_id", None)
-    return doc
+    # MongoDB 文档里的时间字段同样重置为当前时间
+    return reset_sample_timestamps(doc)
 
 def mongo_collection_or_error(collection_name):
     db = mongo_db()
