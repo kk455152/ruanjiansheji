@@ -297,6 +297,12 @@ def _float(value, default=0.0):
         return default
 
 
+def ratio(numerator, denominator):
+    base = max(_float(denominator, 0), 1)
+    value = _float(numerator, 0) / base
+    return round(min(max(value, 0), 1), 4)
+
+
 def cached_value(key, loader, ttl=ADMIN_CACHE_TTL_SECONDS):
     if os.environ.get("ADMIN_REALTIME_DB", "true").lower() in ("1", "true", "yes", "on"):
         return loader()
@@ -1212,18 +1218,18 @@ def retention_device_purchase():
                 (date_value, days, days + 1),
             )
 
-        day1 = retained_count(1)
-        day7 = retained_count(7)
-        day30 = retained_count(30)
+        day1 = min(retained_count(1), purchases)
+        day7 = min(retained_count(7), purchases)
+        day30 = min(retained_count(30), purchases)
         data.append({
             "date": str(date_value),
             "purchaseUserCount": purchases,
             "day1RetainedCount": day1,
             "day7RetainedCount": day7,
             "day30RetainedCount": day30,
-            "day1RetentionRate": round(day1 / purchases, 4),
-            "day7RetentionRate": round(day7 / purchases, 4),
-            "day30RetentionRate": round(day30 / purchases, 4),
+            "day1RetentionRate": ratio(day1, purchases),
+            "day7RetentionRate": ratio(day7, purchases),
+            "day30RetentionRate": ratio(day30, purchases),
         })
     return response_ok({"list": data})
 
@@ -1991,6 +1997,23 @@ def system_monitor():
         }
         for row in _system_config_group_rows("monitor_exception", 20)
     ]
+    if not exceptions:
+        offline_devices = max(total_devices - online_devices, 0)
+        pending_feedback = count_sql("SELECT COUNT(*) AS c FROM user_feedback WHERE COALESCE(status, 'open') IN ('open', 'pending')")
+        failed_tasks = count_sql(
+            """
+            SELECT COUNT(*) AS c
+            FROM device_firmware_update_task
+            WHERE COALESCE(status, '') IN ('failed', 'fail', 'error')
+               OR COALESCE(fail_reason, '') NOT IN ('', '-')
+            """
+        )
+        if offline_devices:
+            exceptions.append({"code": "OFFLINE_DEVICE", "title": "离线设备", "count": offline_devices, "level": "warning"})
+        if pending_feedback:
+            exceptions.append({"code": "PENDING_FEEDBACK", "title": "待处理反馈", "count": pending_feedback, "level": "warning"})
+        if failed_tasks:
+            exceptions.append({"code": "FAILED_FIRMWARE_TASK", "title": "固件升级失败任务", "count": failed_tasks, "level": "critical"})
     return response_ok({
         "services": services,
         "metrics": {
@@ -2148,7 +2171,7 @@ def market_segments():
                     "activeUserCount": _int(row.get("active_user_count"), 0),
                     "avgPlayCount": _float(row.get("avg_play_count"), 0),
                     "avgPayAmount": _float(row.get("avg_pay_amount"), 0),
-                    "retentionRate": _float(row.get("retention_rate"), 0),
+                    "retentionRate": ratio(row.get("retention_rate"), 1),
                     "action": "按日报分群运营",
                 }
                 for row in rows
@@ -2198,10 +2221,10 @@ def market_insights():
     ]
     return response_ok({
         "funnels": [
-            {"label": "新增用户", "value": new_users, "rate": round(new_users / base, 4)},
-            {"label": "绑定设备", "value": bound_users, "rate": round(bound_users / base, 4)},
-            {"label": "完成首播", "value": first_play_users, "rate": round(first_play_users / base, 4)},
-            {"label": "7 日活跃", "value": retained_users, "rate": round(retained_users / base, 4)},
+            {"label": "新增用户", "value": new_users, "rate": ratio(new_users, base)},
+            {"label": "绑定设备", "value": bound_users, "rate": ratio(bound_users, base)},
+            {"label": "完成首播", "value": first_play_users, "rate": ratio(first_play_users, base)},
+            {"label": "7 日活跃", "value": retained_users, "rate": ratio(retained_users, base)},
         ],
         "recommendations": recommendations,
     })
@@ -2231,6 +2254,7 @@ def device_groups():
 @admin_bp.get("/operator/device/alerts")
 @require_admin("super", "operator")
 def device_alerts():
+    rows = []
     db_rows = mysql_all(
         """
         SELECT log_id, log_level, title, content, device_name, online_status, created_at
@@ -2242,20 +2266,88 @@ def device_alerts():
         """
     )
     if db_rows:
-        rows = [
+        rows.extend([
             {
                 "alertId": row.get("log_id"),
                 "level": row.get("log_level") or "warning",
                 "title": row.get("title") or row.get("content") or "-",
                 "deviceName": row.get("device_name") or "-",
-                "status": row.get("online_status") or "open",
+                "status": "open",
                 "createdAt": fmt_dt(row.get("created_at")),
             }
             for row in db_rows
-        ]
-        return response_ok({"total": len(rows), "list": rows})
+        ])
 
-    return response_ok({"total": 0, "list": []})
+    offline_rows = mysql_all(
+        f"""
+        SELECT device_id, device_number, device_name, model_name, last_active
+        FROM device
+        WHERE NOT ({ONLINE_DEVICE_CONDITION})
+        ORDER BY last_active ASC, device_id ASC
+        LIMIT 20
+        """
+    )
+    rows.extend([
+        {
+            "alertId": f"offline-{row.get('device_id')}",
+            "level": "warning",
+            "title": "设备离线",
+            "deviceName": row.get("device_name") or row.get("device_number") or row.get("model_name") or "-",
+            "status": "open",
+            "createdAt": fmt_dt(row.get("last_active")),
+        }
+        for row in offline_rows
+    ])
+
+    task_rows = mysql_all(
+        """
+        SELECT task_id, task_no, device_id, target_version, status, fail_reason, updated_at, created_at
+        FROM device_firmware_update_task
+        WHERE COALESCE(status, '') IN ('failed', 'fail', 'error')
+           OR COALESCE(fail_reason, '') NOT IN ('', '-')
+        ORDER BY updated_at DESC, created_at DESC, task_id DESC
+        LIMIT 20
+        """
+    )
+    rows.extend([
+        {
+            "alertId": f"firmware-{row.get('task_id')}",
+            "level": "critical",
+            "title": row.get("fail_reason") or f"固件升级失败：{row.get('target_version') or '-'}",
+            "deviceName": f"device {row.get('device_id')}" if row.get("device_id") else "全部设备",
+            "status": "open",
+            "createdAt": fmt_dt(row.get("updated_at") or row.get("created_at")),
+        }
+        for row in task_rows
+    ])
+
+    feedback_alert_rows = mysql_all(
+        """
+        SELECT feedback_id, feedback_no, title, content, priority, created_at
+        FROM user_feedback
+        WHERE COALESCE(status, 'open') IN ('open', 'pending')
+        ORDER BY FIELD(priority, 'high', 'normal', 'low') ASC, created_at DESC, feedback_id DESC
+        LIMIT 20
+        """
+    )
+    rows.extend([
+        {
+            "alertId": f"feedback-{row.get('feedback_no') or row.get('feedback_id')}",
+            "level": "warning" if row.get("priority") != "high" else "critical",
+            "title": row.get("title") or row.get("content") or "待处理用户反馈",
+            "deviceName": "用户反馈",
+            "status": "open",
+            "createdAt": fmt_dt(row.get("created_at")),
+        }
+        for row in feedback_alert_rows
+    ])
+
+    rows = sorted(
+        rows,
+        key=lambda item: (0 if item.get("level") == "critical" else 1, item.get("createdAt") or ""),
+        reverse=False,
+    )[:50]
+    return response_ok({"total": len(rows), "list": rows})
 
 
 
