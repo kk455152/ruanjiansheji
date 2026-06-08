@@ -51,10 +51,10 @@ DEMO_SONGS = [
 DEMO_PLATFORMS = ("网易云音乐", "QQ音乐")
 ONLINE_DEVICE_VALUE_SQL = """
 CASE
-    WHEN LOWER(COALESCE(online_status, '')) IN ('online', 'true', '1', 'yes')
-         OR COALESCE(online_status, '') = '在线' THEN 1
-    WHEN LOWER(COALESCE(online_status, '')) IN ('offline', 'false', '0', 'no')
-         OR COALESCE(online_status, '') = '离线' THEN 0
+    WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('online', 'true', '1', 'yes')
+         OR TRIM(COALESCE(online_status, '')) = '在线' THEN 1
+    WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('offline', 'false', '0', 'no')
+         OR TRIM(COALESCE(online_status, '')) = '离线' THEN 0
     ELSE CASE WHEN COALESCE(status, 0) = 1 THEN 1 ELSE 0 END
 END
 """

@@ -474,10 +474,10 @@ def device_runtime_doc(device_id):
 
 ONLINE_DEVICE_VALUE_SQL = """
 CASE
-    WHEN LOWER(COALESCE(online_status, '')) IN ('online', 'true', '1', 'yes')
-         OR COALESCE(online_status, '') = '在线' THEN 1
-    WHEN LOWER(COALESCE(online_status, '')) IN ('offline', 'false', '0', 'no')
-         OR COALESCE(online_status, '') = '离线' THEN 0
+    WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('online', 'true', '1', 'yes')
+         OR TRIM(COALESCE(online_status, '')) = '在线' THEN 1
+    WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('offline', 'false', '0', 'no')
+         OR TRIM(COALESCE(online_status, '')) = '离线' THEN 0
     ELSE CASE WHEN COALESCE(status, 0) = 1 THEN 1 ELSE 0 END
 END
 """
@@ -1452,29 +1452,53 @@ def unbind_device():
 @admin_bp.get("/operator/device/logs")
 @require_admin("super", "operator")
 def device_logs():
+    page = max(_int(request.args.get("page"), 1), 1)
+    page_size = min(max(_int(request.args.get("pageSize"), 20), 1), 100)
+    offset = (page - 1) * page_size
+    total = count_sql("SELECT COUNT(*) AS c FROM device_log", fallback=0)
     rows = mysql_all(
         """
-        SELECT log_id, device_id, device_name, log_type, content, created_at
-        FROM device_log
-        ORDER BY created_at DESC, log_id DESC
-        LIMIT 100
-        """
+        SELECT
+            dl.log_id,
+            dl.device_id,
+            COALESCE(NULLIF(dl.device_name, ''), NULLIF(d.device_name, ''), d.device_number) AS device_name,
+            COALESCE(NULLIF(dl.device_sn, ''), d.device_number) AS device_sn,
+            COALESCE(NULLIF(dl.device_model, ''), d.model_name) AS device_model,
+            dl.log_type,
+            dl.log_level,
+            dl.title,
+            dl.content,
+            dl.event_code,
+            dl.trace_id,
+            dl.created_at
+        FROM device_log dl
+        LEFT JOIN device d ON d.device_id = dl.device_id
+        ORDER BY dl.created_at DESC, dl.log_id DESC
+        LIMIT %s OFFSET %s
+        """,
+        (page_size, offset),
     )
     if rows:
         result = [
             {
                 "logId": row.get("log_id"),
                 "deviceId": str(row.get("device_id") or ""),
+                "deviceSn": row.get("device_sn") or "",
                 "deviceName": row.get("device_name") or "",
+                "deviceModel": row.get("device_model") or "",
                 "logType": row.get("log_type") or "",
+                "logLevel": row.get("log_level") or "",
+                "title": row.get("title") or row.get("content") or "",
                 "content": row.get("content") or "",
+                "eventCode": row.get("event_code") or "",
+                "traceId": row.get("trace_id") or "",
                 "createdAt": str(row.get("created_at") or ""),
             }
             for row in rows
         ]
-        return response_ok({"total": len(result), "list": result})
+        return response_ok({"total": total or len(result), "page": page, "pageSize": page_size, "list": result})
 
-    return response_ok({"total": 0, "list": []})
+    return response_ok({"total": total, "page": page, "pageSize": page_size, "list": []})
 
 
 @admin_bp.get("/operator/device/log-detail")
@@ -1485,10 +1509,42 @@ def device_log_detail():
     if log_id:
         row = mysql_one(
             """
-            SELECT log_id, device_id, device_name, log_type, log_level, title, content,
-                   event_code, online_status, ip_address, network_type, created_at
-            FROM device_log
-            WHERE CAST(log_id AS CHAR)=%s
+            SELECT
+                dl.log_id,
+                dl.device_id,
+                dl.device_sn,
+                dl.device_name,
+                dl.device_type,
+                dl.device_model,
+                dl.log_type,
+                dl.log_level,
+                dl.title,
+                dl.content,
+                dl.event_code,
+                dl.trace_id,
+                dl.task_id,
+                dl.firmware_version,
+                dl.online_status,
+                dl.ip_address,
+                dl.network_type,
+                dl.location,
+                dl.request_url,
+                dl.request_method,
+                dl.request_id,
+                dl.response_code,
+                dl.response_message,
+                dl.created_at,
+                d.device_number AS real_device_sn,
+                d.device_name AS real_device_name,
+                d.device_type AS real_device_type,
+                d.model_name AS real_device_model,
+                d.firmware_version AS real_firmware_version,
+                d.online_status AS real_online_status,
+                d.ip_address AS real_ip_address,
+                d.location AS real_location
+            FROM device_log dl
+            LEFT JOIN device d ON d.device_id = dl.device_id
+            WHERE CAST(dl.log_id AS CHAR)=%s
             LIMIT 1
             """,
             (str(log_id),),
@@ -1499,11 +1555,11 @@ def device_log_detail():
     return response_ok({
         "logId": row.get("log_id"),
         "deviceId": str(row.get("device_id") or ""),
-        "deviceSn": "",
-        "deviceName": row.get("device_name") or "",
-        "deviceType": "",
-        "deviceTypeText": "",
-        "deviceModel": "",
+        "deviceSn": row.get("device_sn") or row.get("real_device_sn") or "",
+        "deviceName": row.get("device_name") or row.get("real_device_name") or row.get("real_device_sn") or "",
+        "deviceType": row.get("device_type") or row.get("real_device_type") or "",
+        "deviceTypeText": row.get("device_type") or row.get("real_device_type") or "",
+        "deviceModel": row.get("device_model") or row.get("real_device_model") or "",
         "logType": row.get("log_type") or "",
         "logTypeText": row.get("log_type") or "",
         "logLevel": row.get("log_level") or "",
@@ -1511,17 +1567,23 @@ def device_log_detail():
         "title": row.get("title") or row.get("content") or "",
         "content": row.get("content") or "",
         "eventCode": row.get("event_code") or "",
-        "traceId": "",
-        "taskId": "",
-        "firmwareVersion": "",
-        "onlineStatus": row.get("online_status") or "",
-        "onlineStatusText": row.get("online_status") or "",
-        "ipAddress": row.get("ip_address") or "",
+        "traceId": row.get("trace_id") or "",
+        "taskId": row.get("task_id") or "",
+        "firmwareVersion": row.get("firmware_version") or row.get("real_firmware_version") or "",
+        "onlineStatus": row.get("online_status") or row.get("real_online_status") or "",
+        "onlineStatusText": row.get("online_status") or row.get("real_online_status") or "",
+        "ipAddress": row.get("ip_address") or row.get("real_ip_address") or "",
         "networkType": row.get("network_type") or "",
-        "location": "",
+        "location": row.get("location") or row.get("real_location") or "",
         "extra": {},
         "stackTrace": None,
-        "requestInfo": {},
+        "requestInfo": {
+            "url": row.get("request_url") or "",
+            "method": row.get("request_method") or "",
+            "requestId": row.get("request_id") or "",
+            "responseCode": row.get("response_code"),
+            "responseMessage": row.get("response_message") or "",
+        },
         "createdAt": fmt_dt(row.get("created_at")),
     })
 
@@ -1664,7 +1726,7 @@ def role_rows():
                     "role": role,
                     "roleName": row.get("config_name") or role,
                     "description": row.get("config_value") or "",
-                    "permissions": permissions,
+                    "permissions": permissions or DEFAULT_ROLE_PERMISSIONS.get(role, []),
                     "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", (role,), fallback=0),
                 }
             )
@@ -1684,37 +1746,42 @@ def role_rows():
         return [
             {
                 "role": row.get("role"),
-                "roleName": row.get("role"),
-                "description": "",
-                "permissions": [],
+                "roleName": ROLE_NAME_MAP.get(row.get("role"), row.get("role")),
+                "description": DEFAULT_ROLE_DESCRIPTIONS.get(row.get("role"), ""),
+                "permissions": DEFAULT_ROLE_PERMISSIONS.get(row.get("role"), []),
                 "userCount": _int(row.get("user_count"), 0),
             }
             for row in db_roles
         ]
 
-    return []
-
     return [
         {
             "role": "super_admin",
-            "roleName": "超级管理员",
-            "description": "系统配置、用户权限、审计、安全和全量业务数据",
-            "permissions": ["system", "users", "roles", "audit", "reports", "devices", "feedback"],
-            "userCount": 1,
+            "roleName": ROLE_NAME_MAP.get("super_admin", "super_admin"),
+            "description": DEFAULT_ROLE_DESCRIPTIONS["super_admin"],
+            "permissions": DEFAULT_ROLE_PERMISSIONS["super_admin"],
+            "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("super_admin",), fallback=1),
         },
         {
             "role": "market_admin",
-            "roleName": "市场分析管理员",
-            "description": "用户画像、区域分析、留存分析、热歌排行和报表导出",
-            "permissions": ["decision", "profile", "region", "segments", "reports", "songs"],
-            "userCount": 1,
+            "roleName": ROLE_NAME_MAP.get("market_admin", "market_admin"),
+            "description": DEFAULT_ROLE_DESCRIPTIONS["market_admin"],
+            "permissions": DEFAULT_ROLE_PERMISSIONS["market_admin"],
+            "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("market_admin",), fallback=1),
         },
         {
             "role": "operator_admin",
-            "roleName": "普通管理员",
-            "description": "设备运维、固件升级、用户反馈、日志和告警处理",
-            "permissions": ["devices", "firmware", "tasks", "alerts", "feedback", "logs"],
-            "userCount": 1,
+            "roleName": ROLE_NAME_MAP.get("operator_admin", "operator_admin"),
+            "description": DEFAULT_ROLE_DESCRIPTIONS["operator_admin"],
+            "permissions": DEFAULT_ROLE_PERMISSIONS["operator_admin"],
+            "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("operator_admin",), fallback=1),
+        },
+        {
+            "role": "boss",
+            "roleName": ROLE_NAME_MAP.get("boss", "boss"),
+            "description": DEFAULT_ROLE_DESCRIPTIONS["boss"],
+            "permissions": DEFAULT_ROLE_PERMISSIONS["boss"],
+            "userCount": count_sql("SELECT COUNT(*) AS c FROM admin_user WHERE role=%s", ("boss",), fallback=1),
         },
     ]
 
@@ -1745,6 +1812,20 @@ PERMISSION_CATALOG = {
     "notices": "系统公告",
     "audit": "审计日志",
     "account": "个人信息",
+}
+
+DEFAULT_ROLE_PERMISSIONS = {
+    "super_admin": list(PERMISSION_CATALOG.keys()),
+    "market_admin": ["overview", "decision", "trend", "region", "profile", "value", "segments", "insights", "songs", "reports", "account"],
+    "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "firmware", "tasks", "logs", "account"],
+    "boss": ["overview", "trend", "region", "profile", "value", "songs", "feedback", "account"],
+}
+
+DEFAULT_ROLE_DESCRIPTIONS = {
+    "super_admin": "系统配置、用户权限、审计、安全和全量业务数据",
+    "market_admin": "用户画像、区域分析、留存分析、热歌排行、营销洞察和报表导出",
+    "operator_admin": "设备运维、固件升级、用户反馈、日志和告警处理",
+    "boss": "只读经营视角，查看核心看板、趋势、地区、画像、热歌和反馈",
 }
 
 
@@ -1972,6 +2053,41 @@ def security_logs():
     return response_ok({"total": 0, "list": []})
 
 
+def alert_summary_counts(total_devices=None, online_devices=None):
+    if total_devices is None:
+        total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
+    if online_devices is None:
+        online_devices = count_sql(f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", fallback=0)
+    log_alerts = count_sql(
+        """
+        SELECT COUNT(*) AS c
+        FROM device_log
+        WHERE COALESCE(log_type, '') IN ('alert', 'warning', 'error')
+           OR COALESCE(log_level, '') IN ('warning', 'error', 'critical')
+        """,
+        fallback=0,
+    )
+    pending_feedback = count_sql(
+        "SELECT COUNT(*) AS c FROM user_feedback WHERE COALESCE(status, 'open') IN ('open', 'pending')",
+        fallback=0,
+    )
+    failed_tasks = count_sql(
+        """
+        SELECT COUNT(*) AS c
+        FROM device_firmware_update_task
+        WHERE COALESCE(status, '') IN ('failed', 'fail', 'error')
+           OR COALESCE(fail_reason, '') NOT IN ('', '-')
+        """,
+        fallback=0,
+    )
+    return {
+        "logAlerts": log_alerts,
+        "offlineDevices": max(total_devices - online_devices, 0),
+        "pendingFeedback": pending_feedback,
+        "failedFirmwareTasks": failed_tasks,
+    }
+
+
 @admin_bp.get("/super/monitor")
 @require_admin("super", "boss")
 def system_monitor():
@@ -1988,32 +2104,28 @@ def system_monitor():
         }
         for row in _system_config_group_rows("monitor_service", 20)
     ]
-    exceptions = [
-        {
-            "code": row.get("config_key") or f"EX-{row.get('config_id')}",
+    alert_counts = alert_summary_counts(total_devices, online_devices)
+    exceptions = []
+    if alert_counts["logAlerts"]:
+        exceptions.append({"code": "DEVICE_LOG_ALERT", "title": "设备日志告警", "count": alert_counts["logAlerts"], "level": "warning"})
+    if alert_counts["offlineDevices"]:
+        exceptions.append({"code": "OFFLINE_DEVICE", "title": "离线设备", "count": alert_counts["offlineDevices"], "level": "warning"})
+    if alert_counts["pendingFeedback"]:
+        exceptions.append({"code": "PENDING_FEEDBACK", "title": "待处理反馈", "count": alert_counts["pendingFeedback"], "level": "warning"})
+    if alert_counts["failedFirmwareTasks"]:
+        exceptions.append({"code": "FAILED_FIRMWARE_TASK", "title": "固件升级失败任务", "count": alert_counts["failedFirmwareTasks"], "level": "critical"})
+
+    existing_codes = {item["code"] for item in exceptions}
+    for row in _system_config_group_rows("monitor_exception", 20):
+        code = row.get("config_key") or f"EX-{row.get('config_id')}"
+        if code in existing_codes:
+            continue
+        exceptions.append({
+            "code": code,
             "title": row.get("config_name") or row.get("config_value") or "-",
             "count": _int(row.get("description"), 0),
             "level": row.get("config_type") or "",
-        }
-        for row in _system_config_group_rows("monitor_exception", 20)
-    ]
-    if not exceptions:
-        offline_devices = max(total_devices - online_devices, 0)
-        pending_feedback = count_sql("SELECT COUNT(*) AS c FROM user_feedback WHERE COALESCE(status, 'open') IN ('open', 'pending')")
-        failed_tasks = count_sql(
-            """
-            SELECT COUNT(*) AS c
-            FROM device_firmware_update_task
-            WHERE COALESCE(status, '') IN ('failed', 'fail', 'error')
-               OR COALESCE(fail_reason, '') NOT IN ('', '-')
-            """
-        )
-        if offline_devices:
-            exceptions.append({"code": "OFFLINE_DEVICE", "title": "离线设备", "count": offline_devices, "level": "warning"})
-        if pending_feedback:
-            exceptions.append({"code": "PENDING_FEEDBACK", "title": "待处理反馈", "count": pending_feedback, "level": "warning"})
-        if failed_tasks:
-            exceptions.append({"code": "FAILED_FIRMWARE_TASK", "title": "固件升级失败任务", "count": failed_tasks, "level": "critical"})
+        })
     return response_ok({
         "services": services,
         "metrics": {
@@ -2266,6 +2378,7 @@ def device_groups():
 @admin_bp.get("/operator/device/alerts")
 @require_admin("super", "operator")
 def device_alerts():
+    summary_counts = alert_summary_counts()
     rows = []
     db_rows = mysql_all(
         """
@@ -2359,7 +2472,8 @@ def device_alerts():
         key=lambda item: (0 if item.get("level") == "critical" else 1, item.get("createdAt") or ""),
         reverse=False,
     )[:50]
-    return response_ok({"total": len(rows), "list": rows})
+    total = sum(summary_counts.values())
+    return response_ok({"total": total or len(rows), "summary": summary_counts, "list": rows})
 
 
 

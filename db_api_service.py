@@ -17,10 +17,10 @@ except Exception:
 db_api = Blueprint("db_api", __name__, url_prefix="/api/db")
 ONLINE_DEVICE_VALUE_SQL = """
 CASE
-    WHEN LOWER(COALESCE(online_status, '')) IN ('online', 'true', '1', 'yes')
-         OR COALESCE(online_status, '') = '在线' THEN 1
-    WHEN LOWER(COALESCE(online_status, '')) IN ('offline', 'false', '0', 'no')
-         OR COALESCE(online_status, '') = '离线' THEN 0
+    WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('online', 'true', '1', 'yes')
+         OR TRIM(COALESCE(online_status, '')) = '在线' THEN 1
+    WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('offline', 'false', '0', 'no')
+         OR TRIM(COALESCE(online_status, '')) = '离线' THEN 0
     ELSE CASE WHEN COALESCE(status, 0) = 1 THEN 1 ELSE 0 END
 END
 """
@@ -1135,9 +1135,13 @@ def normalize_record(table_key, data):
     if table_key == "device" and "online_status" in normalized:
         online_text = str(normalized.get("online_status") or "").strip().lower()
         if online_text in {"online", "true", "1", "yes", "在线"}:
+            normalized["online_status"] = "online"
             normalized["status"] = 1
         elif online_text in {"offline", "false", "0", "no", "离线"}:
+            normalized["online_status"] = "offline"
             normalized["status"] = 0
+        else:
+            normalized["online_status"] = str(normalized.get("online_status") or "").strip()
     return normalized
 
 
