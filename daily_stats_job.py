@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import random
 import time
@@ -23,6 +24,31 @@ from storage_backends import (
 LOCAL_TZ = timezone(timedelta(hours=8))
 DEFAULT_SONG_KEYWORDS = ["稻香", "晴天", "夜曲", "青花瓷", "七里香"]
 DEFAULT_DEVICES = [f"dev_{index:02d}" for index in range(1, 6)]
+DEMO_NAMES = [
+    "林小满", "陈一诺", "周明轩", "苏念安", "顾北辰", "许知夏", "沈清欢", "陆星河",
+    "赵云舒", "唐若溪", "宋景行", "何雨桐", "韩子墨", "梁诗语", "程予安", "孟晚晴",
+    "秦思远", "夏沐橙", "叶青禾", "方以宁", "罗嘉树", "白芷晴", "魏南风", "姜予乐",
+    "袁星澜", "邓若楠", "蒋依依", "钟亦辰", "薛听雨", "马知遥", "高云深", "卢清越",
+]
+DEMO_REGIONS = [
+    ("310000", "上海市", "310100", "上海市"),
+    ("110000", "北京市", "110100", "北京市"),
+    ("440000", "广东省", "440100", "广州市"),
+    ("330000", "浙江省", "330100", "杭州市"),
+    ("320000", "江苏省", "320100", "南京市"),
+    ("510000", "四川省", "510100", "成都市"),
+]
+DEMO_SONGS = [
+    ("demo-daoxiang", "稻香", "周杰伦", "网易云音乐", "华语流行"),
+    ("demo-qingtian", "晴天", "周杰伦", "QQ音乐", "华语流行"),
+    ("demo-yesong", "夜曲", "周杰伦", "网易云音乐", "R&B"),
+    ("demo-qinghuaci", "青花瓷", "周杰伦", "QQ音乐", "中国风"),
+    ("demo-pingfan", "平凡之路", "朴树", "网易云音乐", "民谣"),
+    ("demo-lantingxu", "兰亭序", "周杰伦", "QQ音乐", "中国风"),
+    ("demo-hongdou", "红豆", "王菲", "网易云音乐", "经典流行"),
+    ("demo-guanghui", "光辉岁月", "Beyond", "QQ音乐", "摇滚"),
+]
+DEMO_PLATFORMS = ("网易云音乐", "QQ音乐")
 
 
 def mysql_connect():
@@ -206,6 +232,324 @@ def mysql_scalar(cursor, sql, params=(), default=0):
     return value if value is not None else default
 
 
+def quote_identifier(name):
+    return f"`{str(name).replace('`', '``')}`"
+
+
+def mysql_table_columns(cursor, table):
+    cursor.execute(
+        """
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s
+        """,
+        (table,),
+    )
+    return {row["COLUMN_NAME"] for row in cursor.fetchall() or []}
+
+
+def filter_existing_columns(data, columns):
+    return {key: value for key, value in data.items() if key in columns}
+
+
+def upsert_demo_row(cursor, table, data, update_columns):
+    columns = mysql_table_columns(cursor, table)
+    filtered = filter_existing_columns(data, columns)
+    if not filtered:
+        return
+    names = list(filtered.keys())
+    insert_sql = ", ".join(quote_identifier(column) for column in names)
+    value_sql = ", ".join(["%s"] * len(names))
+    updates = [
+        column for column in update_columns
+        if column in filtered and column not in {"user_id", "device_id", "mapping_id", "history_id", "order_id"}
+    ]
+    if updates:
+        update_sql = ", ".join(
+            f"{quote_identifier(column)}=VALUES({quote_identifier(column)})"
+            for column in updates
+        )
+    else:
+        update_sql = f"{quote_identifier(names[0])}={quote_identifier(names[0])}"
+    cursor.execute(
+        f"INSERT INTO {quote_identifier(table)} ({insert_sql}) VALUES ({value_sql}) "
+        f"ON DUPLICATE KEY UPDATE {update_sql}",
+        [filtered[column] for column in names],
+    )
+
+
+def demo_password_hash(seed):
+    return hashlib.sha256(f"demo:{seed}".encode("utf-8")).hexdigest()
+
+
+def demo_age_range(age):
+    if age < 18:
+        return "18-"
+    if age <= 25:
+        return "18-25"
+    if age <= 35:
+        return "26-35"
+    if age <= 45:
+        return "36-45"
+    return "46+"
+
+
+def day_moment(stat_date, index, total):
+    hour = 8 + (index * 11 // max(total, 1)) % 14
+    minute = (index * 17) % 60
+    second = (index * 23) % 60
+    return datetime.combine(stat_date, datetime_time(hour, minute, second))
+
+
+def select_single_id(cursor, table, id_column, where_column, value):
+    cursor.execute(
+        f"SELECT {quote_identifier(id_column)} FROM {quote_identifier(table)} "
+        f"WHERE {quote_identifier(where_column)}=%s ORDER BY {quote_identifier(id_column)} ASC LIMIT 1",
+        (value,),
+    )
+    row = cursor.fetchone()
+    return int(row[id_column]) if row else None
+
+
+def seed_chinese_demo_data(stat_date, user_count=32, device_count=18, order_count=24, play_count=120):
+    rng = random.Random(f"demo-{stat_date.isoformat()}-{user_count}-{device_count}-{order_count}-{play_count}")
+    user_count = max(1, min(int(user_count or 32), len(DEMO_NAMES)))
+    device_count = max(1, int(device_count or 18))
+    order_count = max(0, int(order_count or 24))
+    play_count = max(0, int(play_count or 120))
+
+    connection = mysql_connect()
+    created = {
+        "users": 0,
+        "profiles": 0,
+        "devices": 0,
+        "orders": 0,
+        "songs": 0,
+        "play_history": 0,
+    }
+    try:
+        with connection.cursor() as cursor:
+            user_ids = []
+            for index, name in enumerate(DEMO_NAMES[:user_count], start=1):
+                username = f"{name}{index:03d}"
+                phone = f"18{stat_date.strftime('%m%d')}{index:05d}"
+                email = f"demo{stat_date.strftime('%m%d')}{index:03d}@smart-speaker.local"
+                created_at = day_moment(stat_date, index, user_count)
+                upsert_demo_row(
+                    cursor,
+                    "user",
+                    {
+                        "username": username,
+                        "password_hash": demo_password_hash(username),
+                        "phone": phone,
+                        "created_at": created_at,
+                        "nickname": name,
+                        "avatar": "",
+                        "email": email,
+                        "status": "active",
+                        "last_login_at": created_at + timedelta(hours=1),
+                        "updated_at": created_at + timedelta(hours=1),
+                    },
+                    ["password_hash", "phone", "created_at", "nickname", "avatar", "email", "status", "last_login_at", "updated_at"],
+                )
+                user_id = select_single_id(cursor, "user", "user_id", "username", username)
+                if user_id is None:
+                    continue
+                user_ids.append(user_id)
+                region = DEMO_REGIONS[(index - 1) % len(DEMO_REGIONS)]
+                age = 18 + (index * 3) % 38
+                platform = DEMO_PLATFORMS[(index - 1) % len(DEMO_PLATFORMS)]
+                if index % 3 == 0:
+                    platform = "网易云音乐,QQ音乐"
+                active_level = ["high", "medium", "low"][index % 3]
+                value_level = ["high", "normal", "low"][(index + 1) % 3]
+                upsert_demo_row(
+                    cursor,
+                    "user_profile",
+                    {
+                        "user_id": user_id,
+                        "nickname": name,
+                        "email": email,
+                        "gender": "女" if index % 2 else "男",
+                        "age": age,
+                        "age_range": demo_age_range(age),
+                        "province_code": region[0],
+                        "province_name": region[1],
+                        "city_code": region[2],
+                        "city_name": region[3],
+                        "active_level": active_level,
+                        "value_level": value_level,
+                        "bound_platforms": platform,
+                        "user_status": "active",
+                        "created_at": created_at,
+                        "updated_at": created_at + timedelta(hours=1),
+                    },
+                    [
+                        "nickname", "email", "gender", "age", "age_range", "province_code", "province_name",
+                        "city_code", "city_name", "active_level", "value_level", "bound_platforms",
+                        "user_status", "created_at", "updated_at",
+                    ],
+                )
+                for auth_platform in platform.split(","):
+                    upsert_demo_row(
+                        cursor,
+                        "auth_token",
+                        {
+                            "user_id": user_id,
+                            "platform_type": auth_platform,
+                            "access_token": demo_password_hash(f"{username}:{auth_platform}:access"),
+                            "refresh_token": demo_password_hash(f"{username}:{auth_platform}:refresh"),
+                            "expires_at": created_at + timedelta(days=30),
+                        },
+                        ["access_token", "refresh_token", "expires_at"],
+                    )
+                created["users"] += 1
+                created["profiles"] += 1
+
+            device_ids = []
+            for index in range(1, device_count + 1):
+                device_number = f"中文演示音箱-{index:03d}"
+                created_at = day_moment(stat_date, index, device_count)
+                upsert_demo_row(
+                    cursor,
+                    "device",
+                    {
+                        "device_number": device_number,
+                        "model_name": "小智音箱 Pro",
+                        "status": 1 if index % 5 else 0,
+                        "last_active": created_at + timedelta(hours=2),
+                        "firmware_version": f"v2.{index % 5}.{index % 9}",
+                        "created_at": created_at,
+                        "device_name": f"{DEMO_REGIONS[index % len(DEMO_REGIONS)][3]}客厅音箱{index:02d}",
+                        "device_type": "speaker",
+                        "online_status": "online" if index % 5 else "offline",
+                        "ip_address": f"192.168.10.{20 + index}",
+                        "hardware_version": "HW-CN-2026",
+                        "location": DEMO_REGIONS[index % len(DEMO_REGIONS)][3],
+                        "updated_at": created_at + timedelta(hours=2),
+                    },
+                    [
+                        "model_name", "status", "last_active", "firmware_version", "created_at",
+                        "device_name", "device_type", "online_status", "ip_address", "hardware_version",
+                        "location", "updated_at",
+                    ],
+                )
+                device_id = select_single_id(cursor, "device", "device_id", "device_number", device_number)
+                if device_id is not None:
+                    device_ids.append(device_id)
+                created["devices"] += 1
+
+            for index, user_id in enumerate(user_ids):
+                if not device_ids:
+                    break
+                device_id = device_ids[index % len(device_ids)]
+                bind_time = day_moment(stat_date, index + 1, max(len(user_ids), 1))
+                upsert_demo_row(
+                    cursor,
+                    "user_device_binding",
+                    {
+                        "user_id": user_id,
+                        "device_id": device_id,
+                        "custom_device_name": f"{DEMO_NAMES[index]}的智能音箱",
+                        "is_primary": 1,
+                        "default_room": ["客厅", "卧室", "书房", "厨房"][index % 4],
+                        "current_network": f"家庭WiFi-{index % 6 + 1}",
+                        "bind_time": bind_time,
+                    },
+                    ["custom_device_name", "is_primary", "default_room", "current_network", "bind_time"],
+                )
+
+            mapping_ids = []
+            for index, song in enumerate(DEMO_SONGS, start=1):
+                user_id = user_ids[(index - 1) % len(user_ids)] if user_ids else None
+                upsert_demo_row(
+                    cursor,
+                    "media_mapping",
+                    {
+                        "user_id": user_id,
+                        "song_title": song[1],
+                        "artist": song[2],
+                        "platform": song[3],
+                        "external_id": song[0],
+                        "cover_url": f"https://cdn.example.com/demo/{song[0]}.jpg",
+                    },
+                    ["song_title", "artist", "cover_url"],
+                )
+                cursor.execute(
+                    """
+                    SELECT mapping_id
+                    FROM media_mapping
+                    WHERE user_id <=> %s AND platform=%s AND external_id=%s
+                    ORDER BY mapping_id ASC
+                    LIMIT 1
+                    """,
+                    (user_id, song[3], song[0]),
+                )
+                row = cursor.fetchone()
+                if row:
+                    mapping_ids.append((int(row["mapping_id"]), song))
+                created["songs"] += 1
+
+            for index in range(1, order_count + 1):
+                user_id = user_ids[(index - 1) % len(user_ids)] if user_ids else None
+                device_id = device_ids[(index - 1) % len(device_ids)] if device_ids else None
+                region = DEMO_REGIONS[(index - 1) % len(DEMO_REGIONS)]
+                amount = 199 + (index % 6) * 80
+                created_at = day_moment(stat_date, index, max(order_count, 1))
+                upsert_demo_row(
+                    cursor,
+                    "sales_order",
+                    {
+                        "order_no": f"DEMO{stat_date.strftime('%Y%m%d')}{index:04d}",
+                        "user_id": user_id,
+                        "device_id": device_id,
+                        "order_amount": amount,
+                        "pay_amount": amount - (20 if index % 5 == 0 else 0),
+                        "order_status": "finished",
+                        "pay_status": "paid",
+                        "province_code": region[0],
+                        "province_name": region[1],
+                        "city_code": region[2],
+                        "city_name": region[3],
+                        "paid_at": created_at + timedelta(minutes=8),
+                        "created_at": created_at,
+                        "updated_at": created_at + timedelta(minutes=8),
+                    },
+                    [
+                        "user_id", "device_id", "order_amount", "pay_amount", "order_status", "pay_status",
+                        "province_code", "province_name", "city_code", "city_name", "paid_at", "created_at", "updated_at",
+                    ],
+                )
+                created["orders"] += 1
+
+            play_columns = mysql_table_columns(cursor, "play_history")
+            for index in range(1, play_count + 1):
+                if not user_ids or not device_ids or not mapping_ids:
+                    break
+                mapping_id, song = rng.choice(mapping_ids)
+                play_data = {
+                    "device_id": rng.choice(device_ids),
+                    "user_id": rng.choice(user_ids),
+                    "mapping_id": mapping_id,
+                    "play_duration": rng.randint(40, 260),
+                    "created_at": day_moment(stat_date, index, max(play_count, 1)),
+                    "style": song[4],
+                    "source_platform": song[3],
+                }
+                filtered = filter_existing_columns(play_data, play_columns)
+                names = list(filtered.keys())
+                cursor.execute(
+                    f"INSERT INTO play_history ({', '.join(quote_identifier(column) for column in names)}) "
+                    f"VALUES ({', '.join(['%s'] * len(names))})",
+                    [filtered[column] for column in names],
+                )
+                created["play_history"] += 1
+
+        return created
+    finally:
+        connection.close()
+
+
 def enrich_daily_stats_from_mysql(cursor, stat_date, stats):
     total_users = int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM `user`", default=0) or 0)
     new_users = int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM `user` WHERE DATE(created_at)=%s", (stat_date,), 0) or 0)
@@ -239,8 +583,8 @@ def enrich_daily_stats_from_mysql(cursor, stat_date, stats):
         "active_user_count": max(int(stats.get("unique_user_count") or 0), active_users),
         "unique_device_count": max(int(stats.get("unique_device_count") or 0), active_devices),
         "online_device_count": max(active_devices, int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0)=1", default=0) or 0)),
-        "platform_wechat_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s", ("%wechat%",), 0) or 0),
-        "platform_qq_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s", ("%qq%",), 0) or 0),
+        "platform_wechat_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR bound_platforms LIKE %s", ("%wechat%", "%微信%"), 0) or 0),
+        "platform_qq_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR bound_platforms LIKE %s", ("%qq%", "%QQ音乐%"), 0) or 0),
         "new_user_count": new_users,
         "new_device_count": new_devices,
         "total_sales_amount": sales,
@@ -686,6 +1030,19 @@ def run_once(args):
     ensure_daily_stats_table()
     ensure_front_daily_tables()
 
+    demo_data = {}
+    if getattr(args, "generate_demo_data", False):
+        demo_play_count = getattr(args, "demo_play_count", None)
+        if demo_play_count is None:
+            demo_play_count = args.generate_count
+        demo_data = seed_chinese_demo_data(
+            stat_date,
+            user_count=getattr(args, "demo_user_count", 32),
+            device_count=getattr(args, "demo_device_count", 18),
+            order_count=getattr(args, "demo_order_count", 24),
+            play_count=demo_play_count,
+        )
+
     seeded = [] if args.skip_seed else seed_song_catalog(keywords)
     generated_logs = [] if args.skip_generate else generate_play_logs(stat_date, args.generate_count)
     stats = aggregate_from_play_logs(stat_date) if needs_mongo else aggregate_from_mysql_play_history(stat_date)
@@ -701,6 +1058,7 @@ def run_once(args):
         "stat_date": stat_date.isoformat(),
         "seeded_song_count": len(seeded),
         "generated_play_log_count": len(generated_logs),
+        "demo_data": demo_data,
         "refreshed_daily_tables": [
             "daily_stats",
             "region_stats_daily",
@@ -771,7 +1129,18 @@ def aggregate_from_mysql_play_history(stat_date):
         connection.close()
 
 
-def run_daily_stats_once(date_value=None, generate_count=50, skip_seed=False, skip_generate=False, keywords=None):
+def run_daily_stats_once(
+    date_value=None,
+    generate_count=50,
+    skip_seed=False,
+    skip_generate=False,
+    keywords=None,
+    generate_demo_data=False,
+    demo_user_count=32,
+    demo_device_count=18,
+    demo_order_count=24,
+    demo_play_count=None,
+):
     class Args:
         pass
 
@@ -781,6 +1150,11 @@ def run_daily_stats_once(date_value=None, generate_count=50, skip_seed=False, sk
     args.skip_seed = skip_seed
     args.skip_generate = skip_generate
     args.keywords = keywords or ",".join(DEFAULT_SONG_KEYWORDS)
+    args.generate_demo_data = generate_demo_data
+    args.demo_user_count = demo_user_count
+    args.demo_device_count = demo_device_count
+    args.demo_order_count = demo_order_count
+    args.demo_play_count = demo_play_count if demo_play_count is not None else generate_count
     return run_once(args)
 
 
@@ -793,6 +1167,11 @@ def build_parser():
         help="Comma-separated song keywords used to seed MongoDB song_info.",
     )
     parser.add_argument("--generate-count", type=int, default=50, help="Number of play logs to generate.")
+    parser.add_argument("--generate-demo-data", action="store_true", help="Generate Chinese demo MySQL business data before refreshing daily stats.")
+    parser.add_argument("--demo-user-count", type=int, default=32, help="Number of Chinese demo users to upsert.")
+    parser.add_argument("--demo-device-count", type=int, default=18, help="Number of demo devices to upsert.")
+    parser.add_argument("--demo-order-count", type=int, default=24, help="Number of demo paid orders to upsert.")
+    parser.add_argument("--demo-play-count", type=int, default=None, help="Number of demo play_history rows to insert.")
     parser.add_argument("--skip-seed", action="store_true", help="Do not fetch and upsert song_info documents.")
     parser.add_argument("--skip-generate", action="store_true", help="Do not generate simulated play logs.")
     parser.add_argument("--once", action="store_true", help="Run once and exit.")

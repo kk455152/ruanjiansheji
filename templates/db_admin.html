@@ -325,6 +325,7 @@
             <button id="catalogFilterBtn" class="secondary">搜索</button>
             <button id="fixLogicBtn" class="secondary">修复逻辑数据</button>
             <button id="runDailyBtn">运行每日汇总</button>
+            <button id="generateDemoBtn">生成模拟数据并汇总</button>
           </div>
         </div>
         <div id="catalogList" class="catalog-list">
@@ -776,20 +777,39 @@
       setStatus(`已生成随机模拟数据，可修改后保存：${label}`);
     }
 
-    async function runDailyStats() {
+    async function runDailyStats(generateDemo = false) {
       el("runDailyBtn").disabled = true;
-      setStatus("正在运行每日汇总...");
+      el("generateDemoBtn").disabled = true;
+      setStatus(generateDemo ? "正在生成中文模拟数据并运行每日汇总..." : "正在运行每日汇总...");
       try {
         const data = await api("/api/db/daily-stats/run", {
           method: "POST",
-          body: { skip_seed: true, skip_generate: true },
+          body: generateDemo
+            ? {
+                skip_seed: true,
+                skip_generate: true,
+                generate_demo_data: true,
+                demo_user_count: 32,
+                demo_device_count: 18,
+                demo_order_count: 24,
+                demo_play_count: 120,
+              }
+            : { skip_seed: true, skip_generate: true },
         });
-        setStatus(`每日汇总完成：${(data.refreshed_daily_tables || []).join(", ")}`);
+        const demo = data.demo_data || {};
+        const demoText = generateDemo
+          ? `；模拟用户 ${demo.users || 0}，设备 ${demo.devices || 0}，订单 ${demo.orders || 0}，播放 ${demo.play_history || 0}`
+          : "";
+        setStatus(`每日汇总完成：${(data.refreshed_daily_tables || []).join(", ")}${demoText}`);
         await loadRows();
+        const catalog = await api("/api/db/front-data-catalog");
+        state.catalog = catalog.list || [];
+        renderCatalog();
       } catch (err) {
         setStatus(`每日汇总失败：${err.message}`);
       } finally {
         el("runDailyBtn").disabled = false;
+        el("generateDemoBtn").disabled = false;
       }
     }
 
@@ -823,7 +843,8 @@
         renderCatalog();
       }
     };
-    el("runDailyBtn").onclick = runDailyStats;
+    el("runDailyBtn").onclick = () => runDailyStats(false);
+    el("generateDemoBtn").onclick = () => runDailyStats(true);
     el("fixLogicBtn").onclick = fixLogicalData;
     el("backCatalogBtn").onclick = async () => {
       setView("catalog");

@@ -546,6 +546,11 @@ def run_daily_stats_now():
             skip_seed=bool(body.get('skip_seed', False)),
             skip_generate=bool(body.get('skip_generate', False)),
             keywords=body.get('keywords'),
+            generate_demo_data=bool(body.get('generate_demo_data', False)),
+            demo_user_count=int(body.get('demo_user_count') or os.environ.get('DAILY_STATS_DEMO_USER_COUNT', '32')),
+            demo_device_count=int(body.get('demo_device_count') or os.environ.get('DAILY_STATS_DEMO_DEVICE_COUNT', '18')),
+            demo_order_count=int(body.get('demo_order_count') or os.environ.get('DAILY_STATS_DEMO_ORDER_COUNT', '24')),
+            demo_play_count=int(body.get('demo_play_count') or body.get('generate_count') or os.environ.get('DAILY_STATS_DEMO_PLAY_COUNT', '120')),
         )
         return jsonify({'status': 'success', 'data': result}), 200
     except Exception as exc:
