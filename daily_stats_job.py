@@ -592,11 +592,6 @@ def refresh_user_value_segments(cursor, stat_date):
         """
         SELECT
             COALESCE(value_level, 'normal') AS segment_code,
-            CASE COALESCE(value_level, 'normal')
-                WHEN 'high' THEN '高价值用户'
-                WHEN 'low' THEN '低价值用户'
-                ELSE '普通用户'
-            END AS segment_name,
             COUNT(*) AS user_count,
             COUNT(CASE WHEN active_level='high' THEN 1 END) AS active_user_count
         FROM user_profile
@@ -642,7 +637,7 @@ def refresh_user_value_segments(cursor, stat_date):
             (
                 stat_date,
                 segment_code,
-                row.get("segment_name") or segment_code,
+                {"high": "高价值用户", "low": "低价值用户", "normal": "普通用户"}.get(segment_code, segment_code),
                 user_count,
                 active_count,
                 avg_row.get("avg_play_count") or 0,
