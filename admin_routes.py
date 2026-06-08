@@ -2696,7 +2696,7 @@ def market_segments():
 @admin_bp.get("/market/insights")
 @require_admin("super", "market")
 def market_insights():
-    cohort_filter = "u.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+    cohort_filter = "u.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) AND u.created_at <= NOW()"
     new_users = count_sql(f"SELECT COUNT(*) AS c FROM `user` u WHERE {cohort_filter}")
     bound_users = count_sql(
         f"""
@@ -2704,6 +2704,8 @@ def market_insights():
         FROM `user` u
         JOIN user_device_binding b ON b.user_id = u.user_id
         WHERE {cohort_filter}
+          AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+          AND (b.bind_time IS NULL OR b.bind_time <= NOW())
         """
     )
     first_play_users = count_sql(
@@ -2712,6 +2714,8 @@ def market_insights():
         FROM `user` u
         JOIN play_history ph ON ph.user_id = u.user_id
         WHERE {cohort_filter}
+          AND ph.created_at >= u.created_at
+          AND ph.created_at <= NOW()
         """
     )
     retained_users = count_sql(
@@ -2721,8 +2725,13 @@ def market_insights():
         JOIN play_history ph ON ph.user_id = u.user_id
         WHERE {cohort_filter}
           AND ph.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          AND ph.created_at >= u.created_at
+          AND ph.created_at <= NOW()
         """
     )
+    bound_users = min(bound_users, new_users)
+    first_play_users = min(first_play_users, bound_users)
+    retained_users = min(retained_users, first_play_users)
     base = max(new_users, 1)
     recommendation_rows = _system_config_group_rows("market_recommendation", 20)
     recommendations = [
@@ -2913,20 +2922,121 @@ def firmware_packages():
     return response_ok({"total": 0, "list": []})
 
 
+FIRMWARE_UPLOAD_PRESETS = [
+    {
+        "packageId": "preset-a1-v111",
+        "modelName": "A1",
+        "version": "v1.1.1",
+        "versionCode": 111,
+        "channel": "stable",
+        "sizeMb": 18.72,
+        "checksum": "A1B7C9D2",
+        "releaseNote": "A1 稳定版：优化配网恢复、播放缓存和夜间音量控制。",
+    },
+    {
+        "packageId": "preset-a2-v112-gray",
+        "modelName": "A2",
+        "version": "v1.1.2",
+        "versionCode": 112,
+        "channel": "gray",
+        "sizeMb": 19.16,
+        "checksum": "A2E4F6B8",
+        "releaseNote": "A2 灰度版：增加固件自检日志和弱网重试策略。",
+    },
+    {
+        "packageId": "preset-b1-v110-rollback",
+        "modelName": "B1",
+        "version": "v1.1.0",
+        "versionCode": 110,
+        "channel": "rollback",
+        "sizeMb": 17.94,
+        "checksum": "B1C3D5F7",
+        "releaseNote": "B1 回滚包：用于异常升级后的稳定版本回退。",
+    },
+]
+
+
 def firmware_upload_catalog():
-    return []
+    uploaded_rows = mysql_all(
+        """
+        SELECT model_name, version
+        FROM device_firmware
+        WHERE COALESCE(status, '') NOT IN ('deleted', 'disabled')
+        """
+    )
+    uploaded = {(row.get("model_name"), row.get("version")) for row in uploaded_rows}
+    return [
+        {
+            **item,
+            "uploaded": (item["modelName"], item["version"]) in uploaded,
+        }
+        for item in FIRMWARE_UPLOAD_PRESETS
+    ]
 
 
 @admin_bp.get("/operator/device/firmware-upload-options")
 @require_admin("super", "operator")
 def firmware_upload_options():
-    return response_ok({"total": 0, "list": []})
+    rows = firmware_upload_catalog()
+    return response_ok({"total": len(rows), "list": rows})
 
 
 @admin_bp.post("/operator/device/firmware-upload")
 @require_admin("super", "operator")
 def upload_firmware_package():
-    return response_error(400, "firmware upload catalog is empty")
+    body = request.get_json(silent=True) or {}
+    package_id = str(body.get("packageId") or "").strip()
+    package = next((item for item in FIRMWARE_UPLOAD_PRESETS if item["packageId"] == package_id), None)
+    if not package:
+        return response_error(404, "firmware package not found", "请选择系统预置固件包")
+
+    existing = mysql_one(
+        """
+        SELECT firmware_id
+        FROM device_firmware
+        WHERE model_name=%s AND version=%s AND COALESCE(status, '') NOT IN ('deleted', 'disabled')
+        ORDER BY firmware_id DESC
+        LIMIT 1
+        """,
+        (package["modelName"], package["version"]),
+    )
+    if existing:
+        return response_ok({**package, "uploaded": True, "firmwareId": existing.get("firmware_id")}, "firmware package already uploaded")
+
+    firmware_id = mysql_exec(
+        """
+        INSERT INTO device_firmware
+            (model_name, device_type, hardware_version, version, version_code,
+             file_url, file_md5, file_size, description, force_update, status,
+             created_at, updated_at)
+        VALUES (%s, 'speaker', %s, %s, %s, %s, %s, %s, %s, 0, %s, NOW(), NOW())
+        """,
+        (
+            package["modelName"],
+            f"HW-{package['modelName']}",
+            package["version"],
+            package["versionCode"],
+            f"https://cdn.example.com/firmware/{package['modelName'].lower()}-{package['version']}.bin",
+            hashlib.md5(package["checksum"].encode("utf-8")).hexdigest(),
+            int(package["sizeMb"] * 1024 * 1024),
+            package["releaseNote"],
+            package["channel"],
+        ),
+        fetch_last_id=True,
+    )
+    if not firmware_id:
+        return response_error(500, "firmware upload failed", "device_firmware is not writable")
+
+    write_admin_audit(
+        "upload_firmware_package",
+        "设备固件",
+        "上传固件包",
+        f"{package['modelName']} {package['version']}",
+        "success",
+        "",
+        params={"packageId": package_id, "firmwareId": firmware_id},
+    )
+    return response_ok({**package, "uploaded": True, "firmwareId": firmware_id}, "firmware package uploaded")
 
 
 @admin_bp.get("/operator/device/firmware-tasks")

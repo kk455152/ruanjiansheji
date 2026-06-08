@@ -24,6 +24,10 @@ from storage_backends import (
 LOCAL_TZ = timezone(timedelta(hours=8))
 DEFAULT_SONG_KEYWORDS = ["稻香", "晴天", "夜曲", "青花瓷", "七里香"]
 DEFAULT_DEVICES = [f"dev_{index:02d}" for index in range(1, 6)]
+DEFAULT_DEMO_USER_COUNT = 36
+DEFAULT_DEMO_DEVICE_COUNT = 19
+DEFAULT_DEMO_ORDER_COUNT = 28
+DEFAULT_DEMO_PLAY_COUNT = 8600
 DEMO_NAMES = [
     "林小满", "陈一诺", "周明轩", "苏念安", "顾北辰", "许知夏", "沈清欢", "陆星河",
     "赵云舒", "唐若溪", "宋景行", "何雨桐", "韩子墨", "梁诗语", "程予安", "孟晚晴",
@@ -59,12 +63,12 @@ DEMO_NICK_NAME_TAILS = [
     "听歌中", "的晚风", "的清晨", "在路上",
 ]
 DEMO_ROOM_DEVICE_NAMES = {
-    "客厅": ("客厅音箱", "客厅播放器", "客厅小音箱"),
-    "卧室": ("卧室音箱", "床头音箱", "主卧播放器"),
-    "书房": ("书房音箱", "桌面播放器", "书房小音箱"),
-    "厨房": ("厨房音箱", "厨房小音箱", "餐厨播放器"),
-    "阳台": ("阳台音箱", "休闲区音箱", "阳台播放器"),
-    "儿童房": ("儿童房音箱", "故事音箱", "儿童房播放器"),
+    "客厅": ("客厅音箱", "客厅播放器", "客厅 Mini", "电视柜音箱", "沙发旁音箱"),
+    "卧室": ("卧室音箱", "床头音箱", "主卧播放器", "睡前音箱", "床边 Mini"),
+    "书房": ("书房音箱", "桌面播放器", "书桌音箱", "工作台音箱", "阅读角音箱"),
+    "厨房": ("厨房音箱", "厨房小音箱", "餐厨播放器", "备餐台音箱", "餐厅音箱"),
+    "阳台": ("阳台音箱", "休闲区音箱", "阳台播放器", "花架旁音箱", "露台 Mini"),
+    "儿童房": ("儿童房音箱", "故事音箱", "儿童房播放器", "晚安故事机", "玩具柜音箱"),
 }
 DEMO_REGIONS = [
     ("310000", "上海市", "310100", "上海市"),
@@ -131,15 +135,15 @@ DEMO_PLATFORMS = ("网易云音乐", "QQ音乐")
 DEMO_DEVICE_MODELS = ("A1", "A2", "B1")
 DEMO_FIRMWARE_VERSIONS = ("v1.0.0", "v1.0.1", "v1.1.0")
 DEMO_ROOMS = ("客厅", "卧室", "书房", "厨房", "阳台", "儿童房")
-DEMO_NETWORK_NAMES = (
-    "ChinaNet-5G-A8F2",
-    "CMCC-Home-7C21",
-    "TP-LINK-9B3A",
-    "MiWiFi-2G-83D1",
-    "HUAWEI-Home-C624",
-    "CU_5G_19AE",
-    "FAST-Home-6F10",
-    "MERCURY-8D72",
+DEMO_NETWORK_PREFIXES = (
+    "ChinaNet-5G",
+    "CMCC-Home",
+    "TP-LINK",
+    "MiWiFi-2G",
+    "HUAWEI-Home",
+    "CU-Home",
+    "FAST-Home",
+    "MERCURY",
 )
 DEMO_CLEAR_ROOT_TABLES = (
     "user",
@@ -150,7 +154,15 @@ DEMO_CLEAR_ROOT_TABLES = (
     "user_feedback",
 )
 DEMO_CLEAR_EXTRA_TABLES = (
+    "admin_auth_token",
+    "admin_data_scope",
+    "admin_login_log",
+    "admin_permission",
+    "admin_role",
+    "admin_role_permission",
+    "admin_user_role",
     "daily_stats",
+    "data_job_task",
     "region_stats_daily",
     "hot_ranking_daily",
     "user_value_segment_daily",
@@ -160,9 +172,14 @@ DEMO_CLEAR_EXTRA_TABLES = (
     "device_firmware_release",
     "device_firmware_release_device",
     "device_firmware_update_task",
+    "high_risk_operation",
+    "security_event_log",
+    "system_backup_task",
+    "system_upgrade_package",
     "admin_operation_log",
 )
 DEMO_MONGO_COLLECTIONS = (
+    "device_metrics",
     "device_runtime",
     "player_state",
     "play_queue",
@@ -170,7 +187,43 @@ DEMO_MONGO_COLLECTIONS = (
     "media_metadata",
     "song_info",
     "play_logs",
+    "user_profiles",
+    "music_service_auth",
+    "device_bindings",
+    "friendships",
+    "listen_rooms",
+    "listening_summaries",
+    "user_feedback",
+    "bind_progress",
+    "music_sync_progress",
+    "device_event_log",
+    "play_event_log",
+    "voice_command_log",
+    "device_status_snapshot",
+    "user_behavior_event",
+    "listen_room_message",
+    "feedback_attachment",
+    "third_party_music_raw",
+    "device_config_snapshot",
 )
+DEMO_CLAMP_TIME_COLUMNS = {
+    "created_at",
+    "updated_at",
+    "generated_at",
+    "last_login_at",
+    "last_active",
+    "bind_time",
+    "paid_at",
+    "handled_at",
+    "closed_at",
+    "scheduled_at",
+    "started_at",
+    "finished_at",
+    "logged_at",
+    "granted_at",
+    "assigned_at",
+    "applied_at",
+}
 ONLINE_DEVICE_VALUE_SQL = """
 CASE
     WHEN LOWER(TRIM(COALESCE(online_status, ''))) IN ('online', 'true', '1', 'yes')
@@ -380,8 +433,22 @@ def mysql_table_columns(cursor, table):
     return {row["COLUMN_NAME"] for row in cursor.fetchall() or []}
 
 
+def clamp_demo_time(value):
+    if not isinstance(value, datetime):
+        return value
+    limit = local_now().replace(tzinfo=None) - timedelta(minutes=2)
+    candidate = value.replace(tzinfo=None)
+    if candidate > limit:
+        return limit
+    return value
+
+
 def filter_existing_columns(data, columns):
-    return {key: value for key, value in data.items() if key in columns}
+    return {
+        key: clamp_demo_time(value) if key in DEMO_CLAMP_TIME_COLUMNS else value
+        for key, value in data.items()
+        if key in columns
+    }
 
 
 def mysql_existing_tables(cursor):
@@ -472,8 +539,13 @@ def clear_demo_mongo_data():
     database = get_play_log_collection().database
     counts = {}
     for collection_name in DEMO_MONGO_COLLECTIONS:
-        result = database[collection_name].delete_many({})
-        counts[collection_name] = int(result.deleted_count or 0)
+        collection = database[collection_name]
+        try:
+            counts[collection_name] = int(collection.estimated_document_count() or 0)
+        except Exception:
+            counts[collection_name] = 0
+        database.drop_collection(collection_name)
+    ensure_mongo_schema()
     return counts
 
 
@@ -562,6 +634,43 @@ def demo_daily_count(base_count, stat_date, minimum=0, salt=0):
     return max(int(minimum or 0), int(round(value)))
 
 
+def demo_target_count(total, preferred_count, low_ratio, high_ratio, rng):
+    if total <= 0:
+        return 0
+    ratio = rng.uniform(low_ratio, high_ratio)
+    jitter = rng.randint(-3, 3)
+    return min(total, max(1, int(preferred_count or 0), int(round(total * ratio)) + jitter))
+
+
+def demo_choice_subset(values, target_count, rng, preferred_values=None):
+    values = list(dict.fromkeys(values or []))
+    if not values:
+        return []
+    preferred_values = list(dict.fromkeys(preferred_values or []))
+    target_count = min(max(int(target_count or 1), 1), len(values))
+    selected = []
+    for value in preferred_values:
+        if value in values and value not in selected and len(selected) < target_count:
+            selected.append(value)
+    pool = [value for value in values if value not in selected]
+    rng.shuffle(pool)
+    selected.extend(pool[:max(target_count - len(selected), 0)])
+    rng.shuffle(selected)
+    return selected or values[:target_count]
+
+
+def demo_unique_song_choices(mapping_choices):
+    unique = []
+    seen = set()
+    for mapping_id, song in mapping_choices or []:
+        key = song[0] if song else mapping_id
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((mapping_id, song))
+    return unique
+
+
 def demo_full_name(index, used_names, seed_offset=0):
     position = max(index + seed_offset, 1)
     if position <= len(DEMO_NAMES) and DEMO_NAMES[position - 1] not in used_names:
@@ -572,14 +681,9 @@ def demo_full_name(index, used_names, seed_offset=0):
     offset = 0
     while True:
         current = base_position + offset
-        surname = DEMO_SURNAMES[current % surname_count]
-        first = DEMO_GIVEN_NAMES[(current // surname_count) % given_count]
-        cycle = current // (surname_count * given_count)
-        if cycle:
-            second = DEMO_GIVEN_NAMES[(current // (surname_count * given_count)) % given_count]
-            candidate = f"{surname}{first}{second[-1]}"
-        else:
-            candidate = f"{surname}{first}"
+        surname = DEMO_SURNAMES[(current * 7 + current // 3) % surname_count]
+        given = DEMO_GIVEN_NAMES[(current * 11 + current // surname_count) % given_count]
+        candidate = f"{surname}{given}"
         if candidate not in used_names:
             return candidate
         offset += 1
@@ -596,25 +700,39 @@ def demo_nickname(username, index, rng=None, used_nicknames=None):
         surname = "音"
     start = rng.randint(0, 997)
     candidates = []
-    for offset in range(24):
+    for offset in range(120):
         cursor = index + start + offset
         prefix = DEMO_NICK_PREFIXES[cursor % len(DEMO_NICK_PREFIXES)]
         suffix = DEMO_NICK_SUFFIXES[(cursor // 2) % len(DEMO_NICK_SUFFIXES)]
         persona = DEMO_NICK_PERSONAS[(cursor // 3) % len(DEMO_NICK_PERSONAS)]
         tail = DEMO_NICK_NAME_TAILS[(cursor // 5) % len(DEMO_NICK_NAME_TAILS)]
         activity = DEMO_NICK_ACTIVITIES[cursor % len(DEMO_NICK_ACTIVITIES)]
+        given_tail = given_name[-1:] or "音"
         candidates.extend([
             f"{given_name}{tail}",
             f"{prefix}{suffix}",
             f"{persona}{suffix}",
-            f"{surname}{activity[-3:]}",
+            f"{given_name}的{suffix}",
+            f"{prefix}{given_tail}{suffix}",
+            f"{given_name}{persona}{suffix}",
+            f"{surname}{prefix}{suffix}",
             activity,
         ])
     for nickname in candidates:
         if nickname and nickname != username and nickname not in used_nicknames:
             used_nicknames.add(nickname)
             return nickname
-    fallback = f"{DEMO_NICK_PREFIXES[index % len(DEMO_NICK_PREFIXES)]}{DEMO_NICK_SUFFIXES[(index * 7) % len(DEMO_NICK_SUFFIXES)]}"
+    for offset in range(500):
+        fallback = (
+            f"{given_name}"
+            f"{DEMO_NICK_PERSONAS[(index + offset) % len(DEMO_NICK_PERSONAS)]}"
+            f"{DEMO_NICK_SUFFIXES[(index * 7 + offset) % len(DEMO_NICK_SUFFIXES)]}"
+        )
+        if fallback != username and fallback not in used_nicknames:
+            used_nicknames.add(fallback)
+            return fallback
+    digest = hashlib.sha1(f"{username}:{index}".encode("utf-8")).hexdigest()[:4]
+    fallback = f"{given_name}听歌人{digest}"
     used_nicknames.add(fallback)
     return fallback
 
@@ -635,6 +753,12 @@ def demo_device_number(model_name, index):
 def demo_room_device_name(room, index):
     names = DEMO_ROOM_DEVICE_NAMES.get(room) or (f"{room}音箱",)
     return names[(index - 1) % len(names)]
+
+
+def demo_network_name(index):
+    prefix = DEMO_NETWORK_PREFIXES[(index - 1) % len(DEMO_NETWORK_PREFIXES)]
+    digest = hashlib.sha1(f"{prefix}:{index}".encode("utf-8")).hexdigest()[:4].upper()
+    return f"{prefix}-{digest}"
 
 
 def demo_song_choice(rng, mapping_ids):
@@ -705,12 +829,390 @@ def count_insert(cursor, table, data):
     return 1 if insert_demo_row(cursor, table, data) is not None else 0
 
 
+def table_exists(cursor, table):
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s
+        """,
+        (table,),
+    )
+    return int((cursor.fetchone() or {}).get("c") or 0) > 0
+
+
+def select_id_by_column(cursor, table, id_column, where_column, value):
+    if not table_exists(cursor, table):
+        return None
+    cursor.execute(
+        f"SELECT {quote_identifier(id_column)} FROM {quote_identifier(table)} "
+        f"WHERE {quote_identifier(where_column)}=%s "
+        f"ORDER BY {quote_identifier(id_column)} ASC LIMIT 1",
+        (value,),
+    )
+    row = cursor.fetchone() or {}
+    return row.get(id_column)
+
+
+def insert_demo_row_if_missing(cursor, table, where_sql, params, data):
+    if not table_exists(cursor, table):
+        return 0
+    cursor.execute(f"SELECT 1 FROM {quote_identifier(table)} WHERE {where_sql} LIMIT 1", params)
+    if cursor.fetchone():
+        return 0
+    return count_insert(cursor, table, data)
+
+
+def seed_demo_admin_rows(cursor, stat_date, rng, span_days=1):
+    required = {
+        "admin_user", "admin_role", "admin_permission", "admin_role_permission",
+        "admin_user_role", "admin_data_scope", "admin_auth_token", "admin_login_log",
+        "data_job_task", "high_risk_operation", "security_event_log",
+        "system_backup_task", "system_upgrade_package",
+    }
+    if not any(table_exists(cursor, table) for table in required):
+        return 0
+
+    moment = lambda index, total: spread_day_moment(stat_date, index, total, span_days)
+    rows = 0
+    cursor.execute(
+        """
+        SELECT admin_id, username, role, real_name
+        FROM admin_user
+        ORDER BY admin_id ASC
+        """
+    )
+    admins = cursor.fetchall() or []
+    if not admins:
+        return 0
+
+    role_defs = [
+        ("super_admin", "超级管理员", "system", "拥有后台全部模块和数据库维护权限"),
+        ("market_admin", "市场分析管理员", "business", "负责趋势、地区、画像、热歌和营销洞察"),
+        ("operator_admin", "普通管理员", "business", "负责设备、固件、日志和用户反馈处理"),
+        ("boss", "老板", "readonly", "只读查看经营看板、日报和核心指标"),
+    ]
+    for index, (code, name, role_type, description) in enumerate(role_defs, start=1):
+        upsert_demo_row(
+            cursor,
+            "admin_role",
+            {
+                "role_code": code,
+                "role_name": name,
+                "role_type": role_type,
+                "description": description,
+                "status": "active",
+                "created_by": None,
+                "updated_by": None,
+                "created_at": moment(index, len(role_defs)),
+                "updated_at": moment(index, len(role_defs)) + timedelta(minutes=8),
+            },
+            ["role_name", "role_type", "description", "status", "updated_by", "updated_at"],
+        )
+        rows += 1
+
+    permission_defs = [
+        ("overview:view", "查看数据总览", "overview", "数据总览", "menu", "/overview", "/api/admin/super/overview/*"),
+        ("trend:view", "查看趋势分析", "trend", "趋势分析", "menu", "/trend", "/api/admin/super/trend/*"),
+        ("region:view", "查看区域热力", "region", "区域热力", "menu", "/region", "/api/admin/super/region/*"),
+        ("profile:view", "查看用户画像", "profile", "用户画像", "menu", "/profile", "/api/admin/super/user-profile/*"),
+        ("segments:view", "查看用户分群", "segments", "用户分群", "menu", "/segments", "/api/admin/market/segments"),
+        ("insights:view", "查看营销洞察", "insights", "营销洞察", "menu", "/insights", "/api/admin/market/insights"),
+        ("songs:view", "查看热歌排行", "songs", "热歌排行", "menu", "/songs", "/api/admin/market/top-songs"),
+        ("feedback:handle", "处理用户反馈", "feedback", "用户反馈", "action", "/feedback", "/api/admin/operator/feedback/handle"),
+        ("devices:operate", "维护设备", "devices", "设备管理", "action", "/devices", "/api/admin/operator/device/*"),
+        ("firmware:upload", "上传固件包", "firmware", "设备固件", "action", "/firmware", "/api/admin/operator/device/firmware-upload"),
+        ("logs:view", "查看设备日志", "logs", "设备日志", "menu", "/logs", "/api/admin/operator/device/logs"),
+        ("notices:create", "发布系统公告", "notices", "系统公告", "action", "/notices", "/api/admin/super/notices"),
+        ("audit:view", "查看审计日志", "audit", "审计日志", "menu", "/audit", "/api/admin/super/security/logs"),
+        ("system:config", "维护系统配置", "system", "系统配置", "action", "/system", "/api/admin/super/system/config"),
+        ("db:maintain", "数据库维护", "database", "数据库维护", "action", "/db-admin", "/api/db/*"),
+    ]
+    for index, item in enumerate(permission_defs, start=1):
+        code, name, module_code, module_name, permission_type, route_path, api_path = item
+        upsert_demo_row(
+            cursor,
+            "admin_permission",
+            {
+                "permission_code": code,
+                "permission_name": name,
+                "module_code": module_code,
+                "module_name": module_name,
+                "permission_type": permission_type,
+                "parent_id": None,
+                "route_path": route_path,
+                "api_path": api_path,
+                "sort_no": index * 10,
+                "status": "active",
+                "created_at": moment(index, len(permission_defs)),
+                "updated_at": moment(index, len(permission_defs)) + timedelta(minutes=5),
+            },
+            ["permission_name", "module_code", "module_name", "permission_type", "route_path", "api_path", "sort_no", "status", "updated_at"],
+        )
+        rows += 1
+
+    role_ids = {
+        code: select_id_by_column(cursor, "admin_role", "role_id", "role_code", code)
+        for code, *_ in role_defs
+    }
+    permission_ids = {
+        code: select_id_by_column(cursor, "admin_permission", "permission_id", "permission_code", code)
+        for code, *_ in permission_defs
+    }
+    role_permissions = {
+        "super_admin": list(permission_ids.keys()),
+        "market_admin": ["overview:view", "trend:view", "region:view", "profile:view", "segments:view", "insights:view", "songs:view"],
+        "operator_admin": ["overview:view", "feedback:handle", "devices:operate", "firmware:upload", "logs:view"],
+        "boss": ["overview:view", "trend:view", "region:view", "profile:view", "segments:view", "insights:view", "songs:view", "audit:view"],
+    }
+    for role_code, permission_codes in role_permissions.items():
+        role_id = role_ids.get(role_code)
+        if not role_id:
+            continue
+        for permission_code in permission_codes:
+            permission_id = permission_ids.get(permission_code)
+            if not permission_id:
+                continue
+            rows += insert_demo_row_if_missing(
+                cursor,
+                "admin_role_permission",
+                "role_id=%s AND permission_id=%s",
+                (role_id, permission_id),
+                {
+                    "role_id": role_id,
+                    "permission_id": permission_id,
+                    "granted_by": None,
+                    "granted_at": moment(len(permission_code), 64),
+                },
+            )
+
+    for index, admin in enumerate(admins, start=1):
+        role_code = admin.get("role") or "operator_admin"
+        role_id = role_ids.get(role_code)
+        if role_id:
+            rows += insert_demo_row_if_missing(
+                cursor,
+                "admin_user_role",
+                "admin_id=%s AND role_id=%s",
+                (admin["admin_id"], role_id),
+                {
+                    "admin_id": admin["admin_id"],
+                    "role_id": role_id,
+                    "assigned_by": None,
+                    "assigned_at": moment(index, len(admins)),
+                },
+            )
+            rows += insert_demo_row_if_missing(
+                cursor,
+                "admin_data_scope",
+                "role_id=%s AND scope_type=%s AND scope_code=%s",
+                (role_id, "global", "all"),
+                {
+                    "admin_id": None,
+                    "role_id": role_id,
+                    "scope_type": "global",
+                    "scope_code": "all",
+                    "scope_name": "全部数据" if role_code == "super_admin" else "角色授权数据",
+                    "can_view": 1,
+                    "can_edit": 1 if role_code in {"super_admin", "operator_admin"} else 0,
+                    "can_export": 1,
+                    "created_at": moment(index, len(admins)),
+                    "updated_at": moment(index, len(admins)) + timedelta(minutes=3),
+                },
+            )
+        rows += insert_demo_row_if_missing(
+            cursor,
+            "admin_auth_token",
+            "admin_id=%s AND token_type=%s AND DATE(created_at)=%s",
+            (admin["admin_id"], "access", stat_date),
+            {
+                "admin_id": admin["admin_id"],
+                "token": demo_password_hash(f"admin-token:{stat_date}:{admin['admin_id']}"),
+                "token_type": "access",
+                "login_type": "password",
+                "ip_address": f"10.0.2.{20 + index}",
+                "user_agent": "Mozilla/5.0 AdminConsole",
+                "status": "active",
+                "expires_at": moment(index, len(admins)) + timedelta(hours=12),
+                "revoked_at": None,
+                "created_at": moment(index, len(admins)),
+                "updated_at": moment(index, len(admins)) + timedelta(minutes=2),
+            },
+        )
+
+    login_statuses = ("success", "success", "success", "failed")
+    for index in range(1, 25):
+        admin = admins[(index - 1) % len(admins)]
+        status = login_statuses[(index - 1) % len(login_statuses)]
+        rows += insert_demo_row_if_missing(
+            cursor,
+            "admin_login_log",
+            "username=%s AND logged_at=%s",
+            (admin["username"], moment(index, 24)),
+            {
+                "admin_id": admin["admin_id"],
+                "username": admin["username"],
+                "login_type": "password",
+                "ip_address": f"10.0.3.{30 + index}",
+                "user_agent": "Mozilla/5.0 AdminConsole",
+                "login_status": status,
+                "fail_reason": None if status == "success" else "验证码输入错误",
+                "logged_at": moment(index, 24),
+            },
+        )
+
+    job_defs = [
+        ("daily_stats", "运营日报汇总", 14, 14, 0, "success", None),
+        ("import", "用户画像导入", 240, 236, 4, "finished", "4 行缺少手机号已跳过"),
+        ("export", "热歌排行导出", 10, 10, 0, "success", None),
+        ("sync", "Mongo 运行态同步", 291, 291, 0, "success", None),
+    ]
+    for index, (job_type, business_type, total, success, fail, status, reason) in enumerate(job_defs, start=1):
+        rows += insert_demo_row_if_missing(
+            cursor,
+            "data_job_task",
+            "job_no=%s",
+            (f"JOB{stat_date.strftime('%Y%m%d')}{index:03d}",),
+            {
+                "job_no": f"JOB{stat_date.strftime('%Y%m%d')}{index:03d}",
+                "job_type": job_type,
+                "business_type": business_type,
+                "file_url": f"https://cdn.example.com/jobs/{stat_date:%Y%m%d}-{index}.csv",
+                "total_count": total,
+                "success_count": success,
+                "fail_count": fail,
+                "status": status,
+                "fail_reason": reason,
+                "admin_id": admins[index % len(admins)]["admin_id"],
+                "started_at": moment(index, len(job_defs)),
+                "finished_at": moment(index, len(job_defs)) + timedelta(minutes=12),
+                "created_at": moment(index, len(job_defs)),
+                "updated_at": moment(index, len(job_defs)) + timedelta(minutes=12),
+            },
+        )
+
+    risk_defs = [
+        ("delete", "device", "批量删除离线设备", "high", "approved", "success"),
+        ("export", "user_profile", "导出用户画像明细", "medium", "approved", "success"),
+        ("firmware", "device_firmware", "全量固件灰度扩大", "high", "pending", "waiting"),
+    ]
+    for index, (op_type, target_type, message, level, approval, result) in enumerate(risk_defs, start=1):
+        rows += insert_demo_row_if_missing(
+            cursor,
+            "high_risk_operation",
+            "operation_no=%s",
+            (f"RISK{stat_date.strftime('%Y%m%d')}{index:03d}",),
+            {
+                "operation_no": f"RISK{stat_date.strftime('%Y%m%d')}{index:03d}",
+                "operation_type": op_type,
+                "target_type": target_type,
+                "target_id": f"{target_type}-{index}",
+                "request_params": json.dumps({"message": message}, ensure_ascii=False),
+                "risk_level": level,
+                "approval_status": approval,
+                "requested_by": admins[(index - 1) % len(admins)]["admin_id"],
+                "approved_by": admins[0]["admin_id"] if approval == "approved" else None,
+                "approved_at": moment(index, len(risk_defs)) + timedelta(minutes=20) if approval == "approved" else None,
+                "executed_at": moment(index, len(risk_defs)) + timedelta(minutes=28) if result == "success" else None,
+                "result_status": result,
+                "result_message": message,
+                "created_at": moment(index, len(risk_defs)),
+                "updated_at": moment(index, len(risk_defs)) + timedelta(minutes=30),
+            },
+        )
+
+    security_defs = [
+        ("login_failed", "warning", "后台登录失败", "同一 IP 连续输错密码，已触发提醒", "handled"),
+        ("api_rate", "info", "接口访问峰值", "数据维护页短时间内连续刷新，系统已记录审计", "handled"),
+        ("firmware_task", "warning", "固件任务失败", "部分设备升级任务失败，已进入告警列表", "open"),
+        ("db_write", "info", "数据库维护写入", "管理员通过维护页新增数据并刷新日报", "handled"),
+    ]
+    for index, (event_type, level, title, content, handled) in enumerate(security_defs, start=1):
+        rows += insert_demo_row_if_missing(
+            cursor,
+            "security_event_log",
+            "event_type=%s AND title=%s AND DATE(created_at)=%s",
+            (event_type, title, stat_date),
+            {
+                "admin_id": admins[(index - 1) % len(admins)]["admin_id"],
+                "event_type": event_type,
+                "event_level": level,
+                "title": title,
+                "content": content,
+                "ip_address": f"10.0.4.{40 + index}",
+                "user_agent": "Mozilla/5.0 AdminConsole",
+                "handled_status": handled,
+                "handled_by": admins[0]["admin_id"] if handled == "handled" else None,
+                "handled_at": moment(index, len(security_defs)) + timedelta(minutes=18) if handled == "handled" else None,
+                "created_at": moment(index, len(security_defs)),
+            },
+        )
+
+    backup_defs = [
+        ("mysql", "smart_speaker", 128_000_000, "success", None),
+        ("mongo", "musicplayer", 72_000_000, "success", None),
+        ("code", "project", 24_000_000, "success", None),
+    ]
+    for index, (task_type, scope, size, status, reason) in enumerate(backup_defs, start=1):
+        rows += insert_demo_row_if_missing(
+            cursor,
+            "system_backup_task",
+            "task_no=%s",
+            (f"BAK{stat_date.strftime('%Y%m%d')}{index:03d}",),
+            {
+                "task_no": f"BAK{stat_date.strftime('%Y%m%d')}{index:03d}",
+                "task_type": task_type,
+                "backup_scope": scope,
+                "file_url": f"https://backup.example.com/{scope}/{stat_date:%Y%m%d}-{index}.zip",
+                "file_size": size,
+                "status": status,
+                "fail_reason": reason,
+                "admin_id": admins[(index - 1) % len(admins)]["admin_id"],
+                "started_at": moment(index, len(backup_defs)),
+                "finished_at": moment(index, len(backup_defs)) + timedelta(minutes=9),
+                "created_at": moment(index, len(backup_defs)),
+                "updated_at": moment(index, len(backup_defs)) + timedelta(minutes=9),
+            },
+        )
+
+    package_defs = [
+        ("SYS-PKG-ADMIN-202606", "后台管理前端包", "2026.06.1", "frontend", "active"),
+        ("SYS-PKG-API-202606", "后台接口服务包", "2026.06.1", "backend", "active"),
+        ("SYS-PKG-JOB-202606", "每日汇总任务包", "2026.06.1", "job", "active"),
+    ]
+    for index, (package_no, package_name, version, upgrade_type, status) in enumerate(package_defs, start=1):
+        upsert_demo_row(
+            cursor,
+            "system_upgrade_package",
+            {
+                "package_no": package_no,
+                "package_name": package_name,
+                "version": version,
+                "file_url": f"https://cdn.example.com/system/{package_no}.zip",
+                "file_md5": demo_password_hash(package_no)[:32],
+                "file_size": 12_000_000 + index * 3_000_000,
+                "upgrade_type": upgrade_type,
+                "description": f"{package_name}，用于演示系统升级包管理。",
+                "status": status,
+                "uploaded_by": admins[(index - 1) % len(admins)]["admin_id"],
+                "applied_by": admins[0]["admin_id"] if index < 3 else None,
+                "applied_at": moment(index, len(package_defs)) + timedelta(minutes=30) if index < 3 else None,
+                "created_at": moment(index, len(package_defs)),
+                "updated_at": moment(index, len(package_defs)) + timedelta(minutes=30),
+            },
+            ["package_name", "version", "file_url", "file_md5", "file_size", "upgrade_type", "description", "status", "uploaded_by", "applied_by", "applied_at", "updated_at"],
+        )
+        rows += 1
+
+    return rows
+
+
 def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records, mapping_ids, order_records, span_days=1):
     if not user_profiles or not device_records:
         return 0
 
     moment = lambda index, total: spread_day_moment(stat_date, index, total, span_days)
-    rows = 0
+    rows = seed_demo_admin_rows(cursor, stat_date, rng, span_days)
     firmware_ids = []
     for index, model_name in enumerate(DEMO_DEVICE_MODELS, start=1):
         hardware_version = f"HW-{model_name}"
@@ -817,7 +1319,7 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
             {
                 "user_id": user["user_id"],
                 "device_sn": device["device_number"],
-                "wifi_name": DEMO_NETWORK_NAMES[(index - 1) % len(DEMO_NETWORK_NAMES)],
+                "wifi_name": demo_network_name(index),
                 "wifi_password": "12345678",
                 "progress": 100 if status == "success" else 68,
                 "current_step": "绑定完成" if status == "success" else "连接家庭 Wi-Fi",
@@ -831,9 +1333,11 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
         )
 
     log_titles = [
-        ("play", "info", "开始播放", "用户从歌单发起播放"),
+        ("online", "info", "设备上线", "设备心跳恢复，已连接家庭 Wi-Fi"),
         ("network", "warning", "网络抖动", "设备检测到 Wi-Fi 信号波动"),
         ("firmware", "info", "固件检查", "设备完成固件版本检测"),
+        ("firmware", "error", "固件升级失败", "下载固件包超时，等待自动重试"),
+        ("play", "info", "开始播放", "用户从歌单发起播放"),
         ("system", "error", "播放失败", "音乐平台临时返回超时"),
     ]
     for index, device in enumerate(device_records[:140], start=1):
@@ -1119,7 +1623,7 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
         )
 
     config_rows = [
-        ("notice.daily", "今日运营数据已更新，新增用户、设备、播放和反馈已完成汇总。", "notice", "notice", "运营日报公告", "published"),
+        (f"notice.daily.{stat_date.strftime('%Y%m%d')}", "今日运营数据已更新，新增用户、设备、播放和反馈已完成汇总。", "notice", "notice", "运营日报公告", "published"),
         ("monitor.api", "running", "status", "monitor_service", "后台接口服务", "平均响应 42 ms"),
         ("monitor.mysql", "running", "status", "monitor_service", "MySQL 数据库", "连接正常"),
         ("monitor.mongo", "running", "status", "monitor_service", "MongoDB 运行态", "连接正常"),
@@ -1151,11 +1655,15 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
 
 def day_moment(stat_date, index, total):
     now = local_now()
-    day_start = datetime.combine(stat_date, datetime_time(8, 0, 0))
-    if stat_date == now.date():
+    if stat_date >= now.date() and now.replace(tzinfo=None).time() < datetime_time(8, 5, 0):
+        day_start = datetime.combine(now.date(), datetime_time(0, 5, 0))
+    else:
+        day_start = datetime.combine(stat_date, datetime_time(8, 0, 0))
+    if stat_date >= now.date():
         day_end = now.replace(tzinfo=None) - timedelta(minutes=3)
         if day_end <= day_start:
-            day_end = datetime.combine(stat_date, datetime_time(23, 55, 0))
+            day_start = datetime.combine(now.date(), datetime_time(0, 0, 0))
+            day_end = max(day_start + timedelta(minutes=1), now.replace(tzinfo=None) - timedelta(minutes=1))
     else:
         day_end = datetime.combine(stat_date, datetime_time(22, 45, 0))
     span_seconds = max(int((day_end - day_start).total_seconds()), 1)
@@ -1228,24 +1736,24 @@ def demo_counts_for_date(stat_date, user_count, device_count, order_count, play_
         "user_count": demo_daily_count(user_count, stat_date, minimum=11, salt=1),
         "device_count": demo_daily_count(device_count, stat_date, minimum=7, salt=2),
         "order_count": demo_daily_count(order_count, stat_date, minimum=8, salt=3),
-        "play_count": demo_daily_count(play_count, stat_date, minimum=max(260, int(play_count or 0) // 2), salt=4),
+        "play_count": demo_daily_count(play_count, stat_date, minimum=max(1800, int(play_count or 0) // 2), salt=4),
     }
 
 
 def seed_chinese_demo_data(
     stat_date,
-    user_count=36,
-    device_count=19,
-    order_count=28,
-    play_count=3200,
+    user_count=DEFAULT_DEMO_USER_COUNT,
+    device_count=DEFAULT_DEMO_DEVICE_COUNT,
+    order_count=DEFAULT_DEMO_ORDER_COUNT,
+    play_count=DEFAULT_DEMO_PLAY_COUNT,
     reset_demo_data=False,
     span_days=1,
 ):
     rng = random.Random(f"demo-{stat_date.isoformat()}-{user_count}-{device_count}-{order_count}-{play_count}")
-    user_count = max(1, int(user_count or 36))
-    device_count = max(1, int(device_count or 19))
-    order_count = max(0, int(order_count or 28))
-    play_count = max(0, int(play_count or 3200))
+    user_count = max(1, int(user_count or DEFAULT_DEMO_USER_COUNT))
+    device_count = max(1, int(device_count or DEFAULT_DEMO_DEVICE_COUNT))
+    order_count = max(0, int(order_count or DEFAULT_DEMO_ORDER_COUNT))
+    play_count = max(0, int(play_count or DEFAULT_DEMO_PLAY_COUNT))
 
     connection = mysql_connect()
     created = {
@@ -1279,7 +1787,7 @@ def seed_chinese_demo_data(
             used_nicknames = select_existing_values(cursor, "user", "nickname")
             for index in range(1, user_count + 1):
                 serial = user_base + index
-                username = demo_full_name(serial + demo_day_index(stat_date) * 3, used_names)
+                username = demo_full_name(serial, used_names)
                 used_names.add(username)
                 nickname = demo_nickname(username, serial, rng, used_nicknames)
                 phone = f"13{(serial * 7) % 10}{stat_date.strftime('%m%d')}{serial % 10000:04d}"
@@ -1406,6 +1914,7 @@ def seed_chinese_demo_data(
                         "model_name": model_name,
                         "room": room,
                         "online_status": "online" if index % 5 else "offline",
+                        "serial": serial,
                     })
                 created["devices"] += 1
 
@@ -1422,10 +1931,10 @@ def seed_chinese_demo_data(
                     {
                         "user_id": user_info["user_id"],
                         "device_id": device_id,
-                        "custom_device_name": demo_room_device_name(room, index + 1),
+                        "custom_device_name": device_info["device_name"],
                         "is_primary": 1 if index < len(user_profiles) else 0,
                         "default_room": room,
-                        "current_network": DEMO_NETWORK_NAMES[index % len(DEMO_NETWORK_NAMES)],
+                        "current_network": demo_network_name(device_info["serial"]),
                         "bind_time": bind_time,
                     },
                     ["custom_device_name", "is_primary", "default_room", "current_network", "bind_time"],
@@ -1465,6 +1974,40 @@ def seed_chinese_demo_data(
             all_user_ids = select_all_ids(cursor, "user", "user_id") or user_ids
             all_device_ids = select_all_ids(cursor, "device", "device_id") or device_ids
             all_mapping_ids = load_all_mapping_choices(cursor) or mapping_ids
+            new_user_active_target = min(
+                len(user_ids),
+                max(1, int(round(len(user_ids) * rng.uniform(0.52, 0.86)))) if user_ids else 0,
+            )
+            preferred_active_users = rng.sample(user_ids, new_user_active_target) if new_user_active_target else []
+            active_user_target = demo_target_count(
+                len(all_user_ids),
+                preferred_count=max(new_user_active_target, int(round(len(user_ids) * 0.7))),
+                low_ratio=0.34,
+                high_ratio=0.68,
+                rng=rng,
+            )
+            active_user_ids = demo_choice_subset(all_user_ids, active_user_target, rng, preferred_active_users)
+
+            new_device_active_target = min(
+                len(device_ids),
+                max(1, int(round(len(device_ids) * rng.uniform(0.62, 0.92)))) if device_ids else 0,
+            )
+            preferred_active_devices = rng.sample(device_ids, new_device_active_target) if new_device_active_target else []
+            active_device_target = demo_target_count(
+                len(all_device_ids),
+                preferred_count=max(new_device_active_target, int(round(len(device_ids) * 0.8))),
+                low_ratio=0.46,
+                high_ratio=0.82,
+                rng=rng,
+            )
+            active_device_ids = demo_choice_subset(all_device_ids, active_device_target, rng, preferred_active_devices)
+
+            unique_song_choices = demo_unique_song_choices(all_mapping_ids)
+            song_target = min(
+                len(unique_song_choices),
+                max(16, int(round(len(DEMO_SONGS) * rng.uniform(0.55, 0.92))) + rng.randint(-3, 4)),
+            )
+            active_mapping_ids = demo_choice_subset(unique_song_choices, song_target, rng)
 
             order_records = []
             for index in range(1, order_count + 1):
@@ -1542,12 +2085,12 @@ def seed_chinese_demo_data(
             ) if play_names else None
             play_batch = []
             for index in range(1, play_count + 1):
-                if not all_user_ids or not all_device_ids or not all_mapping_ids:
+                if not active_user_ids or not active_device_ids or not active_mapping_ids:
                     break
-                mapping_id, song = demo_song_choice(rng, all_mapping_ids)
+                mapping_id, song = demo_song_choice(rng, active_mapping_ids)
                 play_data = filter_existing_columns({
-                    "device_id": rng.choice(all_device_ids),
-                    "user_id": rng.choice(all_user_ids),
+                    "device_id": rng.choice(active_device_ids),
+                    "user_id": rng.choice(active_user_ids),
                     "mapping_id": mapping_id,
                     "play_duration": rng.randint(40, 260),
                     "created_at": demo_moment(index, max(play_count, 1)),
@@ -1594,6 +2137,7 @@ def load_mysql_demo_snapshot():
                     d.model_name,
                     d.online_status,
                     d.firmware_version,
+                    b.user_id,
                     b.custom_device_name,
                     b.default_room,
                     b.current_network
@@ -1610,8 +2154,13 @@ def load_mysql_demo_snapshot():
                     u.username,
                     u.nickname,
                     u.email,
+                    p.gender,
+                    p.age,
+                    p.age_range,
                     p.province_name,
                     p.city_name,
+                    p.active_level,
+                    p.value_level,
                     p.bound_platforms
                 FROM `user` u
                 LEFT JOIN user_profile p ON p.user_id = u.user_id
@@ -1639,6 +2188,7 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
     songs = snapshot["songs"]
     if not devices or not users or not songs:
         return {
+            "device_metrics": 0,
             "device_runtime": 0,
             "player_state": 0,
             "play_queue": 0,
@@ -1646,10 +2196,27 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
             "media_metadata": 0,
             "song_info": 0,
             "play_logs": 0,
+            "user_profiles": 0,
+            "music_service_auth": 0,
+            "device_bindings": 0,
+            "friendships": 0,
+            "listen_rooms": 0,
+            "listening_summaries": 0,
+            "user_feedback": 0,
+            "device_event_log": 0,
+            "play_event_log": 0,
+            "voice_command_log": 0,
+            "device_status_snapshot": 0,
+            "user_behavior_event": 0,
+            "listen_room_message": 0,
+            "feedback_attachment": 0,
+            "third_party_music_raw": 0,
+            "device_config_snapshot": 0,
         }
 
     database = get_play_log_collection().database
     collections = {
+        "device_metrics": database["device_metrics"],
         "device_runtime": database["device_runtime"],
         "player_state": database["player_state"],
         "play_queue": database["play_queue"],
@@ -1657,35 +2224,85 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
         "media_metadata": database["media_metadata"],
         "song_info": get_song_collection(),
         "play_logs": get_play_log_collection(),
+        "user_profiles": database["user_profiles"],
+        "music_service_auth": database["music_service_auth"],
+        "device_bindings": database["device_bindings"],
+        "friendships": database["friendships"],
+        "listen_rooms": database["listen_rooms"],
+        "listening_summaries": database["listening_summaries"],
+        "user_feedback": database["user_feedback"],
+        "bind_progress": database["bind_progress"],
+        "music_sync_progress": database["music_sync_progress"],
+        "device_event_log": database["device_event_log"],
+        "play_event_log": database["play_event_log"],
+        "voice_command_log": database["voice_command_log"],
+        "device_status_snapshot": database["device_status_snapshot"],
+        "user_behavior_event": database["user_behavior_event"],
+        "listen_room_message": database["listen_room_message"],
+        "feedback_attachment": database["feedback_attachment"],
+        "third_party_music_raw": database["third_party_music_raw"],
+        "device_config_snapshot": database["device_config_snapshot"],
     }
     for collection in collections.values():
         collection.delete_many({})
 
     now = utcnow()
+    mongo_moment = lambda index, total: spread_day_moment(stat_date, index, total).replace(tzinfo=LOCAL_TZ)
     runtime_docs = []
     player_docs = []
     queue_docs = []
+    device_metric_docs = []
+    device_binding_docs = []
+    bind_progress_docs = []
+    status_snapshot_docs = []
+    config_snapshot_docs = []
+    device_event_docs = []
     for index, device in enumerate(devices, start=1):
         song = songs[(index - 1) % len(songs)]
         next_songs = [songs[(index + offset) % len(songs)] for offset in range(1, 4)]
+        device_time = mongo_moment(index, max(len(devices), 1))
+        device_id = int(device["device_id"])
+        user_id = int(device.get("user_id") or users[(index - 1) % len(users)]["user_id"])
+        network_name = device.get("current_network") or demo_network_name(index)
+        room_name = device.get("default_room") or DEMO_ROOMS[(index - 1) % len(DEMO_ROOMS)]
+        online = str(device.get("online_status") or "").lower() == "online"
+        battery = 45 + index % 55
+        volume = 25 + index % 65
+        signal_strength = -35 - index % 45
+        device_name = device.get("custom_device_name") or device.get("device_name")
         runtime_docs.append({
-            "device_id": int(device["device_id"]),
+            "device_id": device_id,
             "deviceId": str(device["device_id"]),
             "device_number": device["device_number"],
-            "deviceName": device.get("custom_device_name") or device.get("device_name"),
+            "deviceName": device_name,
             "modelName": device.get("model_name"),
-            "online": str(device.get("online_status") or "").lower() == "online",
-            "battery": 45 + index % 55,
-            "volume": 25 + index % 65,
-            "signalStrength": -35 - index % 45,
+            "online": online,
+            "battery": battery,
+            "volume": volume,
+            "signalStrength": signal_strength,
             "networkType": "wifi",
-            "currentNetwork": device.get("current_network") or DEMO_NETWORK_NAMES[(index - 1) % len(DEMO_NETWORK_NAMES)],
-            "room": device.get("default_room") or DEMO_ROOMS[(index - 1) % len(DEMO_ROOMS)],
+            "currentNetwork": network_name,
+            "room": room_name,
             "firmwareVersion": device.get("firmware_version"),
-            "updated_at": now,
+            "updated_at": device_time,
+        })
+        device_metric_docs.append({
+            "device_id": str(device_id),
+            "deviceId": str(device_id),
+            "device_number": device["device_number"],
+            "timestamp": int(device_time.timestamp()),
+            "metrics": {
+                "battery": battery,
+                "volume": volume,
+                "signal_strength": signal_strength,
+                "current_network": network_name,
+                "is_connected": online,
+            },
+            "user": {"user_id": user_id},
+            "updated_at": device_time,
         })
         player_docs.append({
-            "device_id": int(device["device_id"]),
+            "device_id": device_id,
             "deviceId": str(device["device_id"]),
             "isPlaying": index % 5 != 0,
             "songId": song["external_id"],
@@ -1694,10 +2311,10 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
             "source": song["platform"],
             "playTime": 20 + index % 180,
             "duration": 210 + index % 70,
-            "updated_at": now,
+            "updated_at": device_time,
         })
         queue_docs.append({
-            "device_id": int(device["device_id"]),
+            "device_id": device_id,
             "deviceId": str(device["device_id"]),
             "queue": [
                 {
@@ -1708,7 +2325,205 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
                 }
                 for item in next_songs
             ],
-            "updated_at": now,
+            "updated_at": device_time,
+        })
+        device_binding_docs.append({
+            "account": str(user_id),
+            "user_id": user_id,
+            "device_id": device_id,
+            "device_number": device["device_number"],
+            "custom_device_name": device_name,
+            "default_room": room_name,
+            "current_network": network_name,
+            "status": "bound",
+            "created_at": device_time,
+            "updated_at": device_time,
+        })
+        bind_progress_docs.append({
+            "task_id": f"BIND{stat_date.strftime('%Y%m%d')}{index:04d}",
+            "device_sn": device["device_number"],
+            "device_id": device_id,
+            "user_id": user_id,
+            "overall_status": "bound",
+            "progress": 100,
+            "steps": ["扫码识别", "连接 Wi-Fi", "绑定账号", "同步歌单"],
+            "created_at": device_time,
+            "updated_at": device_time,
+        })
+        status_snapshot_docs.append({
+            "device_id": device_id,
+            "device_sn": device["device_number"],
+            "online": online,
+            "battery": battery,
+            "volume": volume,
+            "signal_strength": signal_strength,
+            "reported_at": device_time,
+            "created_at": device_time,
+        })
+        config_snapshot_docs.append({
+            "device_id": device_id,
+            "device_sn": device["device_number"],
+            "room": room_name,
+            "network_name": network_name,
+            "firmware_version": device.get("firmware_version"),
+            "volume_limit": 80,
+            "auto_firmware_update": index % 3 != 0,
+            "created_at": device_time,
+        })
+        device_event_docs.append({
+            "device_id": device_id,
+            "device_sn": device["device_number"],
+            "device_type": "speaker",
+            "model_name": device.get("model_name"),
+            "log_type": "online" if online else "offline",
+            "log_level": "info" if online else "warning",
+            "event_code": "DEVICE_ONLINE" if online else "DEVICE_OFFLINE",
+            "message": f"{device_name} {'上线并完成心跳' if online else '离线等待重连'}",
+            "trace_id": f"trace-{stat_date.strftime('%Y%m%d')}-{index:04d}",
+            "created_at": device_time,
+        })
+
+    user_profile_docs = []
+    music_auth_docs = []
+    friendship_docs = []
+    listen_room_docs = []
+    listen_room_message_docs = []
+    listening_summary_docs = []
+    user_feedback_docs = []
+    user_behavior_docs = []
+    music_sync_docs = []
+    feedback_templates = [
+        ("bug", "夜间偶尔断连", "昨晚播放到一半断开，重新配网后恢复。", "high", 3, "网络,断连"),
+        ("suggestion", "希望增加儿童模式", "家里小朋友会误触音量，希望能限制最大音量。", "normal", 4, "儿童模式,音量"),
+        ("praise", "歌单推荐很准", "最近推荐的民谣和老歌都很合口味。", "low", 5, "推荐,歌单"),
+        ("bug", "固件升级后重启", "升级结束后自动重启了一次，之后可以正常使用。", "normal", 4, "固件,重启"),
+    ]
+    for index, user in enumerate(users, start=1):
+        user_time = mongo_moment(index, max(len(users), 1))
+        account = str(user["user_id"])
+        platforms = str(user.get("bound_platforms") or "网易云音乐,QQ音乐")
+        user_profile_docs.append({
+            "account": account,
+            "user_id": int(user["user_id"]),
+            "display_name": user.get("nickname") or user.get("username"),
+            "username": user.get("username"),
+            "nickname": user.get("nickname"),
+            "email": user.get("email"),
+            "gender": user.get("gender") or ("female" if index % 2 else "male"),
+            "age": int(user.get("age") or (22 + index % 28)),
+            "age_range": user.get("age_range") or demo_age_range(22 + index % 28),
+            "province_name": user.get("province_name"),
+            "city_name": user.get("city_name"),
+            "active_level": user.get("active_level") or ("high" if index % 4 == 0 else "medium"),
+            "value_level": user.get("value_level") or ("high" if index % 5 == 0 else "normal"),
+            "bound_platforms": platforms,
+            "created_at": user_time,
+            "updated_at": user_time,
+        })
+        for service in ("网易云音乐", "QQ音乐"):
+            if service in platforms:
+                music_auth_docs.append({
+                    "account": account,
+                    "user_id": int(user["user_id"]),
+                    "platform_type": "netease" if service == "网易云音乐" else "qq_music",
+                    "platform_name": service,
+                    "status": "bound",
+                    "permissions": ["play_history", "playlist", "recommendation"],
+                    "sync_state": {
+                        "status": "synced" if index % 7 else "syncing",
+                        "progress": 100 if index % 7 else 82,
+                        "last_synced_at": user_time,
+                    },
+                    "created_at": user_time,
+                    "updated_at": user_time,
+                })
+        if index <= min(80, len(users)):
+            event_name = ("open_app", "play_song", "bind_device", "view_playlist")[index % 4]
+            user_behavior_docs.append({
+                "user_id": int(user["user_id"]),
+                "event_name": event_name,
+                "page": "player" if event_name == "play_song" else "home",
+                "platform": "wxapp",
+                "properties": {"nickname": user.get("nickname"), "city": user.get("city_name")},
+                "created_at": user_time,
+            })
+        if index <= min(72, len(users)):
+            tpl = feedback_templates[(index - 1) % len(feedback_templates)]
+            feedback_type, title, content, priority, rating, tags = tpl
+            user_feedback_docs.append({
+                "feedback_id": f"FB{stat_date.strftime('%Y%m%d')}{index:04d}",
+                "user_id": int(user["user_id"]),
+                "account": account,
+                "nickname": user.get("nickname") or user.get("username"),
+                "feedback_type": feedback_type,
+                "title": title,
+                "content": content,
+                "priority": priority,
+                "star_rating": rating,
+                "rating_tags": tags,
+                "status": "open" if index % 5 == 0 else "processed",
+                "created_at": user_time,
+                "updated_at": user_time,
+            })
+        if index <= min(48, len(users)):
+            music_sync_docs.append({
+                "user_id": int(user["user_id"]),
+                "service": "netease" if index % 2 else "qq_music",
+                "status": "finished" if index % 6 else "syncing",
+                "progress": 100 if index % 6 else 76,
+                "current_task": "同步最近播放",
+                "total_songs": 120 + index * 3,
+                "synced_songs": 120 + index * 3 if index % 6 else 90 + index,
+                "created_at": user_time,
+                "updated_at": user_time,
+            })
+
+    for index in range(1, min(80, len(users) - 1) + 1):
+        user = users[index - 1]
+        friend = users[(index * 5) % len(users)]
+        friendship_docs.append({
+            "account": str(user["user_id"]),
+            "friend_account": str(friend["user_id"]),
+            "user_id": int(user["user_id"]),
+            "friend_user_id": int(friend["user_id"]),
+            "friend_nickname": friend.get("nickname") or friend.get("username"),
+            "status": "active",
+            "created_at": mongo_moment(index, 80),
+            "updated_at": mongo_moment(index, 80),
+        })
+
+    for index in range(1, min(18, len(devices), len(users)) + 1):
+        user = users[(index - 1) % len(users)]
+        device = devices[(index - 1) % len(devices)]
+        room_time = mongo_moment(index, 18)
+        room_id = f"ROOM{stat_date.strftime('%Y%m%d')}{index:03d}"
+        listen_room_docs.append({
+            "room_id": room_id,
+            "owner_user_id": int(user["user_id"]),
+            "owner_nickname": user.get("nickname") or user.get("username"),
+            "device_id": int(device["device_id"]),
+            "title": f"{device.get('default_room') or '客厅'}一起听",
+            "status": "active" if index % 4 else "closed",
+            "member_count": 2 + index % 6,
+            "created_at": room_time,
+            "updated_at": room_time,
+        })
+        listen_room_message_docs.append({
+            "room_id": room_id,
+            "user_id": int(user["user_id"]),
+            "message_type": "text",
+            "content": "这首歌很适合今天的歌单",
+            "created_at": room_time + timedelta(minutes=2),
+        })
+        listening_summary_docs.append({
+            "account": str(user["user_id"]),
+            "user_id": int(user["user_id"]),
+            "period_type": "daily",
+            "period_key": stat_date.isoformat(),
+            "play_count": 18 + index * 2,
+            "duration_seconds": 3600 + index * 240,
+            "favorite_style": DEMO_SONGS[index % len(DEMO_SONGS)][4],
+            "updated_at": room_time,
         })
 
     metadata_docs = []
@@ -1752,6 +2567,23 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
                 "fetched_at": now.isoformat(),
             },
             "updated_at": now,
+        })
+
+    third_party_raw_docs = []
+    for index, song in enumerate(unique_songs[:96], start=1):
+        raw_time = mongo_moment(index, max(min(len(unique_songs), 96), 1))
+        third_party_raw_docs.append({
+            "platform": song.get("platform") or "网易云音乐",
+            "api_name": "song_detail",
+            "request_id": f"MUSIC{stat_date.strftime('%Y%m%d')}{index:04d}",
+            "success": True,
+            "latency_ms": 42 + index % 90,
+            "raw_payload": {
+                "external_id": song.get("external_id"),
+                "song_title": song.get("song_title"),
+                "artist": song.get("artist"),
+            },
+            "created_at": raw_time,
         })
 
     operation_docs = []
@@ -1801,6 +2633,8 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
         connection.close()
 
     play_docs = []
+    play_event_docs = []
+    voice_command_docs = []
     for index, row in enumerate(play_rows, start=1):
         played_at = row.get("created_at")
         if isinstance(played_at, datetime):
@@ -1826,8 +2660,46 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
             "created_at": now,
             "sequence": int(row.get("history_id") or index),
         })
+        if index <= 600 and index % 2 == 0:
+            play_event_docs.append({
+                "user_id": int(row.get("user_id") or 0),
+                "device_id": int(row.get("device_id") or 0),
+                "event_type": "PLAY_START" if index % 9 else "PLAY_COMPLETE",
+                "source_platform": row.get("platform") or "网易云音乐",
+                "song": {
+                    "external_id": row.get("external_id"),
+                    "title": row.get("song_title"),
+                    "artist": row.get("artist"),
+                    "duration_seconds": max(duration + 20, 190 + index % 90),
+                    "cover_url": row.get("cover_url") or "",
+                },
+                "created_at": played_at,
+            })
+        if index <= 120 and index % 6 == 0:
+            voice_command_docs.append({
+                "user_id": int(row.get("user_id") or 0),
+                "device_id": int(row.get("device_id") or 0),
+                "session_id": f"VOICE{stat_date.strftime('%Y%m%d')}{index:04d}",
+                "request_id": f"VREQ{stat_date.strftime('%Y%m%d')}{index:04d}",
+                "asr_text": f"播放{row.get('song_title') or '推荐歌曲'}",
+                "nlu": {"intent": "play_song", "song": row.get("song_title"), "artist": row.get("artist")},
+                "success": True,
+                "created_at": played_at,
+            })
+
+    feedback_attachment_docs = [
+        {
+            "feedback_id": item["feedback_id"],
+            "user_id": item["user_id"],
+            "attachments": [],
+            "note": item["content"],
+            "created_at": item["created_at"],
+        }
+        for item in user_feedback_docs[:36]
+    ]
 
     batches = {
+        "device_metrics": device_metric_docs,
         "device_runtime": runtime_docs,
         "player_state": player_docs,
         "play_queue": queue_docs,
@@ -1835,6 +2707,24 @@ def seed_demo_mongo_data(stat_date, play_count=3600):
         "media_metadata": metadata_docs,
         "song_info": song_docs,
         "play_logs": play_docs,
+        "user_profiles": user_profile_docs,
+        "music_service_auth": music_auth_docs,
+        "device_bindings": device_binding_docs,
+        "friendships": friendship_docs,
+        "listen_rooms": listen_room_docs,
+        "listening_summaries": listening_summary_docs,
+        "user_feedback": user_feedback_docs,
+        "bind_progress": bind_progress_docs,
+        "music_sync_progress": music_sync_docs,
+        "device_event_log": device_event_docs,
+        "play_event_log": play_event_docs,
+        "voice_command_log": voice_command_docs,
+        "device_status_snapshot": status_snapshot_docs,
+        "user_behavior_event": user_behavior_docs,
+        "listen_room_message": listen_room_message_docs,
+        "feedback_attachment": feedback_attachment_docs,
+        "third_party_music_raw": third_party_raw_docs,
+        "device_config_snapshot": config_snapshot_docs,
     }
     counts = {}
     for name, docs in batches.items():
@@ -1871,14 +2761,47 @@ def enrich_daily_stats_from_mysql(cursor, stat_date, stats):
         (stat_date,),
         0,
     ) or 0)
+    online_devices_for_day = int(mysql_scalar(
+        cursor,
+        f"""
+        SELECT COUNT(*) AS c
+        FROM device
+        WHERE DATE(created_at) <= %s
+          AND {ONLINE_DEVICE_CONDITION}
+        """,
+        (stat_date,),
+        0,
+    ) or 0)
+    netease_profiles_for_day = int(mysql_scalar(
+        cursor,
+        """
+        SELECT COUNT(*) AS c
+        FROM user_profile
+        WHERE DATE(created_at) <= %s
+          AND (bound_platforms LIKE %s OR LOWER(bound_platforms) LIKE %s)
+        """,
+        (stat_date, "%网易云%", "%netease%"),
+        0,
+    ) or 0)
+    qq_profiles_for_day = int(mysql_scalar(
+        cursor,
+        """
+        SELECT COUNT(*) AS c
+        FROM user_profile
+        WHERE DATE(created_at) <= %s
+          AND (LOWER(bound_platforms) LIKE %s OR bound_platforms LIKE %s)
+        """,
+        (stat_date, "%qq%", "%QQ音乐%"),
+        0,
+    ) or 0)
     return {
         **stats,
         "unique_user_count": max(int(stats.get("unique_user_count") or 0), active_users),
         "active_user_count": max(int(stats.get("unique_user_count") or 0), active_users),
         "unique_device_count": max(int(stats.get("unique_device_count") or 0), active_devices),
-        "online_device_count": max(active_devices, int(mysql_scalar(cursor, f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", default=0) or 0)),
-        "platform_wechat_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR LOWER(bound_platforms) LIKE %s", ("%网易云%", "%netease%"), 0) or 0),
-        "platform_qq_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR bound_platforms LIKE %s", ("%qq%", "%QQ音乐%"), 0) or 0),
+        "online_device_count": max(active_devices, online_devices_for_day),
+        "platform_wechat_count": netease_profiles_for_day,
+        "platform_qq_count": qq_profiles_for_day,
         "new_user_count": new_users,
         "new_device_count": new_devices,
         "total_sales_amount": sales,
@@ -2683,10 +3606,10 @@ def run_daily_stats_once(
     skip_generate=False,
     keywords=None,
     generate_demo_data=False,
-    demo_user_count=36,
-    demo_device_count=19,
-    demo_order_count=28,
-    demo_play_count=3200,
+    demo_user_count=DEFAULT_DEMO_USER_COUNT,
+    demo_device_count=DEFAULT_DEMO_DEVICE_COUNT,
+    demo_order_count=DEFAULT_DEMO_ORDER_COUNT,
+    demo_play_count=DEFAULT_DEMO_PLAY_COUNT,
     reset_demo_data=False,
 ):
     class Args:
@@ -2702,7 +3625,7 @@ def run_daily_stats_once(
     args.demo_user_count = demo_user_count
     args.demo_device_count = demo_device_count
     args.demo_order_count = demo_order_count
-    args.demo_play_count = demo_play_count if demo_play_count is not None else 3200
+    args.demo_play_count = demo_play_count if demo_play_count is not None else DEFAULT_DEMO_PLAY_COUNT
     args.reset_demo_data = reset_demo_data
     return run_once(args)
 
@@ -2717,10 +3640,10 @@ def build_parser():
     )
     parser.add_argument("--generate-count", type=int, default=50, help="Number of play logs to generate.")
     parser.add_argument("--generate-demo-data", action="store_true", help="Generate Chinese demo MySQL business data before refreshing daily stats.")
-    parser.add_argument("--demo-user-count", type=int, default=36, help="Average number of Chinese demo users per day.")
-    parser.add_argument("--demo-device-count", type=int, default=19, help="Average number of demo devices per day.")
-    parser.add_argument("--demo-order-count", type=int, default=28, help="Average number of demo paid orders per day.")
-    parser.add_argument("--demo-play-count", type=int, default=3200, help="Average number of demo play_history rows per day.")
+    parser.add_argument("--demo-user-count", type=int, default=DEFAULT_DEMO_USER_COUNT, help="Average number of Chinese demo users per day.")
+    parser.add_argument("--demo-device-count", type=int, default=DEFAULT_DEMO_DEVICE_COUNT, help="Average number of demo devices per day.")
+    parser.add_argument("--demo-order-count", type=int, default=DEFAULT_DEMO_ORDER_COUNT, help="Average number of demo paid orders per day.")
+    parser.add_argument("--demo-play-count", type=int, default=DEFAULT_DEMO_PLAY_COUNT, help="Average number of demo play_history rows per day.")
     parser.add_argument("--reset-demo-data", action="store_true", help="Clear existing demo business data and rebuild the recent 14-day dataset.")
     parser.add_argument("--skip-seed", action="store_true", help="Do not fetch and upsert song_info documents.")
     parser.add_argument("--skip-generate", action="store_true", help="Do not generate simulated play logs.")

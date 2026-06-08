@@ -399,7 +399,7 @@ def daily_stats_scheduler():
                 demo_user_count=int(os.environ.get('DAILY_STATS_DEMO_USER_COUNT', '36')),
                 demo_device_count=int(os.environ.get('DAILY_STATS_DEMO_DEVICE_COUNT', '19')),
                 demo_order_count=int(os.environ.get('DAILY_STATS_DEMO_ORDER_COUNT', '28')),
-                demo_play_count=int(os.environ.get('DAILY_STATS_DEMO_PLAY_COUNT', '3200')),
+                demo_play_count=int(os.environ.get('DAILY_STATS_DEMO_PLAY_COUNT', '8600')),
             )
             app.logger.info('daily_stats auto update finished: %s', result)
         except Exception as exc:
@@ -565,7 +565,7 @@ def run_daily_stats_now():
             demo_user_count=int(body.get('demo_user_count') or os.environ.get('DAILY_STATS_DEMO_USER_COUNT', '36')),
             demo_device_count=int(body.get('demo_device_count') or os.environ.get('DAILY_STATS_DEMO_DEVICE_COUNT', '19')),
             demo_order_count=int(body.get('demo_order_count') or os.environ.get('DAILY_STATS_DEMO_ORDER_COUNT', '28')),
-            demo_play_count=int(body.get('demo_play_count') or body.get('generate_count') or os.environ.get('DAILY_STATS_DEMO_PLAY_COUNT', '3200')),
+            demo_play_count=int(body.get('demo_play_count') or body.get('generate_count') or os.environ.get('DAILY_STATS_DEMO_PLAY_COUNT', '8600')),
             reset_demo_data=bool(body.get('reset_demo_data', False)),
         )
         return jsonify({'status': 'success', 'data': result}), 200

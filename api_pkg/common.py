@@ -395,7 +395,24 @@ def current_user_id():
         if row and row.get("user_id"):
             return int(row["user_id"])
 
-    return int(load_state().get("tokens", {}).get(auth, 10001))
+    fallback_user_id = load_state().get("tokens", {}).get(auth)
+    if fallback_user_id:
+        return int(fallback_user_id)
+
+    row = mysql_one("SELECT user_id FROM `user` ORDER BY user_id ASC LIMIT 1")
+    if row and row.get("user_id"):
+        return int(row["user_id"])
+
+    def callback(conn):
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO `user` (username, password_hash, phone, created_at) VALUES (%s, %s, %s, NOW())",
+                ("临时访客", secrets.token_hex(16), None),
+            )
+            return cursor.lastrowid
+
+    user_id = mysql_transaction(callback)
+    return int(user_id or 10001)
 
 
 def current_user_profile(user_id=None):

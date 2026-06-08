@@ -46,6 +46,7 @@ dist/
 .vite/
 
 # Runtime and generated outputs
+.codex-local/
 runtime/*.json
 runtime/*.log
 runtime/*.offset
