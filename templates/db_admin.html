@@ -103,6 +103,80 @@
       background: white;
       overflow: hidden;
     }
+    .catalog {
+      margin-bottom: 16px;
+      border: 1px solid #dceee2;
+      border-radius: 8px;
+      background: white;
+      overflow: hidden;
+    }
+    .catalog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #eef6f1;
+      background: #f7fbf8;
+    }
+    .catalog-head h2 {
+      margin: 0;
+      color: #284d37;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .catalog-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .catalog-tools input { width: 260px; }
+    .catalog-list {
+      display: grid;
+      gap: 10px;
+      max-height: 340px;
+      overflow: auto;
+      padding: 12px;
+    }
+    .catalog-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #e4f1e8;
+      border-radius: 8px;
+      background: #fbfdfc;
+    }
+    .catalog-card strong { color: #224634; }
+    .catalog-card p {
+      margin: 6px 0 0;
+      color: #5d7467;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: normal;
+    }
+    .catalog-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .catalog-meta span {
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #edf6f0;
+      color: #52715e;
+      font-size: 11px;
+    }
+    .field-focus {
+      outline: 2px solid #e3a338;
+      outline-offset: -2px;
+      background: #fff7df !important;
+    }
+    .row-focus td {
+      background: #fffaf0;
+    }
     .table-wrap { overflow: auto; max-height: 58vh; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td {
@@ -199,6 +273,19 @@
       <div id="items"></div>
     </aside>
     <section>
+      <div class="catalog">
+        <div class="catalog-head">
+          <h2>前端数据维护目录</h2>
+          <div class="catalog-tools">
+            <input id="catalogKeyword" placeholder="搜索页面、数字、表名或字段">
+            <button id="catalogFilterBtn" class="secondary">搜索</button>
+            <button id="runDailyBtn">运行每日汇总</button>
+          </div>
+        </div>
+        <div id="catalogList" class="catalog-list">
+          <p class="status">正在加载前端数据目录...</p>
+        </div>
+      </div>
       <div class="toolbar" id="mysqlToolbar">
         <input id="keyword" placeholder="MySQL 字段名，例如 username">
         <input id="keywordValue" placeholder="筛选值">
@@ -239,6 +326,9 @@
       source: "mysql",
       mysql: { items: [], current: null, schema: null, rows: [] },
       mongo: { database: "", items: [], current: null, columns: [], rows: [] },
+      catalog: [],
+      catalogKeyword: "",
+      focusFields: [],
       mode: "create",
       pk: null,
       currentDocId: null,
@@ -324,16 +414,19 @@
     }
 
     async function loadSources() {
-      const [mysql, mongo] = await Promise.all([
+      const [mysql, mongo, catalog] = await Promise.all([
         api("/api/db/mysql/tables"),
         api("/api/db/mongo/collections"),
+        api("/api/db/front-data-catalog"),
       ]);
       state.mysql.items = mysql;
       state.mongo.database = mongo.database;
       state.mongo.items = mongo.collections;
+      state.catalog = catalog.list || [];
       state.mysql.current = mysql[0]?.key || null;
       state.mongo.current = mongo.collections[0]?.name || null;
       renderItems();
+      renderCatalog();
       await loadRows();
     }
 
@@ -349,8 +442,48 @@
       });
     }
 
+    function renderCatalog() {
+      const word = (state.catalogKeyword || "").trim().toLowerCase();
+      const rows = state.catalog.filter((item) => {
+        if (!word) return true;
+        return [item.group, item.title, item.frontend, item.api, item.table, ...(item.fields || []), item.operation]
+          .some((value) => String(value || "").toLowerCase().includes(word));
+      });
+      el("catalogList").innerHTML = rows.map((item, index) => `
+        <div class="catalog-card">
+          <div>
+            <strong>${escapeHtml(item.group)} / ${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(item.operation)}</p>
+            <div class="catalog-meta">
+              <span>${escapeHtml(item.frontend || "")}</span>
+              <span>${escapeHtml(item.api || "")}</span>
+              <span>${escapeHtml(item.table || "")}</span>
+              ${(item.fields || []).map((field) => `<span>${escapeHtml(field)}</span>`).join("")}
+            </div>
+          </div>
+          <button data-catalog-index="${index}">去维护</button>
+        </div>
+      `).join("") || "<p class='status'>没有匹配的前端数据项</p>";
+      el("catalogList").querySelectorAll("[data-catalog-index]").forEach((btn) => {
+        btn.onclick = () => openCatalogTarget(rows[Number(btn.dataset.catalogIndex)]);
+      });
+    }
+
+    async function openCatalogTarget(item) {
+      if (!item?.table) return;
+      state.focusFields = item.fields || [];
+      if (state.source !== "mysql") setSource("mysql");
+      state.mysql.current = item.table;
+      closeEditor();
+      renderItems();
+      await loadRows();
+      setStatus(`已定位：${item.title} / ${item.table}，黄色字段就是建议修改的位置`);
+      document.querySelector(".panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     async function selectItem(key) {
       currentStore().current = key;
+      state.focusFields = [];
       closeEditor();
       renderItems();
       await loadRows();
@@ -372,6 +505,7 @@
       store.schema = data.schema;
       store.rows = data.list || [];
       renderMysqlTable();
+      applyFieldFocus();
       const info = tableInfo(store.current);
       el("tableTitle").innerHTML = `${escapeHtml(store.current)} <small>${escapeHtml(info?.label || "")}</small>`;
       setStatus(`MySQL / ${store.current}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
@@ -407,6 +541,23 @@
     function renderHeader(column) {
       const meta = metaFor(column);
       return `<span class="field-name">${escapeHtml(column)}</span><span class="field-comment">${escapeHtml(meta.label || "")} ${escapeHtml(meta.comment || "")}</span>`;
+    }
+
+    function applyFieldFocus() {
+      const columns = state.mysql.schema?.columns || [];
+      const focus = new Set(state.focusFields || []);
+      document.querySelectorAll(".field-focus").forEach((node) => node.classList.remove("field-focus"));
+      document.querySelectorAll(".row-focus").forEach((node) => node.classList.remove("row-focus"));
+      if (!focus.size) return;
+      el("thead").querySelectorAll("th").forEach((th, index) => {
+        if (focus.has(columns[index])) th.classList.add("field-focus");
+      });
+      el("tbody").querySelectorAll("tr").forEach((tr) => {
+        tr.classList.add("row-focus");
+        tr.querySelectorAll("td").forEach((td, index) => {
+          if (focus.has(columns[index])) td.classList.add("field-focus");
+        });
+      });
     }
 
     function renderMongoTable() {
@@ -557,8 +708,36 @@
       setStatus(`已生成随机模拟数据，可修改后保存：${label}`);
     }
 
+    async function runDailyStats() {
+      el("runDailyBtn").disabled = true;
+      setStatus("正在运行每日汇总...");
+      try {
+        const data = await api("/api/db/daily-stats/run", {
+          method: "POST",
+          body: { skip_seed: true, skip_generate: true },
+        });
+        setStatus(`每日汇总完成：${(data.refreshed_daily_tables || []).join(", ")}`);
+        await loadRows();
+      } catch (err) {
+        setStatus(`每日汇总失败：${err.message}`);
+      } finally {
+        el("runDailyBtn").disabled = false;
+      }
+    }
+
     el("mysqlTab").onclick = () => setSource("mysql");
     el("mongoTab").onclick = () => setSource("mongo");
+    el("catalogFilterBtn").onclick = () => {
+      state.catalogKeyword = el("catalogKeyword").value;
+      renderCatalog();
+    };
+    el("catalogKeyword").onkeydown = (event) => {
+      if (event.key === "Enter") {
+        state.catalogKeyword = el("catalogKeyword").value;
+        renderCatalog();
+      }
+    };
+    el("runDailyBtn").onclick = runDailyStats;
     el("filterBtn").onclick = loadRows;
     el("reloadBtn").onclick = loadRows;
     el("newBtn").onclick = openNew;

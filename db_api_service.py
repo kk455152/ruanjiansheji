@@ -727,6 +727,41 @@ TABLE_CONFIG = {
         ],
     },
 
+    "user_activity_daily": {
+        "table": "user_activity_daily",
+        "pk": ["id"],
+        "columns": [
+            "id", "stat_date", "user_id", "play_count", "play_duration",
+            "active_count", "is_active", "created_at", "last_active_at", "updated_at",
+        ],
+        "insert_columns": [
+            "stat_date", "user_id", "play_count", "play_duration", "active_count",
+            "is_active", "last_active_at",
+        ],
+        "update_columns": [
+            "stat_date", "user_id", "play_count", "play_duration", "active_count",
+            "is_active", "last_active_at",
+        ],
+    },
+
+    "analytics_metric_daily": {
+        "table": "analytics_metric_daily",
+        "pk": ["metric_id"],
+        "columns": [
+            "metric_id", "metric_date", "scope_type", "scope_code", "metric_code",
+            "metric_name", "metric_value", "metric_unit", "compare_value",
+            "growth_rate", "created_at", "updated_at",
+        ],
+        "insert_columns": [
+            "metric_date", "scope_type", "scope_code", "metric_code", "metric_name",
+            "metric_value", "metric_unit", "compare_value", "growth_rate",
+        ],
+        "update_columns": [
+            "metric_date", "scope_type", "scope_code", "metric_code", "metric_name",
+            "metric_value", "metric_unit", "compare_value", "growth_rate",
+        ],
+    },
+
     "device_log": {
         "table": "device_log",
         "pk": ["log_id"],
@@ -858,6 +893,34 @@ TABLE_CONFIG = {
 # =========================================================
 # 通用响应与工具函数
 # =========================================================
+
+FRONT_DATA_CATALOG = [
+    {"group": "总览卡片", "title": "总用户", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/user-count", "table": "user", "fields": ["user_id", "created_at", "status"], "operation": "增加用户：在 user 表新增一行。减少用户：删除 user 行。新增用户数由 created_at=今天 的行数决定。"},
+    {"group": "总览卡片", "title": "新增用户", "frontend": "数据总览 / 总用户提示", "api": "/api/admin/super/overview/user-count", "table": "user", "fields": ["created_at"], "operation": "把 user.created_at 改成今天会增加今日新增；改成历史日期会减少今日新增。"},
+    {"group": "总览卡片", "title": "设备数 / 在线率", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/device-count", "table": "device", "fields": ["device_id", "status", "online_status", "created_at"], "operation": "设备数由 device 行数决定；在线设备由 status=1 决定。新增一台设备就新增一行，降低在线率就把部分设备 status 改为 0。"},
+    {"group": "总览卡片", "title": "销售额 / 订单数", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/sales-amount", "table": "sales_order", "fields": ["pay_amount", "pay_status", "created_at"], "operation": "销售额统计 pay_status 为 paid/success/finished 的 pay_amount 总和；新增订单或调高 pay_amount 会增加，改成 pending/closed 会减少统计。"},
+    {"group": "总览卡片", "title": "活跃度 / 活跃用户", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/activity-rate", "table": "user_profile", "fields": ["active_level", "user_id"], "operation": "活跃用户由 active_level='high' 的画像数量决定；把用户画像 active_level 改为 high 增加，改为 medium/low 减少。"},
+    {"group": "趋势分析", "title": "用户/设备/销售趋势柱状图", "frontend": "趋势分析 / state.trend.list", "api": "/api/admin/super/trend/growth", "table": "daily_stats", "fields": ["stat_date", "new_user_count", "new_device_count", "total_sales_amount", "active_user_count"], "operation": "按 stat_date 找到对应日期行，用户趋势改 new_user_count，设备趋势改 new_device_count，销售趋势改 total_sales_amount。"},
+    {"group": "地区热力", "title": "地区销售热力", "frontend": "地区热力 / 销售热力", "api": "/api/admin/super/region/sales-heatmap", "table": "region_stats_daily", "fields": ["stat_date", "region_name", "sales_amount", "order_count"], "operation": "修改最新 stat_date 下某地区 sales_amount/order_count；新增地区就新增一行并填写唯一 region_code。"},
+    {"group": "地区热力", "title": "地区用户热力", "frontend": "地区热力 / 用户热力", "api": "/api/admin/super/region/user-heatmap", "table": "region_stats_daily", "fields": ["stat_date", "region_name", "user_count", "active_user_count"], "operation": "修改最新 stat_date 下 user_count/active_user_count；数值越大条形越长。"},
+    {"group": "用户画像", "title": "年龄占比", "frontend": "用户画像 / 年龄分布饼图", "api": "/api/admin/super/user-profile/age-distribution", "table": "user_profile", "fields": ["age", "age_range"], "operation": "占比由 age_range 分组计数决定；要提高某年龄段占比，就新增/修改更多用户画像的 age_range 为该段。"},
+    {"group": "用户画像", "title": "地区占比", "frontend": "用户画像 / 地区分布饼图", "api": "/api/admin/super/user-profile/region-distribution", "table": "user_profile", "fields": ["province_code", "province_name", "city_name"], "operation": "占比由 province_name 分组计数决定；修改用户画像省份即可调整地区占比。"},
+    {"group": "用户画像", "title": "活跃分层占比", "frontend": "用户画像 / 活跃分层饼图", "api": "/api/admin/super/user-profile/activity-distribution", "table": "user_profile", "fields": ["active_level"], "operation": "占比由 active_level 分组计数决定；常用值 high/medium/low。"},
+    {"group": "用户画像", "title": "绑定软件占比", "frontend": "用户画像 / 绑定软件饼图", "api": "/api/admin/super/user-profile/music-service-distribution", "table": "user_profile", "fields": ["bound_platforms"], "operation": "占比由 bound_platforms 分组计数决定；填写 qq、netease、wechat 或逗号组合。"},
+    {"group": "用户价值", "title": "普通用户 / 高活用户环图", "frontend": "用户价值 / valueDonut", "api": "/api/admin/super/user-value/*", "table": "user_profile", "fields": ["active_level", "value_level"], "operation": "高活用户是 active_level='high' 的数量；普通用户是总画像数减高活用户数。"},
+    {"group": "用户分群", "title": "分群人数 / 留存 / 均值", "frontend": "用户分群 / segmentPie 和表格", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "fields": ["stat_date", "segment_name", "user_count", "active_user_count", "avg_play_count", "avg_pay_amount", "retention_rate"], "operation": "修改最新 stat_date 下的分群行；新增分群需新增唯一 segment_code。"},
+    {"group": "热歌排行", "title": "热歌播放量 / 名次", "frontend": "热歌排行 / state.songs", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "fields": ["ranking_date", "rank_no", "target_name", "target_category", "metric_value"], "operation": "修改最新 ranking_date 下 ranking_type='song' 的 rank_no 和 metric_value；metric_value 越大可在每日任务中排得越靠前。"},
+    {"group": "留存", "title": "购买后 1/7/30 日留存", "frontend": "趋势分析 / 市场角色留存趋势", "api": "/api/admin/market/retention/device-purchase", "table": "sales_order", "fields": ["user_id", "pay_status", "created_at"], "operation": "购买人数来自已支付订单的 user_id；留存人数来自 play_history 中购买后对应日期范围内仍有播放的用户。"},
+    {"group": "留存", "title": "播放留存来源", "frontend": "趋势分析 / 留存计算", "api": "/api/admin/market/retention/device-purchase", "table": "play_history", "fields": ["user_id", "created_at", "play_duration"], "operation": "给购买用户新增购买日后 1/7/30 天之后的播放记录，会提高对应留存计数。"},
+    {"group": "运营管理", "title": "反馈总数 / 待处理数 / 评分", "frontend": "用户反馈", "api": "/api/admin/*/feedback/list", "table": "user_feedback", "fields": ["feedback_type", "status", "priority", "star_rating", "created_at"], "operation": "新增反馈行增加总数；status 改为 pending/open 会增加待处理，改为 processed/closed 会减少。"},
+    {"group": "运营管理", "title": "设备列表 / 固件版本 / 在线状态", "frontend": "设备管理", "api": "/api/admin/operator/device/list", "table": "device", "fields": ["device_number", "model_name", "status", "firmware_version", "last_active"], "operation": "新增设备行会增加设备列表；status=1 显示在线，firmware_version 影响固件版本展示。"},
+    {"group": "运营管理", "title": "设备所属用户 / 房间", "frontend": "设备详情 / bound-user", "api": "/api/admin/operator/device/bound-user", "table": "user_device_binding", "fields": ["user_id", "device_id", "custom_device_name", "default_room", "bind_time"], "operation": "绑定关系决定设备详情里的用户、设备别名和房间；新增绑定或修改 custom_device_name/default_room 即可调整。"},
+    {"group": "运营管理", "title": "设备日志数量 / 内容", "frontend": "设备日志", "api": "/api/admin/operator/device/logs", "table": "device_log", "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "新增日志行增加列表；修改 log_level/title/content 改变前端展示。"},
+    {"group": "小程序播放", "title": "播放历史 / 歌曲名 / 播放次数", "frontend": "小程序播放历史、后台热歌来源", "api": "/api/play-history 与 /api/admin/market/top-songs", "table": "play_history", "fields": ["device_id", "user_id", "mapping_id", "play_duration", "created_at", "style"], "operation": "新增播放记录会增加播放历史；每日任务会把播放记录聚合到 hot_ranking_daily 和 daily_stats。"},
+    {"group": "小程序播放", "title": "歌曲标题 / 歌手 / 平台", "frontend": "小程序当前歌曲、热歌排行", "api": "/api/song-info 与 /api/admin/market/top-songs", "table": "media_mapping", "fields": ["song_title", "artist", "platform", "external_id", "cover_url"], "operation": "修改 media_mapping 可改变歌曲名、歌手、平台和封面；play_history.mapping_id 关联到这张表。"},
+    {"group": "日报任务", "title": "每日自动汇总时间", "frontend": "所有日报型图表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["generated_at", "updated_at"], "operation": "点击维护页的“运行每日汇总”会用当前真实时间刷新 generated_at/updated_at，并同步刷新所有日报表。"},
+]
+
 
 def serialize_value(value):
     if isinstance(value, (datetime, date)):
@@ -1099,6 +1162,14 @@ def list_supported_tables():
 @db_api.route("/mysql/tables", methods=["GET"])
 def list_mysql_tables():
     return list_supported_tables()
+
+
+@db_api.route("/front-data-catalog", methods=["GET"])
+def front_data_catalog():
+    return success({
+        "total": len(FRONT_DATA_CATALOG),
+        "list": FRONT_DATA_CATALOG,
+    })
 
 
 @db_api.route("/mongo/collections", methods=["GET"])
