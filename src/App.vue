@@ -330,6 +330,10 @@ function statusText(status) {
   return {
     enabled: "启用",
     readonly: "只读",
+    active: "正常",
+    normal: "正常",
+    inactive: "停用",
+    disabled: "停用",
     pending: "待处理",
     processing: "处理中",
     processed: "已处理",
@@ -1210,7 +1214,7 @@ onMounted(restoreSession)
           </div>
         </article>
         <article class="panel">
-          <div class="panel-head"><div><h3>播放趋势</h3><p>来自 Daily_Stats 聚合</p></div></div>
+          <div class="panel-head"><div><h3>每日播放次数趋势</h3><p>每天播放记录总次数，来自 daily_stats.total_play_count</p></div></div>
           <div class="bar-chart">
             <div v-for="item in state.decision.trend" :key="item.stat_date" class="bar-item">
               <div class="bar" :style="{ height: barHeight(item.total_play_count, maxOf(state.decision.trend, 'total_play_count')) }"></div>
@@ -1511,7 +1515,7 @@ onMounted(restoreSession)
       </section>
 
       <section v-if="state.active === 'groups'" class="panel full">
-        <div class="panel-head"><div><h3>设备分组</h3><p>按型号、固件和在线状态聚合</p></div></div>
+        <div class="panel-head"><div><h3>设备分组</h3><p>共 {{ state.groups.total || 0 }} 台设备 / {{ state.groups.groupTotal || state.groups.list.length }} 个分组，按型号、固件和在线状态聚合</p></div></div>
         <div class="data-table">
           <div v-for="group in state.groups.list" :key="group.groupName" class="table-row">
             <strong>{{ group.groupName }}</strong><span>固件：{{ group.firmwareVersions }} / 离线 {{ group.offlineCount }}</span><em>{{ group.onlineCount }}/{{ group.deviceCount }} 在线</em>
@@ -1592,8 +1596,11 @@ onMounted(restoreSession)
         </div>
         <div class="data-table">
           <div v-for="user in state.users.list" :key="user.adminId" class="table-row user-row">
-            <strong>{{ user.realName }} · {{ user.username }}</strong>
-            <span>{{ user.roleName }} / {{ user.jobNo }} / {{ user.phone || "未配置手机号" }}</span>
+            <div class="user-cell">
+              <strong>{{ user.realName }} · {{ user.username }}</strong>
+              <span>{{ user.roleName }} / {{ user.jobNo }} / {{ user.phone || "未配置手机号" }}</span>
+              <small>状态：{{ statusText(user.status) }} / 最近登录：{{ user.lastLoginAt || "-" }}</small>
+            </div>
             <div v-if="user.editable" class="row-actions">
               <button class="ghost-button compact" @click="openUserEdit(user)"><i class="fa-solid fa-user-pen"></i> 编辑</button>
               <button class="ghost-button compact danger" @click="deleteUser(user)"><i class="fa-solid fa-trash"></i> 删除</button>
@@ -3131,6 +3138,25 @@ button {
 
 .table-row:not(.device-row) {
   cursor: pointer;
+}
+
+.user-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.user-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-cell small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.user-row > em {
+  justify-self: end;
 }
 
 .segmented {

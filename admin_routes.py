@@ -141,6 +141,7 @@ def all_admins():
 
     overlay = admin_accounts_overlay()
     result = {username: dict(record) for username, record in DEFAULT_ADMINS.items()}
+    last_login_map = ((load_state().get("admin_console", {}) or {}).get("adminLastLoginAt") or {})
     for username in overlay["deleted"]:
         result.pop(username, None)
     for username, record in overlay["accounts"].items():
@@ -148,6 +149,9 @@ def all_admins():
             result[username].update(record)
         else:
             result[username] = dict(record)
+    for username, last_login_at in last_login_map.items():
+        if username in result:
+            result[username]["lastLoginAt"] = last_login_at
     return result
 
 
@@ -183,6 +187,57 @@ def response_error(code, message, error_details=None):
     else:
         body["data"] = None
     return jsonify(body), code
+
+
+def write_admin_audit(action, module, operation_name, target="", result_status="success", error_message="", admin=None, params=None):
+    actor = admin or getattr(g, "admin", None) or {}
+    payload = {
+        "target": target,
+        **(params or {}),
+    }
+    try:
+        param_text = json.dumps(json_safe(payload), ensure_ascii=False)
+    except Exception:
+        param_text = str(payload)
+    mysql_exec(
+        """
+        INSERT INTO admin_operation_log
+            (admin_id, action, module, operation_name, path, request_method,
+             ip_address, user_agent, params, result_status, error_message, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        """,
+        (
+            actor.get("adminId"),
+            action,
+            module,
+            operation_name,
+            request.path if request else "",
+            request.method if request else "",
+            request.headers.get("X-Forwarded-For", request.remote_addr or "") if request else "",
+            request.headers.get("User-Agent", "")[:500] if request else "",
+            param_text[:2000],
+            result_status,
+            error_message[:500] if error_message else "",
+        ),
+    )
+
+
+def record_admin_login(admin):
+    login_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    admin_id = admin.get("adminId")
+    if admin_id:
+        mysql_exec(
+            "UPDATE admin_user SET last_login_at=%s WHERE admin_id=%s",
+            (login_at, admin_id),
+        )
+    try:
+        state = load_state()
+        state.setdefault("admin_console", {}).setdefault("adminLastLoginAt", {})[admin["username"]] = login_at
+        save_state(state)
+    except Exception:
+        pass
+    admin["lastLoginAt"] = login_at
+    return login_at
 
 
 def _b64_encode(raw):
@@ -904,9 +959,12 @@ def login():
 
     admin = find_admin(username)
     if not admin or not verify_admin_password(password, admin.get("password", "")):
+        write_admin_audit("login_failed", "认证", "登录系统失败", username, "failed", "用户名或密码错误", None)
         return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
 
     token = sign_token(admin)
+    record_admin_login(admin)
+    write_admin_audit("login", "认证", "登录系统", username, "success", "", admin)
     return response_ok({"token": token, "adminInfo": public_admin_info(admin)}, "登录成功")
 
 
@@ -1272,6 +1330,15 @@ def update_firmware():
         (task_no, body.get("deviceId") or device["deviceId"], device["firmwareVersion"], target_version, g.admin.get("realName") or g.admin.get("username")),
         fetch_last_id=True,
     )
+    write_admin_audit(
+        "create_firmware_task",
+        "设备固件",
+        "下发固件升级任务",
+        target_version,
+        "success" if inserted else "failed",
+        "" if inserted else "任务写入失败",
+        params={"taskNo": task_no, "deviceId": body.get("deviceId") or device["deviceId"]},
+    )
     return response_ok(
         {
             "taskId": inserted or task_no,
@@ -1434,6 +1501,7 @@ def rename_device():
         "UPDATE user_device_binding SET custom_device_name=%s WHERE device_id=%s",
         (name, device_id),
     )
+    write_admin_audit("rename_device", "设备管理", "修改设备名称", device_id, "success", "", params={"deviceName": name})
     state = load_state()
     state.setdefault("device", {})["deviceName"] = name
     save_state(state)
@@ -1446,6 +1514,7 @@ def unbind_device():
     body = request.get_json(silent=True) or {}
     device_id = str(body.get("deviceId") or current_device()["deviceId"])
     mysql_exec("DELETE FROM user_device_binding WHERE device_id=%s", (device_id,))
+    write_admin_audit("unbind_device", "设备管理", "解绑设备", device_id, "success")
     return response_ok({"deviceId": device_id, "unbound": True}, "设备解绑成功")
 
 
@@ -1625,13 +1694,32 @@ def admin_users_data():
     rows = cached_mysql_all(
         """
         SELECT u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username) AS display_name,
-               u.phone, u.created_at, u.last_login_at
-        FROM `user` u
+               u.phone, u.status, u.created_at, u.last_login_at,
+               COUNT(DISTINCT b.device_id) AS bound_device_count,
+               GROUP_CONCAT(DISTINCT COALESCE(b.custom_device_name, d.device_name, d.device_number) SEPARATOR '、') AS bound_devices,
+               MAX(b.bind_time) AS last_bind_time
+        FROM user_device_binding b
+        JOIN `user` u ON u.user_id=b.user_id
         LEFT JOIN user_profile p ON p.user_id=u.user_id
-        ORDER BY u.user_id ASC
+        LEFT JOIN device d ON d.device_id=b.device_id
+        GROUP BY u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username),
+                 u.phone, u.status, u.created_at, u.last_login_at
+        ORDER BY MAX(b.bind_time) DESC, u.user_id ASC
         LIMIT 20
         """
     )
+    if not rows:
+        rows = cached_mysql_all(
+            """
+            SELECT u.user_id, u.username, COALESCE(p.nickname, u.nickname, u.username) AS display_name,
+                   u.phone, u.status, u.created_at, u.last_login_at,
+                   0 AS bound_device_count, '' AS bound_devices, NULL AS last_bind_time
+            FROM `user` u
+            LEFT JOIN user_profile p ON p.user_id=u.user_id
+            ORDER BY u.user_id ASC
+            LIMIT 20
+            """
+        )
     users = [
         {
             "adminId": admin["adminId"],
@@ -1644,12 +1732,13 @@ def admin_users_data():
             "phone": admin.get("phone"),
             "email": admin.get("email"),
             "status": admin.get("status", "enabled"),
-            "lastLoginAt": admin.get("lastLoginAt", "2026-05-29 09:30:00"),
+            "lastLoginAt": fmt_dt(admin.get("lastLoginAt")) or "尚未登录",
             "editable": True,
         }
         for admin in all_admins().values()
     ]
-    for row in rows[:6]:
+    for row in rows[:10]:
+        bound_count = _int(row.get("bound_device_count"), 0)
         users.append(
             {
                 "adminId": f"user-{row.get('user_id')}",
@@ -1657,12 +1746,14 @@ def admin_users_data():
                 "realName": row.get("display_name") or row.get("username") or "业务用户",
                 "role": "customer",
                 "roleName": "绑定用户",
-                "jobNo": "-",
+                "jobNo": f"绑定 {bound_count} 台" if bound_count else "未绑定设备",
                 "position": "智能音箱用户",
                 "phone": row.get("phone"),
                 "email": "",
-                "status": "readonly",
-                "lastLoginAt": str(row.get("last_login_at") or row.get("created_at") or "-"),
+                "status": "active" if str(row.get("status") or "active").lower() in ("1", "active", "normal", "enabled") else "inactive",
+                "lastLoginAt": fmt_dt(row.get("last_login_at") or row.get("last_bind_time") or row.get("created_at")) or "-",
+                "boundDeviceCount": bound_count,
+                "boundDevices": row.get("bound_devices") or "",
                 "editable": False,
             }
         )
@@ -1925,6 +2016,7 @@ def admin_user_create():
     }
     accounts[username] = record
     _save_admin_overlay({"accounts": accounts, "deleted": deleted})
+    write_admin_audit("create_admin_user", "用户管理", "新增后台账号", username, "success", "", params={"role": role})
     return response_ok(public_admin_info(record, include_private=True), "账号已创建")
 
 
@@ -1962,6 +2054,7 @@ def admin_user_update():
             record[key] = str(body.get(key)).strip()
     accounts[username] = record
     _save_admin_overlay({"accounts": accounts, "deleted": overlay["deleted"]})
+    write_admin_audit("update_admin_user", "用户管理", "修改后台账号", username, "success", "", params={"role": record.get("role")})
     return response_ok(public_admin_info(record, include_private=True), "账号已更新")
 
 
@@ -1986,6 +2079,7 @@ def admin_user_delete():
     if username in DEFAULT_ADMINS and username not in deleted:
         deleted.append(username)
     _save_admin_overlay({"accounts": accounts, "deleted": deleted})
+    write_admin_audit("delete_admin_user", "用户管理", "删除后台账号", username, "success")
     return response_ok(None, "账号已删除")
 
 @admin_bp.get("/super/roles")
@@ -2019,9 +2113,158 @@ def update_role_permissions():
     overrides = dict(admin_state_section("rolePermissions", {}))
     overrides[role] = cleaned
     save_admin_state_section("rolePermissions", overrides)
+    write_admin_audit("update_role_permissions", "角色权限", "修改用户权限", role, "success", "", params={"permissions": cleaned})
 
     rows = merged_role_rows()
     return response_ok({"list": rows}, "角色权限已更新")
+
+
+def audit_result_level(result_status, error_message=""):
+    status = str(result_status or "").lower()
+    if error_message or status in {"fail", "failed", "error", "denied"}:
+        return "warning"
+    return "info"
+
+
+def parse_audit_params(raw):
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def is_seed_audit_row(row):
+    text = " ".join(
+        str(row.get(key) or "")
+        for key in ("action", "module", "operation_name", "path")
+    ).lower()
+    return "seed business data" in text or ("seed" in text and "business" in text)
+
+
+def format_audit_row(row, seed=False):
+    params = parse_audit_params(row.get("params"))
+    target = params.get("target") or params.get("object") or params.get("deviceId") or params.get("version") or ""
+    operation = row.get("operation_name") or row.get("action") or row.get("path") or "-"
+    if seed:
+        operation = "初始化业务测试数据"
+    result = row.get("result_status") or ("success" if not row.get("error_message") else "failed")
+    event = f"{operation}：{target}" if target else operation
+    event = f"{event}（结果：{result}）"
+    return {
+        "logId": row.get("log_id"),
+        "level": audit_result_level(result, row.get("error_message")),
+        "event": event,
+        "operation": operation,
+        "target": target or "-",
+        "result": result,
+        "errorMessage": row.get("error_message") or "",
+        "actor": row.get("actor_name") or row.get("module") or "系统",
+        "ip": row.get("ip_address") or "-",
+        "createdAt": fmt_dt(row.get("created_at")),
+    }
+
+
+def dynamic_audit_rows(limit=30):
+    rows = []
+
+    for row in mysql_all(
+        """
+        SELECT task_id, task_no, target_version, status, fail_reason, operator_name,
+               created_at, updated_at
+        FROM device_firmware_update_task
+        ORDER BY created_at DESC, task_id DESC
+        LIMIT 10
+        """
+    ):
+        status = row.get("status") or "pending"
+        rows.append({
+            "logId": f"firmware-task-{row.get('task_id')}",
+            "level": audit_result_level(status, row.get("fail_reason") if row.get("fail_reason") not in ("", "-") else ""),
+            "event": f"下发固件升级任务：{row.get('target_version') or '-'}（结果：{status}）",
+            "operation": "下发固件升级任务",
+            "target": row.get("task_no") or row.get("target_version") or "-",
+            "result": status,
+            "errorMessage": "" if row.get("fail_reason") in ("", "-") else row.get("fail_reason") or "",
+            "actor": row.get("operator_name") or "后台管理员",
+            "ip": "-",
+            "createdAt": fmt_dt(row.get("created_at") or row.get("updated_at")),
+        })
+
+    for row in mysql_all(
+        """
+        SELECT feedback_id, feedback_no, title, status, handler_name, handled_at,
+               updated_at, created_at
+        FROM user_feedback
+        WHERE COALESCE(handler_name, '') <> ''
+           OR handled_at IS NOT NULL
+        ORDER BY COALESCE(handled_at, updated_at, created_at) DESC, feedback_id DESC
+        LIMIT 10
+        """
+    ):
+        rows.append({
+            "logId": f"feedback-{row.get('feedback_id')}",
+            "level": audit_result_level(row.get("status")),
+            "event": f"处理用户反馈：{row.get('title') or row.get('feedback_no') or '-'}（结果：{row.get('status') or 'processed'}）",
+            "operation": "处理用户反馈",
+            "target": row.get("feedback_no") or row.get("feedback_id") or "-",
+            "result": row.get("status") or "processed",
+            "errorMessage": "",
+            "actor": row.get("handler_name") or "售后人员",
+            "ip": "-",
+            "createdAt": fmt_dt(row.get("handled_at") or row.get("updated_at") or row.get("created_at")),
+        })
+
+    for row in mysql_all(
+        """
+        SELECT config_id, config_key, config_name, config_value, config_type,
+               description, created_at, updated_at
+        FROM system_config
+        WHERE config_group IN ('notice', 'notices', 'system_notice')
+           OR config_key LIKE 'notice.%'
+        ORDER BY updated_at DESC, created_at DESC, config_id DESC
+        LIMIT 10
+        """
+    ):
+        rows.append({
+            "logId": f"notice-{row.get('config_id')}",
+            "level": "info" if (row.get("description") or "published") != "failed" else "warning",
+            "event": f"发布系统公告：{row.get('config_name') or row.get('config_value') or '-'}（结果：{row.get('description') or 'published'}）",
+            "operation": "发布系统公告",
+            "target": row.get("config_key") or "-",
+            "result": row.get("description") or "published",
+            "errorMessage": "",
+            "actor": "超级管理员",
+            "ip": "-",
+            "createdAt": fmt_dt(row.get("updated_at") or row.get("created_at")),
+        })
+
+    for row in mysql_all(
+        """
+        SELECT admin_id, username, real_name, role, last_login_at
+        FROM admin_user
+        WHERE last_login_at IS NOT NULL
+        ORDER BY last_login_at DESC, admin_id DESC
+        LIMIT 10
+        """
+    ):
+        rows.append({
+            "logId": f"login-{row.get('admin_id')}",
+            "level": "info",
+            "event": f"登录系统：{row.get('username') or '-'}（结果：success）",
+            "operation": "登录系统",
+            "target": row.get("username") or "-",
+            "result": "success",
+            "errorMessage": "",
+            "actor": row.get("real_name") or row.get("username") or ROLE_NAME_MAP.get(row.get("role"), "管理员"),
+            "ip": "-",
+            "createdAt": fmt_dt(row.get("last_login_at")),
+        })
+
+    rows = sorted(rows, key=lambda item: item.get("createdAt") or "", reverse=True)
+    return rows[:limit]
 
 
 @admin_bp.get("/super/security/logs")
@@ -2029,25 +2272,29 @@ def update_role_permissions():
 def security_logs():
     db_rows = mysql_all(
         """
-        SELECT log_id, action, module, operation_name, path, request_method,
-               ip_address, result_status, error_message, created_at
-        FROM admin_operation_log
-        ORDER BY created_at DESC, log_id DESC
+        SELECT l.log_id, l.admin_id, l.action, l.module, l.operation_name, l.path,
+               l.request_method, l.ip_address, l.params, l.result_status,
+               l.error_message, l.created_at,
+               COALESCE(u.real_name, u.username) AS actor_name
+        FROM admin_operation_log l
+        LEFT JOIN admin_user u ON u.admin_id = l.admin_id
+        ORDER BY l.created_at DESC, l.log_id DESC
         LIMIT 50
         """
     )
-    if db_rows:
-        rows = [
-            {
-                "logId": row.get("log_id"),
-                "level": "warning" if row.get("error_message") or str(row.get("result_status") or "").lower() not in ("", "success", "ok") else "info",
-                "event": row.get("operation_name") or row.get("action") or row.get("module") or row.get("path") or "-",
-                "actor": row.get("module") or row.get("action") or "-",
-                "ip": row.get("ip_address") or "-",
-                "createdAt": fmt_dt(row.get("created_at")),
-            }
-            for row in db_rows
-        ]
+    seed_rows = [row for row in db_rows if is_seed_audit_row(row)]
+    real_rows = [row for row in db_rows if not is_seed_audit_row(row)]
+    rows = [format_audit_row(row) for row in real_rows]
+    if len(rows) < 12:
+        rows.extend(dynamic_audit_rows(30 - len(rows)))
+    if seed_rows and len(rows) < 8:
+        rows.extend(format_audit_row(row, seed=True) for row in seed_rows[:8 - len(rows)])
+    rows = sorted(
+        rows,
+        key=lambda item: item.get("createdAt") or "",
+        reverse=True,
+    )[:50]
+    if rows:
         return response_ok({"total": len(rows), "list": rows})
 
     return response_ok({"total": 0, "list": []})
@@ -2189,6 +2436,7 @@ def create_admin_notice():
             "UPDATE system_config SET config_type=%s, description=%s WHERE config_key=%s",
             (notice["type"], notice["status"], notice_key),
         )
+        write_admin_audit("create_notice", "系统公告", "发布系统公告", title, "success", "", params={"noticeId": notice_key, "status": notice["status"]})
         return response_ok(notice, "notice created")
 
     return response_error(500, "notice create failed", "system_config is not writable")
@@ -2372,7 +2620,7 @@ def device_groups():
         }
         for group in groups.values()
     ]
-    return response_ok({"total": len(result), "list": result})
+    return response_ok({"total": len(devices), "groupTotal": len(result), "list": result})
 
 
 @admin_bp.get("/operator/device/alerts")
@@ -2572,6 +2820,15 @@ def create_firmware_task():
         fetch_last_id=True,
     )
     if inserted:
+        write_admin_audit(
+            "create_firmware_task",
+            "任务中心",
+            "下发灰度升级任务",
+            target_version,
+            "success",
+            "",
+            params={"taskNo": task_no, "targetScope": body.get("targetScope") or "", "deviceId": body.get("deviceId") or device["deviceId"]},
+        )
         task = {
             "taskId": task_no,
             "targetVersion": target_version,
@@ -2584,6 +2841,7 @@ def create_firmware_task():
         }
         return response_ok(task, "firmware task created")
 
+    write_admin_audit("create_firmware_task", "任务中心", "下发灰度升级任务", target_version, "failed", "device_firmware_update_task is not writable")
     return response_error(500, "firmware task create failed", "device_firmware_update_task is not writable")
 
 
@@ -2638,6 +2896,15 @@ def handle_feedback():
     with _ADMIN_CACHE_LOCK:
         _ADMIN_CACHE.clear()
 
+    write_admin_audit(
+        "handle_feedback",
+        "用户反馈",
+        "处理用户反馈",
+        feedback_id,
+        "success",
+        "",
+        params={"status": status, "remark": remark},
+    )
     return response_ok(
         {
             "result": True,
