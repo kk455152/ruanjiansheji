@@ -466,6 +466,27 @@ def device_runtime_doc(device_id):
     return {}
 
 
+ONLINE_DEVICE_VALUE_SQL = """
+CASE
+    WHEN LOWER(COALESCE(online_status, '')) IN ('online', 'true', '1', 'yes')
+         OR COALESCE(online_status, '') = '在线' THEN 1
+    WHEN LOWER(COALESCE(online_status, '')) IN ('offline', 'false', '0', 'no')
+         OR COALESCE(online_status, '') = '离线' THEN 0
+    ELSE CASE WHEN COALESCE(status, 0) = 1 THEN 1 ELSE 0 END
+END
+"""
+ONLINE_DEVICE_CONDITION = f"({ONLINE_DEVICE_VALUE_SQL}) = 1"
+
+
+def device_online(row):
+    text = str(row.get("online_status") or "").strip().lower()
+    if text in {"online", "true", "1", "yes", "在线"}:
+        return True
+    if text in {"offline", "false", "0", "no", "离线"}:
+        return False
+    return bool(row.get("status"))
+
+
 def current_device(device_id=None):
     params = ()
     where = ""
@@ -479,6 +500,7 @@ def current_device(device_id=None):
             d.device_number,
             d.model_name,
             d.status,
+            d.online_status,
             d.last_active,
             d.firmware_version,
             b.custom_device_name,
@@ -511,7 +533,7 @@ def current_device(device_id=None):
             "deviceName": row.get("custom_device_name") or row.get("device_number") or "",
             "modelName": row.get("model_name") or "",
             "ownerName": row.get("owner_name") or "",
-            "online": bool(row.get("status")),
+            "online": device_online(row),
             "firmwareVersion": row.get("firmware_version") or "",
             "lastOnlineAt": str(row.get("last_active") or ""),
             "volume": runtime_int("volume", default=0),
@@ -557,6 +579,15 @@ def service_text(value):
     if not parts:
         return "未知平台"
     return "、".join(platform_text(part) for part in parts)
+
+
+def normalized_music_service(value):
+    text = platform_text(value).replace(" ", "")
+    if text in {"网易云音乐", "网易云"}:
+        return "网易云音乐"
+    if text in {"QQ音乐", "QQ"}:
+        return "QQ音乐"
+    return None
 
 
 def latest_song_row(device_id=None):
@@ -650,15 +681,18 @@ def distribution_data(kind):
             """
         )
         return [{"level": row.get("level"), "levelName": row.get("level"), "count": _int(row.get("count"), 0)} for row in rows]
-    rows = mysql_all(
-        """
-        SELECT COALESCE(bound_platforms, 'unknown') AS service, COUNT(*) AS count
-        FROM user_profile
-        GROUP BY COALESCE(bound_platforms, 'unknown')
-        ORDER BY count DESC
-        """
-    )
-    return [{"service": row.get("service"), "serviceName": service_text(row.get("service")), "count": _int(row.get("count"), 0)} for row in rows]
+    rows = mysql_all("SELECT bound_platforms FROM user_profile")
+    counts = {"网易云音乐": 0, "QQ音乐": 0}
+    for row in rows:
+        values = str(row.get("bound_platforms") or "").replace("、", ",").split(",")
+        for value in values:
+            service = normalized_music_service(value.strip())
+            if service:
+                counts[service] += 1
+    return [
+        {"service": "netease", "serviceName": "网易云音乐", "count": counts["网易云音乐"]},
+        {"service": "qq_music", "serviceName": "QQ音乐", "count": counts["QQ音乐"]},
+    ]
 
 
 def heatmap(kind):
@@ -672,6 +706,41 @@ def heatmap(kind):
         LIMIT 20
         """
     )
+    if not rows and kind == "sales":
+        rows = mysql_all(
+            """
+            SELECT
+                COALESCE(province_code, 'unknown') AS region_code,
+                COALESCE(province_name, city_name, '未知地区') AS region_name,
+                COALESCE(SUM(pay_amount), 0) AS sales_amount,
+                COUNT(*) AS order_count,
+                0 AS user_count,
+                0 AS active_user_count
+            FROM sales_order
+            WHERE pay_status IN ('paid', 'success', 'finished')
+            GROUP BY COALESCE(province_code, 'unknown'),
+                     COALESCE(province_name, city_name, '未知地区')
+            ORDER BY sales_amount DESC, order_count DESC
+            LIMIT 20
+            """
+        )
+    if not rows and kind == "user":
+        rows = mysql_all(
+            """
+            SELECT
+                COALESCE(province_code, 'unknown') AS region_code,
+                COALESCE(province_name, city_name, '未知地区') AS region_name,
+                0 AS sales_amount,
+                0 AS order_count,
+                COUNT(*) AS user_count,
+                COUNT(CASE WHEN active_level='high' THEN 1 END) AS active_user_count
+            FROM user_profile
+            GROUP BY COALESCE(province_code, 'unknown'),
+                     COALESCE(province_name, city_name, '未知地区')
+            ORDER BY user_count DESC, active_user_count DESC
+            LIMIT 20
+            """
+        )
     if kind == "sales":
         return [
             {
@@ -732,6 +801,7 @@ def feedback_rows():
             feedback_id = str(row.get("feedback_no") or row.get("feedback_id"))
             feedback_type = row.get("feedback_type") or "suggestion"
             status = row.get("status") or "open"
+            normalized_status = "pending" if status in ("open", "pending") else status
             priority = row.get("priority") or "normal"
             rating = _int(row.get("star_rating"), 0)
             result.append({
@@ -746,7 +816,7 @@ def feedback_rows():
                 "content": row.get("content") or "",
                 "images": [],
                 "contact": row.get("contact") or row.get("phone") or "",
-                "status": status,
+                "status": normalized_status,
                 "statusText": status_text.get(status, status),
                 "priority": priority,
                 "priorityText": priority_text.get(priority, priority),
@@ -878,7 +948,7 @@ def user_count():
 @require_admin("super", "boss")
 def device_count():
     total = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
-    online = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=0)
+    online = count_sql(f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", fallback=0)
     return response_ok({"deviceCount": total, "onlineDeviceCount": online, "offlineDeviceCount": max(total - online, 0)})
 
 
@@ -1027,11 +1097,31 @@ def feedback_detail_route():
 def top_songs():
     ranking_rows = mysql_all(
         """
-        SELECT ranking_date, rank_no, target_id, target_name, target_category,
-               metric_value, metric_unit, scope_type
-        FROM hot_ranking_daily
-        WHERE ranking_type = 'song'
-          AND ranking_date = (
+        SELECT h.ranking_date, h.rank_no, h.target_id, h.target_name, h.target_category,
+               h.metric_value, h.metric_unit, h.scope_type, h.scope_code,
+               COALESCE(
+                   NULLIF(NULLIF(h.scope_code, 'global'), ''),
+                   (
+                       SELECT mm.platform
+                       FROM media_mapping mm
+                       WHERE mm.external_id = h.target_id OR mm.song_title = h.target_name
+                       ORDER BY mm.mapping_id DESC
+                       LIMIT 1
+                   )
+               ) AS source_platform,
+               (
+                   SELECT COUNT(DISTINCT ph.user_id)
+                   FROM play_history ph
+                   LEFT JOIN media_mapping mm2 ON mm2.mapping_id = ph.mapping_id
+                   WHERE DATE(ph.created_at) = h.ranking_date
+                     AND (
+                         COALESCE(mm2.external_id, CAST(ph.mapping_id AS CHAR), CAST(ph.history_id AS CHAR)) = h.target_id
+                         OR mm2.song_title = h.target_name
+                     )
+               ) AS user_count
+        FROM hot_ranking_daily h
+        WHERE h.ranking_type = 'song'
+          AND h.ranking_date = (
               SELECT MAX(ranking_date)
               FROM hot_ranking_daily
               WHERE ranking_type = 'song'
@@ -1040,6 +1130,33 @@ def top_songs():
         LIMIT 10
         """
     )
+    if not ranking_rows:
+        ranking_rows = mysql_all(
+            """
+            SELECT
+                DATE(ph.created_at) AS ranking_date,
+                0 AS rank_no,
+                COALESCE(mm.external_id, CAST(ph.mapping_id AS CHAR), CAST(ph.history_id AS CHAR)) AS target_id,
+                COALESCE(mm.song_title, '未知歌曲') AS target_name,
+                COALESCE(mm.artist, '未知歌手') AS target_category,
+                COUNT(*) AS metric_value,
+                'plays' AS metric_unit,
+                'platform' AS scope_type,
+                COALESCE(ph.source_platform, mm.platform, '未知平台') AS scope_code,
+                COALESCE(ph.source_platform, mm.platform, '未知平台') AS source_platform,
+                COUNT(DISTINCT ph.user_id) AS user_count
+            FROM play_history ph
+            LEFT JOIN media_mapping mm ON mm.mapping_id = ph.mapping_id
+            WHERE DATE(ph.created_at) = (SELECT MAX(DATE(created_at)) FROM play_history)
+            GROUP BY DATE(ph.created_at),
+                     COALESCE(mm.external_id, CAST(ph.mapping_id AS CHAR), CAST(ph.history_id AS CHAR)),
+                     COALESCE(mm.song_title, '未知歌曲'),
+                     COALESCE(mm.artist, '未知歌手'),
+                     COALESCE(ph.source_platform, mm.platform, '未知平台')
+            ORDER BY metric_value DESC, target_name ASC
+            LIMIT 10
+            """
+        )
     if ranking_rows:
         return response_ok({
             "list": [
@@ -1047,9 +1164,9 @@ def top_songs():
                     "rank": index + 1,
                     "songName": row.get("target_name") or "未知歌曲",
                     "artist": row.get("target_category") or "未知歌手",
-                    "platform": row.get("scope_type") or "global",
+                    "platform": platform_text(row.get("source_platform") or row.get("scope_code") or row.get("scope_type")),
                     "playCount": _int(row.get("metric_value"), 0),
-                    "userCount": 0,
+                    "userCount": _int(row.get("user_count"), 0),
                     "rankingDate": str(row.get("ranking_date")),
                     "targetId": row.get("target_id"),
                     "metricUnit": row.get("metric_unit") or "plays",
@@ -1080,18 +1197,24 @@ def retention_device_purchase():
         purchases = _int(row.get("purchases"), 0)
         if not purchases:
             continue
-        day1 = count_sql(
-            "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at) >= DATE_ADD(%s, INTERVAL 1 DAY)",
-            (date_value,),
-        )
-        day7 = count_sql(
-            "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at) >= DATE_ADD(%s, INTERVAL 7 DAY)",
-            (date_value,),
-        )
-        day30 = count_sql(
-            "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at) >= DATE_ADD(%s, INTERVAL 30 DAY)",
-            (date_value,),
-        )
+
+        def retained_count(days):
+            return count_sql(
+                """
+                SELECT COUNT(DISTINCT so.user_id) AS c
+                FROM sales_order so
+                JOIN play_history ph ON ph.user_id = so.user_id
+                WHERE so.pay_status IN ('paid', 'success', 'finished')
+                  AND DATE(so.created_at) = %s
+                  AND DATE(ph.created_at) >= DATE_ADD(DATE(so.created_at), INTERVAL %s DAY)
+                  AND DATE(ph.created_at) < DATE_ADD(DATE(so.created_at), INTERVAL %s DAY)
+                """,
+                (date_value, days, days + 1),
+            )
+
+        day1 = retained_count(1)
+        day7 = retained_count(7)
+        day30 = retained_count(30)
         data.append({
             "date": str(date_value),
             "purchaseUserCount": purchases,
@@ -1164,6 +1287,7 @@ def operator_device_list():
             d.device_number,
             d.model_name,
             d.status,
+            d.online_status,
             d.firmware_version,
             d.last_active,
             b.user_id,
@@ -1186,7 +1310,7 @@ def operator_device_list():
                 "modelName": row.get("model_name") or "",
                 "ownerName": row.get("owner_name") or "",
                 "userId": str(row.get("user_id")) if row.get("user_id") is not None else "",
-                "online": bool(row.get("status")),
+                "online": device_online(row),
                 "firmwareVersion": row.get("firmware_version") or "",
                 "lastOnlineAt": str(row.get("last_active") or ""),
             }
@@ -1485,11 +1609,13 @@ def device_admin_rows():
             d.device_number,
             d.model_name,
             d.status,
+            d.online_status,
             d.last_active,
+            d.firmware_version,
             b.custom_device_name,
             COALESCE(p.nickname, u.nickname, u.username) AS owner_name
         FROM device d
-        LEFT JOIN user_device_binding b ON b.device_id = d.device_id
+        LEFT JOIN user_device_binding b ON b.device_id = d.device_id AND COALESCE(b.is_primary, 1) = 1
         LEFT JOIN `user` u ON u.user_id = b.user_id
         LEFT JOIN user_profile p ON p.user_id = u.user_id
         ORDER BY d.device_id ASC
@@ -1504,8 +1630,8 @@ def device_admin_rows():
                 "deviceName": row.get("custom_device_name") or "声盒 Mini",
                 "modelName": row.get("model_name") or "SH-Mini A1",
                 "ownerName": row.get("owner_name") or "未绑定",
-                "online": bool(row.get("status")),
-                "firmwareVersion": "1.0.3",
+                "online": device_online(row),
+                "firmwareVersion": row.get("firmware_version") or "未知版本",
                 "lastOnlineAt": str(row.get("last_active") or "-"),
             }
             for row in rows
@@ -1845,7 +1971,7 @@ def security_logs():
 def system_monitor():
     total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
     total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
-    online_devices = count_sql("SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0) = 1", fallback=0)
+    online_devices = count_sql(f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", fallback=0)
     feedback_total = len(feedback_rows())
     monitor_config = _system_config_values({"apiErrorRate": 0, "storageUsage": ""})
     services = [
@@ -1990,6 +2116,27 @@ def market_segments():
         ORDER BY user_count DESC, segment_code ASC
         """
     )
+    if not rows:
+        rows = mysql_all(
+            """
+            SELECT
+                CURDATE() AS stat_date,
+                COALESCE(value_level, 'normal') AS segment_code,
+                CASE COALESCE(value_level, 'normal')
+                    WHEN 'high' THEN '高价值用户'
+                    WHEN 'low' THEN '低价值用户'
+                    ELSE '普通用户'
+                END AS segment_name,
+                COUNT(*) AS user_count,
+                COUNT(CASE WHEN active_level='high' THEN 1 END) AS active_user_count,
+                0 AS avg_play_count,
+                0 AS avg_pay_amount,
+                COUNT(CASE WHEN active_level='high' THEN 1 END) / GREATEST(COUNT(*), 1) AS retention_rate
+            FROM user_profile
+            GROUP BY COALESCE(value_level, 'normal')
+            ORDER BY user_count DESC, segment_code ASC
+            """
+        )
     if rows:
         return response_ok({
             "total": len(rows),
@@ -2015,11 +2162,34 @@ def market_segments():
 @admin_bp.get("/market/insights")
 @require_admin("super", "market")
 def market_insights():
-    new_users = count_sql("SELECT COUNT(*) AS c FROM `user` WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)")
-    bound_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM user_device_binding")
-    first_play_users = count_sql("SELECT COUNT(DISTINCT user_id) AS c FROM play_history")
-    retained_users = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'")
-    base = max(new_users, bound_users, first_play_users, retained_users, 1)
+    cohort_filter = "u.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)"
+    new_users = count_sql(f"SELECT COUNT(*) AS c FROM `user` u WHERE {cohort_filter}")
+    bound_users = count_sql(
+        f"""
+        SELECT COUNT(DISTINCT u.user_id) AS c
+        FROM `user` u
+        JOIN user_device_binding b ON b.user_id = u.user_id
+        WHERE {cohort_filter}
+        """
+    )
+    first_play_users = count_sql(
+        f"""
+        SELECT COUNT(DISTINCT u.user_id) AS c
+        FROM `user` u
+        JOIN play_history ph ON ph.user_id = u.user_id
+        WHERE {cohort_filter}
+        """
+    )
+    retained_users = count_sql(
+        f"""
+        SELECT COUNT(DISTINCT u.user_id) AS c
+        FROM `user` u
+        JOIN play_history ph ON ph.user_id = u.user_id
+        WHERE {cohort_filter}
+          AND ph.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        """
+    )
+    base = max(new_users, 1)
     recommendation_rows = _system_config_group_rows("market_recommendation", 20)
     recommendations = [
         row.get("config_value") or row.get("config_name") or row.get("description")

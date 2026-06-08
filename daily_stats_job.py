@@ -49,6 +49,16 @@ DEMO_SONGS = [
     ("demo-guanghui", "光辉岁月", "Beyond", "QQ音乐", "摇滚"),
 ]
 DEMO_PLATFORMS = ("网易云音乐", "QQ音乐")
+ONLINE_DEVICE_VALUE_SQL = """
+CASE
+    WHEN LOWER(COALESCE(online_status, '')) IN ('online', 'true', '1', 'yes')
+         OR COALESCE(online_status, '') = '在线' THEN 1
+    WHEN LOWER(COALESCE(online_status, '')) IN ('offline', 'false', '0', 'no')
+         OR COALESCE(online_status, '') = '离线' THEN 0
+    ELSE CASE WHEN COALESCE(status, 0) = 1 THEN 1 ELSE 0 END
+END
+"""
+ONLINE_DEVICE_CONDITION = f"({ONLINE_DEVICE_VALUE_SQL}) = 1"
 
 
 def mysql_connect():
@@ -359,8 +369,6 @@ def seed_chinese_demo_data(stat_date, user_count=32, device_count=18, order_coun
                 region = DEMO_REGIONS[(index - 1) % len(DEMO_REGIONS)]
                 age = 18 + (index * 3) % 38
                 platform = DEMO_PLATFORMS[(index - 1) % len(DEMO_PLATFORMS)]
-                if index % 3 == 0:
-                    platform = "网易云音乐,QQ音乐"
                 active_level = ["high", "medium", "low"][index % 3]
                 value_level = ["high", "normal", "low"][(index + 1) % 3]
                 upsert_demo_row(
@@ -582,8 +590,8 @@ def enrich_daily_stats_from_mysql(cursor, stat_date, stats):
         "unique_user_count": max(int(stats.get("unique_user_count") or 0), active_users),
         "active_user_count": max(int(stats.get("unique_user_count") or 0), active_users),
         "unique_device_count": max(int(stats.get("unique_device_count") or 0), active_devices),
-        "online_device_count": max(active_devices, int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0)=1", default=0) or 0)),
-        "platform_wechat_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR bound_platforms LIKE %s", ("%wechat%", "%微信%"), 0) or 0),
+        "online_device_count": max(active_devices, int(mysql_scalar(cursor, f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", default=0) or 0)),
+        "platform_wechat_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR LOWER(bound_platforms) LIKE %s", ("%网易云%", "%netease%"), 0) or 0),
         "platform_qq_count": int(mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE bound_platforms LIKE %s OR bound_platforms LIKE %s", ("%qq%", "%QQ音乐%"), 0) or 0),
         "new_user_count": new_users,
         "new_device_count": new_devices,
@@ -791,24 +799,63 @@ def upsert_daily_stats(stats):
 
 
 def refresh_region_stats(cursor, stat_date):
+    regions = {}
+
+    def bucket(row):
+        region_code = row.get("region_code") or "unknown"
+        if region_code not in regions:
+            regions[region_code] = {
+                "region_code": region_code,
+                "region_name": row.get("region_name") or "unknown",
+                "user_count": 0,
+                "active_user_count": 0,
+                "device_count": 0,
+                "order_count": 0,
+                "sales_amount": 0,
+            }
+        return regions[region_code]
+
     cursor.execute(
         """
         SELECT
-            COALESCE(p.province_code, so.province_code, 'unknown') AS region_code,
-            COALESCE(p.province_name, so.province_name, 'unknown') AS region_name,
+            COALESCE(p.province_code, 'unknown') AS region_code,
+            COALESCE(p.province_name, p.city_name, 'unknown') AS region_name,
             COUNT(DISTINCT p.user_id) AS user_count,
             COUNT(DISTINCT CASE WHEN p.active_level='high' THEN p.user_id END) AS active_user_count,
-            COUNT(DISTINCT b.device_id) AS device_count,
-            COUNT(DISTINCT so.order_id) AS order_count,
-            COALESCE(SUM(CASE WHEN so.pay_status IN ('paid', 'success', 'finished') THEN so.pay_amount ELSE 0 END), 0) AS sales_amount
+            COUNT(DISTINCT b.device_id) AS device_count
         FROM user_profile p
         LEFT JOIN user_device_binding b ON b.user_id = p.user_id
-        LEFT JOIN sales_order so ON so.user_id = p.user_id
-        GROUP BY COALESCE(p.province_code, so.province_code, 'unknown'),
-                 COALESCE(p.province_name, so.province_name, 'unknown')
+        GROUP BY COALESCE(p.province_code, 'unknown'),
+                 COALESCE(p.province_name, p.city_name, 'unknown')
         """
     )
-    rows = cursor.fetchall() or []
+    for row in cursor.fetchall() or []:
+        item = bucket(row)
+        item["user_count"] = int(row.get("user_count") or 0)
+        item["active_user_count"] = int(row.get("active_user_count") or 0)
+        item["device_count"] = int(row.get("device_count") or 0)
+
+    cursor.execute(
+        """
+        SELECT
+            COALESCE(province_code, 'unknown') AS region_code,
+            COALESCE(province_name, city_name, 'unknown') AS region_name,
+            COUNT(*) AS order_count,
+            COALESCE(SUM(pay_amount), 0) AS sales_amount
+        FROM sales_order
+        WHERE pay_status IN ('paid', 'success', 'finished')
+          AND DATE(created_at) = %s
+        GROUP BY COALESCE(province_code, 'unknown'),
+                 COALESCE(province_name, city_name, 'unknown')
+        """,
+        (stat_date,),
+    )
+    for row in cursor.fetchall() or []:
+        item = bucket(row)
+        item["order_count"] = int(row.get("order_count") or 0)
+        item["sales_amount"] = row.get("sales_amount") or 0
+
+    rows = list(regions.values())
     if not rows:
         rows = [{
             "region_code": "global",
@@ -854,13 +901,15 @@ def refresh_hot_ranking(cursor, stat_date):
             COALESCE(mm.external_id, CAST(ph.mapping_id AS CHAR), CAST(ph.history_id AS CHAR)) AS target_id,
             COALESCE(mm.song_title, '未知歌曲') AS target_name,
             COALESCE(mm.artist, '未知歌手') AS target_category,
+            COALESCE(ph.source_platform, mm.platform, '未知平台') AS source_platform,
             COUNT(*) AS play_count
         FROM play_history ph
         LEFT JOIN media_mapping mm ON mm.mapping_id = ph.mapping_id
         WHERE DATE(ph.created_at) = %s
         GROUP BY COALESCE(mm.external_id, CAST(ph.mapping_id AS CHAR), CAST(ph.history_id AS CHAR)),
                  COALESCE(mm.song_title, '未知歌曲'),
-                 COALESCE(mm.artist, '未知歌手')
+                 COALESCE(mm.artist, '未知歌手'),
+                 COALESCE(ph.source_platform, mm.platform, '未知平台')
         ORDER BY play_count DESC, target_name ASC
         LIMIT 10
         """,
@@ -869,12 +918,16 @@ def refresh_hot_ranking(cursor, stat_date):
     rows = cursor.fetchall() or []
     if not rows:
         return
+    cursor.execute(
+        "DELETE FROM hot_ranking_daily WHERE ranking_date=%s AND ranking_type='song'",
+        (stat_date,),
+    )
     for index, row in enumerate(rows, start=1):
         cursor.execute(
             """
             INSERT INTO hot_ranking_daily
                 (ranking_date, ranking_type, scope_type, scope_code, rank_no, target_id, target_name, target_category, metric_value, metric_unit, created_at)
-            VALUES (%s, 'song', 'global', 'global', %s, %s, %s, %s, %s, 'plays', NOW())
+            VALUES (%s, 'song', 'platform', %s, %s, %s, %s, %s, %s, 'plays', NOW())
             ON DUPLICATE KEY UPDATE
                 target_id=VALUES(target_id),
                 target_name=VALUES(target_name),
@@ -884,6 +937,7 @@ def refresh_hot_ranking(cursor, stat_date):
             """,
             (
                 stat_date,
+                row.get("source_platform") or "未知平台",
                 index,
                 row.get("target_id") or f"song-{index}",
                 row.get("target_name") or "未知歌曲",
@@ -945,13 +999,15 @@ def refresh_user_value_segments(cursor, stat_date):
             FROM (
                 SELECT p.user_id, COUNT(ph.history_id) AS play_count, COALESCE(SUM(so.pay_amount), 0) AS pay_amount
                 FROM user_profile p
-                LEFT JOIN play_history ph ON ph.user_id=p.user_id
-                LEFT JOIN sales_order so ON so.user_id=p.user_id AND so.pay_status IN ('paid', 'success', 'finished')
+                LEFT JOIN play_history ph ON ph.user_id=p.user_id AND DATE(ph.created_at)=%s
+                LEFT JOIN sales_order so ON so.user_id=p.user_id
+                    AND so.pay_status IN ('paid', 'success', 'finished')
+                    AND DATE(so.created_at)=%s
                 WHERE COALESCE(p.value_level, 'normal')=%s
                 GROUP BY p.user_id
             ) x
             """,
-            (segment_code,),
+            (stat_date, stat_date, segment_code),
         )
         avg_row = cursor.fetchone() or {}
         user_count = int(row.get("user_count") or 0)
@@ -987,8 +1043,8 @@ def refresh_analytics_metrics(cursor, stat_date):
     metrics = [
         ("user_count", "用户总数", mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM `user`", default=0), "count"),
         ("device_count", "设备总数", mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM device", default=0), "count"),
-        ("sales_amount", "销售额", mysql_scalar(cursor, "SELECT COALESCE(SUM(pay_amount),0) AS c FROM sales_order WHERE pay_status IN ('paid','success','finished')", default=0), "yuan"),
-        ("active_user_count", "高活用户数", mysql_scalar(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE active_level='high'", default=0), "count"),
+        ("sales_amount", "销售额", mysql_scalar(cursor, "SELECT COALESCE(SUM(pay_amount),0) AS c FROM sales_order WHERE pay_status IN ('paid','success','finished') AND DATE(created_at)=%s", (stat_date,), 0), "yuan"),
+        ("active_user_count", "活跃用户数", mysql_scalar(cursor, "SELECT COUNT(DISTINCT user_id) AS c FROM play_history WHERE DATE(created_at)=%s", (stat_date,), 0), "count"),
     ]
     for code, name, value, unit in metrics:
         cursor.execute(
@@ -1020,6 +1076,74 @@ def refresh_front_daily_tables(stat_date):
         connection.close()
 
 
+def coerce_date_value(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if value:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    return None
+
+
+def date_range(start_date, end_date):
+    current = start_date
+    while current <= end_date:
+        yield current
+        current += timedelta(days=1)
+
+
+def missing_daily_stat_dates(target_date):
+    end_date = target_date - timedelta(days=1)
+    if end_date < date.min:
+        return []
+    connection = mysql_connect()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT MAX(stat_date) AS latest_date FROM daily_stats WHERE stat_date < %s",
+                (target_date,),
+            )
+            latest_date = coerce_date_value((cursor.fetchone() or {}).get("latest_date"))
+            if not latest_date:
+                return []
+            start_date = latest_date + timedelta(days=1)
+            if start_date > end_date:
+                return []
+            cursor.execute(
+                "SELECT stat_date FROM daily_stats WHERE stat_date BETWEEN %s AND %s",
+                (start_date, end_date),
+            )
+            existing_dates = {
+                item
+                for item in (coerce_date_value(row.get("stat_date")) for row in cursor.fetchall() or [])
+                if item
+            }
+    finally:
+        connection.close()
+    return [item for item in date_range(start_date, end_date) if item not in existing_dates]
+
+
+def refresh_daily_stats_from_mysql(stat_date):
+    stats = aggregate_from_mysql_play_history(stat_date)
+    upsert_daily_stats(stats)
+    refresh_front_daily_tables(stat_date)
+    return stats
+
+
+def backfill_missing_daily_stats(target_date):
+    backfilled = []
+    for missing_date in missing_daily_stat_dates(target_date):
+        stats = refresh_daily_stats_from_mysql(missing_date)
+        backfilled.append({
+            "stat_date": missing_date.isoformat(),
+            "total_play_count": int(stats.get("total_play_count") or 0),
+            "unique_user_count": int(stats.get("unique_user_count") or 0),
+            "unique_device_count": int(stats.get("unique_device_count") or 0),
+        })
+    return backfilled
+
+
 def run_once(args):
     stat_date = parse_stat_date(args.date)
     keywords = [item.strip() for item in args.keywords.split(",") if item.strip()]
@@ -1029,6 +1153,7 @@ def run_once(args):
         ensure_mongo_schema()
     ensure_daily_stats_table()
     ensure_front_daily_tables()
+    backfilled_dates = backfill_missing_daily_stats(stat_date)
 
     demo_data = {}
     if getattr(args, "generate_demo_data", False):
@@ -1059,6 +1184,8 @@ def run_once(args):
         "seeded_song_count": len(seeded),
         "generated_play_log_count": len(generated_logs),
         "demo_data": demo_data,
+        "backfilled_dates": backfilled_dates,
+        "processed_dates": [item["stat_date"] for item in backfilled_dates] + [stat_date.isoformat()],
         "refreshed_daily_tables": [
             "daily_stats",
             "region_stats_daily",

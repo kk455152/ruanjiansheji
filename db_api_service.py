@@ -15,6 +15,16 @@ except Exception:
 
 
 db_api = Blueprint("db_api", __name__, url_prefix="/api/db")
+ONLINE_DEVICE_VALUE_SQL = """
+CASE
+    WHEN LOWER(COALESCE(online_status, '')) IN ('online', 'true', '1', 'yes')
+         OR COALESCE(online_status, '') = '在线' THEN 1
+    WHEN LOWER(COALESCE(online_status, '')) IN ('offline', 'false', '0', 'no')
+         OR COALESCE(online_status, '') = '离线' THEN 0
+    ELSE CASE WHEN COALESCE(status, 0) = 1 THEN 1 ELSE 0 END
+END
+"""
+ONLINE_DEVICE_CONDITION = f"({ONLINE_DEVICE_VALUE_SQL}) = 1"
 
 TABLE_LABELS = {
     "user": "小程序用户",
@@ -120,8 +130,8 @@ FIELD_COMMENTS = {
     "unique_user_count": ("去重用户数", "当天活跃用户数。"),
     "active_user_count": ("活跃用户数", "当天活跃用户数量。"),
     "online_device_count": ("在线设备数", "当天在线设备数量。"),
-    "platform_wechat_count": ("微信用户数", "微信来源用户数量。"),
-    "platform_qq_count": ("QQ音乐用户数", "QQ 音乐来源用户数量。"),
+    "platform_wechat_count": ("网易云音乐用户数", "历史字段名沿用 platform_wechat_count，当前统计绑定网易云音乐的画像数量。"),
+    "platform_qq_count": ("QQ音乐用户数", "绑定 QQ 音乐的画像数量。"),
     "unique_device_count": ("去重设备数", "当天活跃设备数。"),
     "total_play_duration_seconds": ("总播放秒数", "当天累计播放时长，单位秒。"),
     "avg_play_duration_seconds": ("平均播放秒数", "平均单次播放时长，单位秒。"),
@@ -162,8 +172,8 @@ FIELD_COMMENTS = {
     "ranking_id": ("排行ID", "热度排行表主键。"),
     "ranking_date": ("排行日期", "排行榜统计日期。"),
     "ranking_type": ("排行类型", "song、artist。"),
-    "scope_type": ("范围类型", "global、province。"),
-    "scope_code": ("范围编码", "排行范围编码。"),
+    "scope_type": ("范围类型", "platform 表示按音乐平台统计；历史 global 数据会在接口中兼容。"),
+    "scope_code": ("范围编码", "音乐平台名称，如 网易云音乐、QQ音乐。"),
     "rank_no": ("名次", "排行榜名次。"),
     "target_id": ("目标ID", "排行对象 ID。"),
     "target_name": ("目标名称", "排行对象名称。"),
@@ -898,7 +908,7 @@ TABLE_CONFIG = {
 FRONT_DATA_CATALOG = [
     {"group": "总览卡片", "title": "总用户", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/user-count", "table": "user", "fields": ["user_id", "created_at", "status"], "operation": "增加用户：在 user 表新增一行。减少用户：删除 user 行。新增用户数由 created_at=今天 的行数决定。"},
     {"group": "总览卡片", "title": "新增用户", "frontend": "数据总览 / 总用户提示", "api": "/api/admin/super/overview/user-count", "table": "user", "fields": ["created_at"], "operation": "把 user.created_at 改成今天会增加今日新增；改成历史日期会减少今日新增。"},
-    {"group": "总览卡片", "title": "设备数 / 在线率", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/device-count", "table": "device", "fields": ["device_id", "status", "online_status", "created_at"], "operation": "设备数由 device 行数决定；在线设备由 status=1 决定。新增一台设备就新增一行，降低在线率就把部分设备 status 改为 0。"},
+    {"group": "总览卡片", "title": "设备数 / 在线率", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/device-count", "table": "device", "fields": ["device_id", "online_status", "status", "created_at"], "operation": "设备数由 device 行数决定；在线率优先看 online_status：online=在线、offline=离线；online_status 为空时才回退 status=1/0。"},
     {"group": "总览卡片", "title": "销售额 / 订单数", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/sales-amount", "table": "sales_order", "fields": ["pay_amount", "pay_status", "created_at"], "operation": "销售额统计 pay_status 为 paid/success/finished 的 pay_amount 总和；新增订单或调高 pay_amount 会增加，改成 pending/closed 会减少统计。"},
     {"group": "总览卡片", "title": "活跃度 / 活跃用户", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/activity-rate", "table": "user_profile", "fields": ["active_level", "user_id"], "operation": "活跃用户由 active_level='high' 的画像数量决定；把用户画像 active_level 改为 high 增加，改为 medium/low 减少。"},
     {"group": "趋势分析", "title": "用户/设备/销售趋势柱状图", "frontend": "趋势分析 / state.trend.list", "api": "/api/admin/super/trend/growth", "table": "daily_stats", "fields": ["stat_date", "new_user_count", "new_device_count", "total_sales_amount", "active_user_count"], "operation": "按 stat_date 找到对应日期行，用户趋势改 new_user_count，设备趋势改 new_device_count，销售趋势改 total_sales_amount。"},
@@ -907,19 +917,19 @@ FRONT_DATA_CATALOG = [
     {"group": "用户画像", "title": "年龄占比", "frontend": "用户画像 / 年龄分布饼图", "api": "/api/admin/super/user-profile/age-distribution", "table": "user_profile", "fields": ["age", "age_range"], "operation": "占比由 age_range 分组计数决定；要提高某年龄段占比，就新增/修改更多用户画像的 age_range 为该段。"},
     {"group": "用户画像", "title": "地区占比", "frontend": "用户画像 / 地区分布饼图", "api": "/api/admin/super/user-profile/region-distribution", "table": "user_profile", "fields": ["province_code", "province_name", "city_name"], "operation": "占比由 province_name 分组计数决定；修改用户画像省份即可调整地区占比。"},
     {"group": "用户画像", "title": "活跃分层占比", "frontend": "用户画像 / 活跃分层饼图", "api": "/api/admin/super/user-profile/activity-distribution", "table": "user_profile", "fields": ["active_level"], "operation": "占比由 active_level 分组计数决定；常用值 high/medium/low。"},
-    {"group": "用户画像", "title": "绑定软件占比", "frontend": "用户画像 / 绑定软件饼图", "api": "/api/admin/super/user-profile/music-service-distribution", "table": "user_profile", "fields": ["bound_platforms"], "operation": "占比由 bound_platforms 分组计数决定；填写 网易云音乐、QQ音乐 或逗号组合。"},
+    {"group": "用户画像", "title": "绑定软件占比", "frontend": "用户画像 / 绑定软件饼图", "api": "/api/admin/super/user-profile/music-service-distribution", "table": "user_profile", "fields": ["bound_platforms"], "operation": "只归并为两个类别：网易云音乐、QQ音乐；历史逗号组合会拆开计入这两个桶，不再作为第三类显示。"},
     {"group": "用户价值", "title": "普通用户 / 高活用户环图", "frontend": "用户价值 / valueDonut", "api": "/api/admin/super/user-value/*", "table": "user_profile", "fields": ["active_level", "value_level"], "operation": "高活用户是 active_level='high' 的数量；普通用户是总画像数减高活用户数。"},
     {"group": "用户分群", "title": "分群人数 / 留存 / 均值", "frontend": "用户分群 / segmentPie 和表格", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "fields": ["stat_date", "segment_name", "user_count", "active_user_count", "avg_play_count", "avg_pay_amount", "retention_rate"], "operation": "修改最新 stat_date 下的分群行；新增分群需新增唯一 segment_code。"},
-    {"group": "热歌排行", "title": "热歌播放量 / 名次", "frontend": "热歌排行 / state.songs", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "fields": ["ranking_date", "rank_no", "target_name", "target_category", "metric_value"], "operation": "修改最新 ranking_date 下 ranking_type='song' 的 target_name、target_category 和 metric_value；保存后系统会按 metric_value 从高到低自动重排名次。"},
+    {"group": "热歌排行", "title": "热歌播放量 / 名次", "frontend": "热歌排行 / state.songs", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "fields": ["ranking_date", "scope_code", "rank_no", "target_name", "target_category", "metric_value"], "operation": "热歌平台来源来自 play_history.source_platform 或 media_mapping.platform；手工维护时 scope_code 填 网易云音乐 或 QQ音乐，保存后按 metric_value 从高到低自动重排名次。"},
     {"group": "留存", "title": "购买后 1/7/30 日留存", "frontend": "趋势分析 / 市场角色留存趋势", "api": "/api/admin/market/retention/device-purchase", "table": "sales_order", "fields": ["user_id", "pay_status", "created_at"], "operation": "购买人数来自已支付订单的 user_id；留存人数来自 play_history 中购买后对应日期范围内仍有播放的用户。"},
     {"group": "留存", "title": "播放留存来源", "frontend": "趋势分析 / 留存计算", "api": "/api/admin/market/retention/device-purchase", "table": "play_history", "fields": ["user_id", "created_at", "play_duration"], "operation": "给购买用户新增购买日后 1/7/30 天之后的播放记录，会提高对应留存计数。"},
     {"group": "运营管理", "title": "反馈总数 / 待处理数 / 评分", "frontend": "用户反馈", "api": "/api/admin/*/feedback/list", "table": "user_feedback", "fields": ["feedback_type", "status", "priority", "star_rating", "created_at"], "operation": "新增反馈行增加总数；status 改为 pending/open 会增加待处理，改为 processed/closed 会减少。"},
-    {"group": "运营管理", "title": "设备列表 / 固件版本 / 在线状态", "frontend": "设备管理", "api": "/api/admin/operator/device/list", "table": "device", "fields": ["device_number", "model_name", "status", "firmware_version", "last_active"], "operation": "新增设备行会增加设备列表；status=1 显示在线，firmware_version 影响固件版本展示。"},
+    {"group": "运营管理", "title": "设备列表 / 固件版本 / 在线状态", "frontend": "设备管理", "api": "/api/admin/operator/device/list", "table": "device", "fields": ["device_number", "model_name", "online_status", "status", "firmware_version", "last_active"], "operation": "新增设备行会增加设备列表；online_status=online 显示在线、offline 显示离线；online_status 为空才看 status，firmware_version 影响固件版本展示。"},
     {"group": "运营管理", "title": "设备所属用户 / 房间", "frontend": "设备详情 / bound-user", "api": "/api/admin/operator/device/bound-user", "table": "user_device_binding", "fields": ["user_id", "device_id", "custom_device_name", "default_room", "bind_time"], "operation": "绑定关系决定设备详情里的用户、设备别名和房间；新增绑定或修改 custom_device_name/default_room 即可调整。"},
     {"group": "运营管理", "title": "设备日志数量 / 内容", "frontend": "设备日志", "api": "/api/admin/operator/device/logs", "table": "device_log", "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "新增日志行增加列表；修改 log_level/title/content 改变前端展示。"},
     {"group": "小程序播放", "title": "播放历史 / 歌曲名 / 播放次数", "frontend": "小程序播放历史、后台热歌来源", "api": "/api/play-history 与 /api/admin/market/top-songs", "table": "play_history", "fields": ["device_id", "user_id", "mapping_id", "play_duration", "created_at", "style"], "operation": "新增播放记录会增加播放历史；每日任务会把播放记录聚合到 hot_ranking_daily 和 daily_stats。"},
     {"group": "小程序播放", "title": "歌曲标题 / 歌手 / 平台", "frontend": "小程序当前歌曲、热歌排行", "api": "/api/song-info 与 /api/admin/market/top-songs", "table": "media_mapping", "fields": ["song_title", "artist", "platform", "external_id", "cover_url"], "operation": "修改 media_mapping 可改变歌曲名、歌手、平台和封面；play_history.mapping_id 关联到这张表。"},
-    {"group": "日报任务", "title": "每日自动汇总时间", "frontend": "所有日报型图表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["generated_at", "updated_at"], "operation": "“运行每日汇总”只聚合现有明细；“生成模拟数据并汇总”会先写入中文用户、中文昵称、网易云音乐/QQ音乐、订单和播放记录，再刷新日报表。"},
+    {"group": "日报任务", "title": "每日自动汇总时间", "frontend": "所有日报型图表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["generated_at", "updated_at"], "operation": "“运行每日汇总”会聚合现有明细，并自动补齐上次汇总日期到今天之间漏掉的日期；“生成模拟数据并汇总”会先写入中文用户、中文昵称、网易云音乐/QQ音乐、订单和播放记录，再刷新日报表。"},
 ]
 
 
@@ -1080,6 +1090,12 @@ def normalize_record(table_key, data):
         fixed_range = age_range_for_age(normalized.get("age"))
         if fixed_range:
             normalized["age_range"] = fixed_range
+    if table_key == "device" and "online_status" in normalized:
+        online_text = str(normalized.get("online_status") or "").strip().lower()
+        if online_text in {"online", "true", "1", "yes", "在线"}:
+            normalized["status"] = 1
+        elif online_text in {"offline", "false", "0", "no", "离线"}:
+            normalized["status"] = 0
     return normalized
 
 
@@ -1201,8 +1217,8 @@ def prepare_hot_ranking_create(cursor, data):
     if not data.get("ranking_date"):
         data["ranking_date"] = date.today().isoformat()
     data["ranking_type"] = data.get("ranking_type") or "song"
-    data["scope_type"] = data.get("scope_type") or "global"
-    data["scope_code"] = data.get("scope_code") or "global"
+    data["scope_type"] = data.get("scope_type") or "platform"
+    data["scope_code"] = data.get("scope_code") or "网易云音乐"
     data["metric_unit"] = data.get("metric_unit") or "plays"
     data["rank_no"] = next_hot_rank_no(cursor, hot_ranking_group(data))
 
@@ -1351,7 +1367,7 @@ def front_catalog_snapshot():
             user_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM `user`")
             new_user_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM `user` WHERE DATE(created_at)=CURDATE()")
             device_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM device")
-            online_device_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM device WHERE COALESCE(status, 0)=1")
+            online_device_count = scalar_value(cursor, f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}")
             sales_amount = scalar_value(cursor, "SELECT COALESCE(SUM(pay_amount),0) AS c FROM sales_order WHERE pay_status IN ('paid','success','finished')")
             order_count = scalar_value(cursor, "SELECT COUNT(*) AS c FROM sales_order WHERE pay_status IN ('paid','success','finished')")
             high_active = scalar_value(cursor, "SELECT COUNT(*) AS c FROM user_profile WHERE active_level='high'")
