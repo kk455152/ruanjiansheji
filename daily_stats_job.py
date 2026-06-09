@@ -24,10 +24,10 @@ from storage_backends import (
 LOCAL_TZ = timezone(timedelta(hours=8))
 DEFAULT_SONG_KEYWORDS = ["稻香", "晴天", "夜曲", "青花瓷", "七里香"]
 DEFAULT_DEVICES = [f"dev_{index:02d}" for index in range(1, 6)]
-DEFAULT_DEMO_USER_COUNT = 36
-DEFAULT_DEMO_DEVICE_COUNT = 19
-DEFAULT_DEMO_ORDER_COUNT = 28
-DEFAULT_DEMO_PLAY_COUNT = 8600
+DEFAULT_DEMO_USER_COUNT = 12
+DEFAULT_DEMO_DEVICE_COUNT = 16
+DEFAULT_DEMO_ORDER_COUNT = 15
+DEFAULT_DEMO_PLAY_COUNT = 900
 DEMO_NAMES = [
     "林小满", "陈一诺", "周明轩", "苏念安", "顾北辰", "许知夏", "沈清欢", "陆星河",
     "赵云舒", "唐若溪", "宋景行", "何雨桐", "韩子墨", "梁诗语", "程予安", "孟晚晴",
@@ -1732,11 +1732,21 @@ def load_all_mapping_choices(cursor):
 
 
 def demo_counts_for_date(stat_date, user_count, device_count, order_count, play_count):
+    rng = random.Random(f"demo-counts:{stat_date.isoformat()}:{user_count}:{device_count}:{order_count}:{play_count}")
+    target_users = rng.randint(5, max(8, min(20, int((user_count or DEFAULT_DEMO_USER_COUNT) * 2))))
+    extra_devices = rng.randint(1, 8)
+    target_devices = target_users + extra_devices
+    if rng.random() < 0.22:
+        target_devices += rng.randint(3, 8)
+    target_orders = max(3, target_devices + rng.randint(-4, 5))
+    if rng.random() < 0.18:
+        target_orders += rng.randint(4, 10)
+    target_plays = rng.randint(420, 980) + target_users * rng.randint(18, 36) + target_devices * rng.randint(8, 20)
     return {
-        "user_count": demo_daily_count(user_count, stat_date, minimum=11, salt=1),
-        "device_count": demo_daily_count(device_count, stat_date, minimum=7, salt=2),
-        "order_count": demo_daily_count(order_count, stat_date, minimum=8, salt=3),
-        "play_count": demo_daily_count(play_count, stat_date, minimum=max(1800, int(play_count or 0) // 2), salt=4),
+        "user_count": target_users,
+        "device_count": target_devices,
+        "order_count": target_orders,
+        "play_count": max(650, min(2200, target_plays)),
     }
 
 
