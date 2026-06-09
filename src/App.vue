@@ -64,6 +64,7 @@ const state = reactive({
   feedback: { total: 0, list: [] },
   feedbackLoading: false,
   devices: { total: 0, list: [] },
+  selectedDeviceId: "",
   groups: { total: 0, list: [] },
   alerts: { total: 0, list: [] },
   runtime: null,
@@ -652,8 +653,10 @@ async function loadDevices() {
   state.devices = await api("/api/admin/operator/device/list")
   const first = state.devices.list?.[0]
   if (first) {
+    state.selectedDeviceId = state.selectedDeviceId || first.deviceId
+    await showDeviceDetail(state.devices.list.find((item) => item.deviceId === state.selectedDeviceId) || first)
     state.runtime = await silent(
-      () => api("/api/admin/operator/device/runtime-status", { params: { deviceId: first.deviceId } }),
+      () => api("/api/admin/operator/device/runtime-status", { params: { deviceId: state.selectedDeviceId } }),
       null,
     )
   }
@@ -894,11 +897,17 @@ async function handleFeedback(item) {
 }
 
 async function showDeviceDetail(item) {
+  state.selectedDeviceId = item.deviceId
   state.detail = await api("/api/admin/operator/device/detail", { params: { deviceId: item.deviceId } })
   state.detail.boundUser = await silent(
     () => api("/api/admin/operator/device/bound-user", { params: { deviceId: item.deviceId } }),
     null,
   )
+}
+
+async function selectDeviceById(deviceId) {
+  const item = (state.devices.list || []).find((device) => device.deviceId === deviceId)
+  if (item) await showDeviceDetail(item)
 }
 
 async function showDeviceUser(item) {
@@ -1498,18 +1507,28 @@ onMounted(restoreSession)
       <section v-if="state.active === 'devices'" class="two-column detail-layout">
         <article class="panel">
           <div class="panel-head"><div><h3>设备列表</h3><p>共 {{ state.devices.total }} 台设备</p></div></div>
-          <div class="data-table">
-            <div v-for="item in filteredDevices" :key="item.deviceId" class="table-row device-row">
-              <button @click="showDeviceDetail(item)">
-                <i :class="['dot', { online: item.online }]"></i>
-                <strong>{{ item.deviceName }}</strong>
-                <span>{{ item.modelName }} / {{ item.firmwareVersion }}</span>
-              </button>
-              <div class="row-actions">
-                <button @click="renameDevice(item)">改名</button>
-                <button @click="unbindDevice(item)">解绑</button>
+          <el-select
+            v-model="state.selectedDeviceId"
+            filterable
+            class="device-select"
+            placeholder="搜索并选择设备"
+            @change="selectDeviceById"
+          >
+            <el-option
+              v-for="item in state.devices.list || []"
+              :key="item.deviceId"
+              :label="`${item.deviceSn} · ${item.deviceName} · ${item.ownerName || '未绑定'}`"
+              :value="item.deviceId"
+            >
+              <div class="device-option">
+                <span><i :class="['dot', { online: item.online }]"></i>{{ item.deviceSn }} · {{ item.deviceName }}</span>
+                <em>{{ item.modelName }} / {{ item.firmwareVersion }}</em>
               </div>
-            </div>
+            </el-option>
+          </el-select>
+          <div v-if="state.detail?.deviceId" class="device-actions">
+            <button @click="renameDevice(state.detail)">改名</button>
+            <button @click="unbindDevice(state.detail)">解绑</button>
           </div>
         </article>
         <article class="panel detail-card">
@@ -3246,6 +3265,49 @@ button {
 .detail-card h3,
 .detail-card p {
   margin: 0;
+}
+
+.device-select {
+  width: 100%;
+}
+
+.device-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.device-option span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-option em {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-style: normal;
+  font-size: 12px;
+}
+
+.device-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.device-actions button {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: white;
+  padding: 8px 14px;
+  color: var(--accent-green-deep);
 }
 
 .device-row {

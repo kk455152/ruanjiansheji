@@ -1372,7 +1372,6 @@ def operator_device_list():
         LEFT JOIN `user` u ON u.user_id = b.user_id
         LEFT JOIN user_profile p ON p.user_id = u.user_id
         ORDER BY d.device_id ASC
-        LIMIT 100
         """
     )
     if rows:
@@ -2749,23 +2748,43 @@ def market_insights():
     )
     first_play_users = count_sql(
         f"""
-        SELECT COUNT(DISTINCT u.user_id) AS c
-        FROM `user` u
-        JOIN play_history ph ON ph.user_id = u.user_id
-        WHERE {cohort_filter}
-          AND ph.created_at >= u.created_at
-          AND ph.created_at <= NOW()
+        SELECT COUNT(*) AS c
+        FROM (
+            SELECT u.user_id
+            FROM `user` u
+            JOIN user_device_binding b ON b.user_id = u.user_id
+            JOIN play_history ph ON ph.user_id = u.user_id
+            WHERE {cohort_filter}
+              AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+              AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+              AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+              AND ph.created_at <= NOW()
+            GROUP BY u.user_id
+        ) x
         """
     )
     retained_users = count_sql(
         f"""
-        SELECT COUNT(DISTINCT u.user_id) AS c
-        FROM `user` u
-        JOIN play_history ph ON ph.user_id = u.user_id
-        WHERE {cohort_filter}
-          AND ph.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-          AND ph.created_at >= u.created_at
-          AND ph.created_at <= NOW()
+        SELECT COUNT(*) AS c
+        FROM (
+            SELECT
+                u.user_id,
+                MIN(ph.created_at) AS first_play_at,
+                MAX(ph.created_at) AS last_play_at,
+                COUNT(DISTINCT DATE(ph.created_at)) AS play_days
+            FROM `user` u
+            JOIN user_device_binding b ON b.user_id = u.user_id
+            JOIN play_history ph ON ph.user_id = u.user_id
+            WHERE {cohort_filter}
+              AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+              AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+              AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+              AND ph.created_at <= NOW()
+            GROUP BY u.user_id
+            HAVING play_days >= 2
+               AND last_play_at >= DATE_ADD(first_play_at, INTERVAL 1 DAY)
+               AND last_play_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ) x
         """
     )
     bound_users = min(bound_users, new_users)
