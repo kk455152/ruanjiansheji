@@ -49,6 +49,7 @@ dist/
 .codex-local/
 runtime/*.json
 runtime/*.log
+runtime/*.md
 runtime/*.offset
 runtime/*.zip
 runtime/current_working_code_for_github/

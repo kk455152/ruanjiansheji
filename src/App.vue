@@ -895,6 +895,10 @@ async function handleFeedback(item) {
 
 async function showDeviceDetail(item) {
   state.detail = await api("/api/admin/operator/device/detail", { params: { deviceId: item.deviceId } })
+  state.detail.boundUser = await silent(
+    () => api("/api/admin/operator/device/bound-user", { params: { deviceId: item.deviceId } }),
+    null,
+  )
 }
 
 async function showDeviceUser(item) {
@@ -1515,6 +1519,8 @@ onMounted(restoreSession)
             <span>型号：{{ state.detail.modelName }} / 归属：{{ state.detail.ownerName }}</span>
             <small>音量 {{ state.detail.volume }}，电量 {{ state.detail.battery }}%，网络 {{ state.detail.currentNetwork }}</small>
             <small>最近在线：{{ state.detail.lastOnlineAt }}</small>
+            <small v-if="state.detail.boundUser?.userId">绑定用户：{{ state.detail.boundUser.nickname }} / {{ state.detail.boundUser.region }}</small>
+            <small v-if="state.detail.unbindMeaning">{{ state.detail.unbindMeaning }}</small>
           </template>
           <p v-else class="muted">选择设备查看基础信息、绑定用户和实时状态。</p>
         </article>

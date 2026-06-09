@@ -77,8 +77,12 @@ DEMO_REGIONS = [
     ("330000", "浙江省", "330100", "杭州市"),
     ("320000", "江苏省", "320100", "南京市"),
     ("510000", "四川省", "510100", "成都市"),
+    ("420000", "湖北省", "420100", "武汉市"),
+    ("500000", "重庆市", "500100", "重庆市"),
+    ("610000", "陕西省", "610100", "西安市"),
+    ("370000", "山东省", "370100", "济南市"),
 ]
-DEMO_REGION_WEIGHTS = (34, 24, 46, 31, 27, 18)
+DEMO_REGION_WEIGHTS = (30, 24, 36, 29, 31, 27, 22, 20, 18, 21)
 DEMO_DAILY_WEIGHTS = (18, 13, 16, 10, 21, 15, 24, 12, 19, 14, 22, 11, 17, 9)
 DEMO_SONG_WEIGHTS = (64, 58, 51, 47, 43, 39, 34, 30, 26, 23, 20, 18, 16, 14, 12, 10)
 DEMO_SONGS = [
@@ -783,8 +787,9 @@ def weighted_position(index, total, weights):
     return len(weights) - 1
 
 
-def demo_region(index, total):
-    return DEMO_REGIONS[weighted_position(index, total, DEMO_REGION_WEIGHTS)]
+def demo_region(index, total, seed=""):
+    rng = random.Random(f"demo-region:{seed}:{index}:{total}")
+    return rng.choices(DEMO_REGIONS, weights=DEMO_REGION_WEIGHTS, k=1)[0]
 
 
 def demo_span_moment(stat_date, index, total, span_days=1):
@@ -1830,7 +1835,13 @@ def seed_chinese_demo_data(
                     "nickname": nickname,
                     "email": email,
                 })
-                region = demo_region(serial, max(user_base + user_count, 1))
+                region = demo_region(serial, max(user_base + user_count, 1), stat_date.isoformat())
+                user_profiles[-1].update({
+                    "province_code": region[0],
+                    "province_name": region[1],
+                    "city_code": region[2],
+                    "city_name": region[3],
+                })
                 age = 18 + (serial * 3) % 38
                 platform = DEMO_PLATFORMS[(serial - 1) % len(DEMO_PLATFORMS)]
                 if serial % 5 == 0:
@@ -1886,7 +1897,7 @@ def seed_chinese_demo_data(
                 serial = device_base + index
                 model_name = demo_device_model(serial)
                 device_number = demo_device_number(model_name, serial)
-                region = demo_region(serial, max(device_base + device_count, 1))
+                region = demo_region(serial, max(device_base + device_count, 1), stat_date.isoformat())
                 room = DEMO_ROOMS[(serial - 1) % len(DEMO_ROOMS)]
                 device_name = demo_room_device_name(room, serial)
                 created_at = demo_moment(index, device_count)
@@ -2021,9 +2032,15 @@ def seed_chinese_demo_data(
 
             order_records = []
             for index in range(1, order_count + 1):
-                user_id = user_ids[(index - 1) % len(user_ids)] if user_ids else None
+                user = user_profiles[(index - 1) % len(user_profiles)] if user_profiles else {}
+                user_id = user.get("user_id") or (user_ids[(index - 1) % len(user_ids)] if user_ids else None)
                 device_id = device_ids[(index - 1) % len(device_ids)] if device_ids else None
-                region = DEMO_REGIONS[(index - 1) % len(DEMO_REGIONS)]
+                region = (
+                    user.get("province_code") or "unknown",
+                    user.get("province_name") or "unknown",
+                    user.get("city_code") or "unknown",
+                    user.get("city_name") or "unknown",
+                )
                 amount = 199 + (index % 6) * 80
                 created_at = demo_moment(index, max(order_count, 1))
                 order_no = f"DEMO{created_at.strftime('%Y%m%d')}{index:04d}"
@@ -3065,7 +3082,7 @@ def refresh_region_stats(cursor, stat_date):
             COALESCE(SUM(pay_amount), 0) AS sales_amount
         FROM sales_order
         WHERE pay_status IN ('paid', 'success', 'finished')
-          AND DATE(created_at) = %s
+          AND DATE(created_at) <= %s
         GROUP BY COALESCE(province_code, 'unknown'),
                  COALESCE(province_name, city_name, 'unknown')
         """,

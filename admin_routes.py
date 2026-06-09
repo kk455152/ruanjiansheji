@@ -1399,7 +1399,10 @@ def operator_device_list():
 @admin_bp.get("/operator/device/detail")
 @require_admin("super", "operator")
 def operator_device_detail():
-    return response_ok(current_device())
+    device_id = request.args.get("deviceId")
+    device = current_device(device_id)
+    device["unbindMeaning"] = "解绑只删除 user_device_binding 里的用户-设备绑定关系，不删除 device 设备本体。"
+    return response_ok(device)
 
 
 @admin_bp.get("/operator/device/bound-user")
@@ -2284,6 +2287,31 @@ def is_seed_audit_row(row):
     return "seed business data" in text or ("seed" in text and "business" in text)
 
 
+MEANINGFUL_AUDIT_ACTIONS = {
+    "login",
+    "login_failed",
+    "unbind_device",
+    "rename_device",
+    "upload_firmware_package",
+    "create_firmware_task",
+    "update_role_permissions",
+    "create_admin_user",
+    "update_admin_user",
+    "delete_admin_user",
+    "handle_feedback",
+    "create_notice",
+    "update_system_config",
+}
+
+
+def is_meaningful_audit_row(row):
+    action = str(row.get("action") or "").strip()
+    if action in MEANINGFUL_AUDIT_ACTIONS:
+        return True
+    operation = str(row.get("operation_name") or "")
+    return any(keyword in operation for keyword in ("登录", "解绑", "发布固件", "修改", "新增", "删除", "处理", "公告"))
+
+
 def format_audit_row(row, seed=False):
     params = parse_audit_params(row.get("params"))
     target = params.get("target") or params.get("object") or params.get("deviceId") or params.get("version") or ""
@@ -2293,6 +2321,19 @@ def format_audit_row(row, seed=False):
     result = row.get("result_status") or ("success" if not row.get("error_message") else "failed")
     event = f"{operation}：{target}" if target else operation
     event = f"{event}（结果：{result}）"
+    module_actor_map = {
+        "firmware": "技术人员",
+        "device": "售后人员",
+        "roles": "超级管理员",
+        "用户管理": "超级管理员",
+        "角色权限": "超级管理员",
+        "设备管理": "售后人员",
+        "任务中心": "技术人员",
+        "系统公告": "超级管理员",
+        "用户反馈": "客服人员",
+        "认证": "系统管理员",
+    }
+    actor = row.get("actor_name") or module_actor_map.get(row.get("module")) or "系统管理员"
     return {
         "logId": row.get("log_id"),
         "level": audit_result_level(result, row.get("error_message")),
@@ -2301,7 +2342,7 @@ def format_audit_row(row, seed=False):
         "target": target or "-",
         "result": result,
         "errorMessage": row.get("error_message") or "",
-        "actor": row.get("actor_name") or row.get("module") or "系统",
+        "actor": actor,
         "ip": row.get("ip_address") or "-",
         "createdAt": fmt_dt(row.get("created_at")),
     }
@@ -2423,12 +2464,10 @@ def security_logs():
         """
     )
     seed_rows = [row for row in db_rows if is_seed_audit_row(row)]
-    real_rows = [row for row in db_rows if not is_seed_audit_row(row)]
+    real_rows = [row for row in db_rows if not is_seed_audit_row(row) and is_meaningful_audit_row(row)]
     rows = [format_audit_row(row) for row in real_rows]
-    if len(rows) < 12:
+    if len(rows) < 30:
         rows.extend(dynamic_audit_rows(30 - len(rows)))
-    if seed_rows and len(rows) < 8:
-        rows.extend(format_audit_row(row, seed=True) for row in seed_rows[:8 - len(rows)])
     rows = sorted(
         rows,
         key=lambda item: item.get("createdAt") or "",
