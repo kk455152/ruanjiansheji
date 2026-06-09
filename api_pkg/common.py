@@ -29,6 +29,11 @@ except Exception:
     project_mysql_conn = None
 
 try:
+    from storage_backends import get_mysql_config as reachable_mysql_config
+except Exception:
+    reachable_mysql_config = None
+
+try:
     from db import mongo_db as project_mongo_db
 except Exception:
     project_mongo_db = None
@@ -189,6 +194,15 @@ def save_state(state):
 
 
 def mysql_conn():
+    if reachable_mysql_config is not None:
+        try:
+            config = reachable_mysql_config()
+            config["cursorclass"] = DictCursor
+            config["autocommit"] = False
+            return pymysql.connect(**config)
+        except Exception:
+            pass
+
     if project_mysql_conn is not None:
         try:
             return project_mysql_conn()
