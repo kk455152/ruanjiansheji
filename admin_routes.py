@@ -1991,7 +1991,6 @@ PERMISSION_CATALOG = {
     "segments": "用户分群",
     "insights": "营销洞察",
     "songs": "热歌排行",
-    "reports": "决策报表",
     "feedback": "用户反馈",
     "devices": "设备管理",
     "groups": "设备分组",
@@ -2009,14 +2008,14 @@ PERMISSION_CATALOG = {
 
 DEFAULT_ROLE_PERMISSIONS = {
     "super_admin": list(PERMISSION_CATALOG.keys()),
-    "market_admin": ["overview", "decision", "trend", "region", "profile", "value", "segments", "insights", "songs", "reports", "account"],
+    "market_admin": ["overview", "decision", "trend", "region", "profile", "value", "segments", "insights", "songs", "account"],
     "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "firmware", "logs", "account"],
     "boss": ["overview", "trend", "region", "profile", "value", "songs", "feedback", "account"],
 }
 
 DEFAULT_ROLE_DESCRIPTIONS = {
     "super_admin": "系统配置、用户权限、审计、安全和全量业务数据",
-    "market_admin": "用户画像、区域分析、留存分析、热歌排行、营销洞察和报表导出",
+    "market_admin": "用户画像、区域分析、留存分析、热歌排行和营销洞察",
     "operator_admin": "设备运维、固件升级、用户反馈、日志和告警处理",
     "boss": "只读经营视角，查看核心看板、趋势、地区、画像、热歌和反馈",
 }
@@ -2615,25 +2614,6 @@ def decision_summary():
         "trend": stats,
         "risks": risks,
     })
-
-@admin_bp.get("/super/reports")
-@admin_bp.get("/market/reports")
-@require_admin("super", "market")
-def admin_reports():
-    stats = daily_stats_rows(10)
-    reports = [
-        {
-            "reportId": f"R-{index + 1:03d}",
-            "name": f"{row.get('stat_date')} 智能音箱运营日报",
-            "type": "daily",
-            "summary": f"播放 {row.get('total_play_count')} 次，活跃用户 {row.get('unique_user_count')} 人",
-            "exportFormats": ["PDF", "Excel"],
-            "createdAt": str(row.get("stat_date")),
-        }
-        for index, row in enumerate(reversed(stats[-5:]))
-    ]
-    return response_ok({"total": len(reports), "list": reports, "raw": stats})
-
 
 @admin_bp.get("/market/segments")
 @require_admin("super", "market")

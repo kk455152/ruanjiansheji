@@ -20,7 +20,6 @@ const menus = [
   { key: "segments", label: "用户分群", icon: "fa-users-rays", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "insights", label: "营销洞察", icon: "fa-lightbulb", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "songs", label: "热歌排行", icon: "fa-music", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
-  { key: "reports", label: "决策报表", icon: "fa-file-lines", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "feedback", label: "用户反馈", icon: "fa-comment-dots", section: "运营管理", roles: ["super_admin", "operator_admin", "boss"] },
   { key: "devices", label: "设备管理", icon: "fa-sliders", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "groups", label: "设备分组", icon: "fa-layer-group", section: "运营管理", roles: ["super_admin", "operator_admin"] },
@@ -59,7 +58,6 @@ const state = reactive({
   retention: [],
   insights: { funnels: [], recommendations: [] },
   segments: { total: 0, list: [] },
-  reports: { total: 0, list: [], raw: [] },
   feedback: { total: 0, list: [] },
   feedbackLoading: false,
   devices: { total: 0, list: [] },
@@ -490,7 +488,6 @@ async function loadPage(initial = false) {
     if (state.active === "segments") await loadSegments()
     if (state.active === "insights") await loadInsights()
     if (state.active === "songs") await loadSongs()
-    if (state.active === "reports") await loadReports()
     if (state.active === "feedback") await loadFeedback()
     if (state.active === "devices") await loadDevices()
     if (state.active === "groups") await loadGroups()
@@ -621,11 +618,6 @@ async function loadSegments() {
 
 async function loadInsights() {
   state.insights = await api("/api/admin/market/insights")
-}
-
-async function loadReports() {
-  const prefix = currentRole.value === "market_admin" ? "/api/admin/market" : "/api/admin/super"
-  state.reports = await api(`${prefix}/reports`)
 }
 
 async function loadFeedback() {
@@ -1444,15 +1436,6 @@ onMounted(restoreSession)
             <strong>#{{ song.rank }} {{ song.songName }}</strong>
             <span>{{ song.artist }} / {{ song.platform }}</span>
             <em>{{ formatNumber(song.playCount) }} 次</em>
-          </div>
-        </div>
-      </section>
-
-      <section v-if="state.active === 'reports'" class="panel full">
-        <div class="panel-head"><div><h3>决策报表</h3><p>日报、周报、月报，支持导出</p></div><button class="ghost-button" @click="exportRows('reports.csv', state.reports.list)">导出 Excel</button></div>
-        <div class="data-table">
-          <div v-for="report in state.reports.list" :key="report.reportId" class="table-row">
-            <strong>{{ report.name }}</strong><span>{{ report.summary }}</span><em>{{ report.exportFormats?.join(' / ') }}</em>
           </div>
         </div>
       </section>

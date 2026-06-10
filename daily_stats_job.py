@@ -1604,7 +1604,6 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
         ("update", "feedback", "处理用户反馈", "/api/admin/operator/feedback/handle", "POST", "success"),
         ("create", "firmware", "发布固件任务", "/api/admin/operator/device/firmware-task", "POST", "success"),
         ("run", "daily_stats", "运行每日汇总", "/api/db/daily-stats/run", "POST", "success"),
-        ("view", "report", "查看运营报表", "/api/admin/super/reports", "GET", "success"),
     ]
     for index in range(1, 121):
         action, module, operation_name, path, method, result_status = audit_actions[(index - 1) % len(audit_actions)]
