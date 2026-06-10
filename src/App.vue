@@ -24,7 +24,6 @@ const menus = [
   { key: "devices", label: "设备管理", icon: "fa-sliders", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "groups", label: "设备分组", icon: "fa-layer-group", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "alerts", label: "告警中心", icon: "fa-triangle-exclamation", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "firmware", label: "设备固件", icon: "fa-microchip", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "logs", label: "设备日志", icon: "fa-clipboard-list", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "users", label: "用户管理", icon: "fa-user-gear", section: "系统管理", roles: ["super_admin"] },
   { key: "roles", label: "角色权限", icon: "fa-user-shield", section: "系统管理", roles: ["super_admin"] },
@@ -65,9 +64,6 @@ const state = reactive({
   groups: { total: 0, list: [] },
   alerts: { total: 0, list: [] },
   runtime: null,
-  firmware: null,
-  firmwarePackages: { total: 0, list: [] },
-  firmwareUpload: { open: false, options: [], selected: "", uploading: false },
   logs: { total: 0, list: [] },
   users: { total: 0, list: [] },
   roles: { total: 0, list: [], catalog: [] },
@@ -110,7 +106,6 @@ const metricCards = computed(() => {
     return [
       { label: "设备总数", value: formatNumber(state.devices.total || devices.length), hint: `${online} 台在线`, tone: "green", icon: "fa-speaker-deck" },
       { label: "在线率", value: percent(devices.length ? online / devices.length : 0), hint: "来自设备列表", tone: "blue", icon: "fa-wifi" },
-      { label: "固件版本", value: state.firmware?.currentVersion || "-", hint: state.firmware?.needUpdate ? "可更新" : "已是最新", tone: "orange", icon: "fa-microchip" },
       { label: "待处理反馈", value: formatNumber(pending), hint: `共 ${state.feedback.total || 0} 条`, tone: "red", icon: "fa-comment-dots" },
     ]
   }
@@ -492,7 +487,6 @@ async function loadPage(initial = false) {
     if (state.active === "devices") await loadDevices()
     if (state.active === "groups") await loadGroups()
     if (state.active === "alerts") await loadAlerts()
-    if (state.active === "firmware") await loadFirmware()
     if (state.active === "logs") await loadLogs()
     if (state.active === "users") await loadUsers()
     if (state.active === "roles") await loadRoles()
@@ -544,7 +538,7 @@ async function loadOverview() {
     return
   }
 
-  await Promise.all([loadDevices(), loadFirmware(), loadFeedback(), loadLogs(), loadAlerts()])
+  await Promise.all([loadDevices(), loadFeedback(), loadLogs(), loadAlerts()])
 }
 
 async function loadDecision() {
@@ -657,52 +651,6 @@ async function loadGroups() {
 
 async function loadAlerts() {
   state.alerts = await api("/api/admin/operator/device/alerts")
-}
-
-async function loadFirmware() {
-  const [firmware, packages] = await Promise.all([
-    api("/api/admin/operator/device/firmware-version"),
-    silent(() => api("/api/admin/operator/device/firmware-packages"), { total: 0, list: [] }),
-  ])
-  state.firmware = firmware
-  state.firmwarePackages = packages
-}
-
-async function openFirmwareUpload() {
-  state.firmwareUpload = { open: true, options: [], selected: "", uploading: false }
-  try {
-    const data = await api("/api/admin/operator/device/firmware-upload-options")
-    state.firmwareUpload.options = data.list || []
-    const firstAvailable = state.firmwareUpload.options.find((item) => !item.uploaded)
-    state.firmwareUpload.selected = firstAvailable?.packageId || ""
-  } catch (error) {
-    ElMessage.error(error.message || "加载固件包列表失败")
-  }
-}
-
-function closeFirmwareUpload() {
-  state.firmwareUpload.open = false
-}
-
-async function confirmFirmwareUpload() {
-  if (!state.firmwareUpload.selected) {
-    ElMessage.warning("请选择要上传的固件包")
-    return
-  }
-  state.firmwareUpload.uploading = true
-  try {
-    await api("/api/admin/operator/device/firmware-upload", {
-      method: "POST",
-      body: { packageId: state.firmwareUpload.selected },
-    })
-    ElMessage.success("固件包上传成功")
-    state.firmwareUpload.open = false
-    await loadFirmware()
-  } catch (error) {
-    ElMessage.error(error.message || "上传失败")
-  } finally {
-    state.firmwareUpload.uploading = false
-  }
 }
 
 async function loadLogs() {
@@ -957,7 +905,7 @@ async function saveSystemConfig() {
 async function createNotice() {
   try {
     const { value } = await ElMessageBox.prompt("请输入公告标题", "发布系统公告", {
-      inputValue: "设备固件升级通知",
+      inputValue: "设备维护通知",
       confirmButtonText: "创建",
       cancelButtonText: "取消",
     })
@@ -1539,29 +1487,6 @@ onMounted(restoreSession)
         </div>
       </section>
 
-      <section v-if="state.active === 'firmware'" class="dashboard-grid">
-        <article class="panel">
-          <div class="panel-head"><div><h3>{{ state.firmware?.deviceName || "设备固件" }}</h3><p>当前版本 {{ state.firmware?.currentVersion || "-" }}，最新版本 {{ state.firmware?.latestVersion || "-" }}</p></div></div>
-          <span :class="['badge', state.firmware?.needUpdate ? 'warning' : 'normal']">
-            {{ state.firmware?.needUpdate ? "可更新" : "已是最新" }}
-          </span>
-        </article>
-        <article class="panel">
-          <div class="panel-head">
-            <div><h3>固件包</h3><p>稳定版、灰度版、回滚版本</p></div>
-            <button class="ghost-button compact" @click="openFirmwareUpload">
-              <i class="fa-solid fa-cloud-arrow-up"></i> 上传固件包
-            </button>
-          </div>
-          <ul class="pill-list">
-            <li v-for="item in state.firmwarePackages.list" :key="item.packageId" class="pill-row">
-              <strong>{{ item.version }} · {{ item.modelName }}</strong>
-              <span>{{ statusText(item.status) }} / {{ item.sizeMb }}MB</span>
-            </li>
-          </ul>
-        </article>
-      </section>
-
       <section v-if="state.active === 'logs'" class="two-column detail-layout">
         <article class="panel">
           <div class="panel-head"><div><h3>设备日志</h3><p>设备上线、升级、异常事件</p></div></div>
@@ -1764,54 +1689,6 @@ onMounted(restoreSession)
             <button class="ghost-button compact" @click="closeUserEditor">取消</button>
             <button class="primary-button compact" :disabled="state.userEditor.saving" @click="saveUserEditor">
               {{ state.userEditor.saving ? "保存中..." : "保存账号" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="state.firmwareUpload.open" class="modal-mask" @click.self="closeFirmwareUpload">
-      <div class="modal-card">
-        <div class="panel-head">
-          <div>
-            <h3>上传固件包</h3>
-            <p>从系统预置的固件包中选择上传入库</p>
-          </div>
-          <button class="icon-close" @click="closeFirmwareUpload"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <div class="fw-options">
-          <label
-            v-for="item in state.firmwareUpload.options"
-            :key="item.packageId"
-            :class="['fw-option', { checked: state.firmwareUpload.selected === item.packageId, disabled: item.uploaded }]"
-          >
-            <input
-              type="radio"
-              name="fw-pkg"
-              :value="item.packageId"
-              :disabled="item.uploaded"
-              v-model="state.firmwareUpload.selected"
-            />
-            <span class="fw-radio"><i class="fa-solid fa-circle-check"></i></span>
-            <span class="fw-meta">
-              <strong>{{ item.version }} · {{ item.modelName }}</strong>
-              <small>{{ item.releaseNote }}</small>
-              <span class="fw-sub">{{ statusText(item.channel) }} / {{ item.sizeMb }}MB / 校验 {{ item.checksum }}</span>
-            </span>
-            <span v-if="item.uploaded" class="fw-flag">已上传</span>
-          </label>
-          <p v-if="!state.firmwareUpload.options.length" class="muted">暂无可上传的固件包</p>
-        </div>
-        <div class="modal-foot">
-          <span class="muted"><i class="fa-solid fa-shield-halved"></i> 仅支持系统预置固件包</span>
-          <div class="modal-buttons">
-            <button class="ghost-button compact" @click="closeFirmwareUpload">取消</button>
-            <button
-              class="primary-button compact"
-              :disabled="state.firmwareUpload.uploading || !state.firmwareUpload.selected"
-              @click="confirmFirmwareUpload"
-            >
-              {{ state.firmwareUpload.uploading ? "上传中..." : "确认上传" }}
             </button>
           </div>
         </div>
@@ -2077,7 +1954,6 @@ button {
 .brand,
 .user-card,
 .panel-head,
-.firmware-panel,
 .account-card {
   display: flex;
   align-items: center;
@@ -3658,93 +3534,6 @@ button {
 .modal-buttons {
   display: flex;
   gap: 10px;
-}
-
-/* 固件包上传选项 */
-.fw-options {
-  display: grid;
-  gap: 12px;
-  margin: 8px 0 24px;
-}
-
-.fw-option {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(132, 169, 140, 0.25);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.fw-option:hover:not(.disabled) {
-  border-color: var(--accent-green);
-}
-
-.fw-option.checked {
-  background: var(--accent-green-light);
-  border-color: var(--accent-green);
-}
-
-.fw-option.disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.fw-option input {
-  display: none;
-}
-
-.fw-radio {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  color: var(--accent-green);
-  font-size: 18px;
-}
-
-.fw-radio i {
-  opacity: 0.25;
-  transition: opacity 0.2s ease;
-}
-
-.fw-option.checked .fw-radio i {
-  opacity: 1;
-}
-
-.fw-meta {
-  display: grid;
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
-}
-
-.fw-meta strong {
-  font-weight: 500;
-}
-
-.fw-meta small {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.fw-sub {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.fw-flag {
-  flex-shrink: 0;
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: var(--accent-green-light);
-  color: var(--accent-green-deep);
-  font-size: 12px;
 }
 
 @media (max-width: 1180px) {

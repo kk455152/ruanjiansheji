@@ -894,7 +894,7 @@ def seed_demo_admin_rows(cursor, stat_date, rng, span_days=1):
     role_defs = [
         ("super_admin", "超级管理员", "system", "拥有后台全部模块和数据库维护权限"),
         ("market_admin", "市场分析管理员", "business", "负责趋势、地区、画像、热歌和营销洞察"),
-        ("operator_admin", "普通管理员", "business", "负责设备、固件、日志和用户反馈处理"),
+        ("operator_admin", "普通管理员", "business", "负责设备、日志和用户反馈处理"),
         ("boss", "老板", "readonly", "只读查看经营看板、日报和核心指标"),
     ]
     for index, (code, name, role_type, description) in enumerate(role_defs, start=1):
@@ -926,7 +926,6 @@ def seed_demo_admin_rows(cursor, stat_date, rng, span_days=1):
         ("songs:view", "查看热歌排行", "songs", "热歌排行", "menu", "/songs", "/api/admin/market/top-songs"),
         ("feedback:handle", "处理用户反馈", "feedback", "用户反馈", "action", "/feedback", "/api/admin/operator/feedback/handle"),
         ("devices:operate", "维护设备", "devices", "设备管理", "action", "/devices", "/api/admin/operator/device/*"),
-        ("firmware:upload", "上传固件包", "firmware", "设备固件", "action", "/firmware", "/api/admin/operator/device/firmware-upload"),
         ("logs:view", "查看设备日志", "logs", "设备日志", "menu", "/logs", "/api/admin/operator/device/logs"),
         ("notices:create", "发布系统公告", "notices", "系统公告", "action", "/notices", "/api/admin/super/notices"),
         ("audit:view", "查看审计日志", "audit", "审计日志", "menu", "/audit", "/api/admin/super/security/logs"),
@@ -967,7 +966,7 @@ def seed_demo_admin_rows(cursor, stat_date, rng, span_days=1):
     role_permissions = {
         "super_admin": list(permission_ids.keys()),
         "market_admin": ["overview:view", "trend:view", "region:view", "profile:view", "segments:view", "insights:view", "songs:view"],
-        "operator_admin": ["overview:view", "feedback:handle", "devices:operate", "firmware:upload", "logs:view"],
+        "operator_admin": ["overview:view", "feedback:handle", "devices:operate", "logs:view"],
         "boss": ["overview:view", "trend:view", "region:view", "profile:view", "segments:view", "insights:view", "songs:view", "audit:view"],
     }
     for role_code, permission_codes in role_permissions.items():
@@ -1602,7 +1601,6 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
         ("login", "auth", "后台登录", "/api/admin/login", "POST", "success"),
         ("view", "device", "查看设备列表", "/api/admin/operator/device/list", "GET", "success"),
         ("update", "feedback", "处理用户反馈", "/api/admin/operator/feedback/handle", "POST", "success"),
-        ("create", "firmware", "发布固件任务", "/api/admin/operator/device/firmware-task", "POST", "success"),
         ("run", "daily_stats", "运行每日汇总", "/api/db/daily-stats/run", "POST", "success"),
     ]
     for index in range(1, 121):

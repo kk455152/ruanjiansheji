@@ -490,19 +490,6 @@ def _save_system_config_value(key, value, group_name="system", config_name=None)
     return bool(inserted)
 
 
-def _latest_firmware_version(default_version):
-    row = mysql_one(
-        """
-        SELECT version
-        FROM device_firmware
-        WHERE COALESCE(status, '') NOT IN ('deleted', 'disabled')
-        ORDER BY COALESCE(version_code, 0) DESC, updated_at DESC, created_at DESC, firmware_id DESC
-        LIMIT 1
-        """
-    )
-    return str(row.get("version") or default_version) if row else default_version
-
-
 def device_runtime_doc(device_id):
     if not device_id:
         return {}
@@ -1300,27 +1287,6 @@ def market_profile():
     return response_ok(public_admin_info(admin, include_private=True))
 
 
-@admin_bp.get("/operator/device/firmware-version")
-@require_admin("super", "operator")
-def firmware_version():
-    device = current_device()
-    latest = _latest_firmware_version(os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"))
-    return response_ok({
-        "deviceId": device["deviceId"],
-        "deviceName": device["deviceName"],
-        "modelName": device["modelName"],
-        "currentVersion": device["firmwareVersion"],
-        "latestVersion": latest,
-        "needUpdate": device["firmwareVersion"] != latest,
-    })
-
-
-@admin_bp.post("/operator/device/update-firmware")
-@require_admin("super", "operator")
-def update_firmware():
-    return response_error(404, "not found", "firmware task creation has been removed")
-
-
 @admin_bp.get("/operator/device/list")
 @require_admin("super", "operator")
 def operator_device_list():
@@ -1995,7 +1961,6 @@ PERMISSION_CATALOG = {
     "devices": "设备管理",
     "groups": "设备分组",
     "alerts": "告警中心",
-    "firmware": "设备固件",
     "logs": "设备日志",
     "users": "用户管理",
     "roles": "角色权限",
@@ -2009,14 +1974,14 @@ PERMISSION_CATALOG = {
 DEFAULT_ROLE_PERMISSIONS = {
     "super_admin": list(PERMISSION_CATALOG.keys()),
     "market_admin": ["overview", "decision", "trend", "region", "profile", "value", "segments", "insights", "songs", "account"],
-    "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "firmware", "logs", "account"],
+    "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "logs", "account"],
     "boss": ["overview", "trend", "region", "profile", "value", "songs", "feedback", "account"],
 }
 
 DEFAULT_ROLE_DESCRIPTIONS = {
     "super_admin": "系统配置、用户权限、审计、安全和全量业务数据",
     "market_admin": "用户画像、区域分析、留存分析、热歌排行和营销洞察",
-    "operator_admin": "设备运维、固件升级、用户反馈、日志和告警处理",
+    "operator_admin": "设备运维、用户反馈、日志和告警处理",
     "boss": "只读经营视角，查看核心看板、趋势、地区、画像、热歌和反馈",
 }
 
@@ -2259,8 +2224,6 @@ MEANINGFUL_AUDIT_ACTIONS = {
     "login_failed",
     "unbind_device",
     "rename_device",
-    "upload_firmware_package",
-    "create_firmware_task",
     "update_role_permissions",
     "create_admin_user",
     "update_admin_user",
@@ -2276,7 +2239,7 @@ def is_meaningful_audit_row(row):
     if action in MEANINGFUL_AUDIT_ACTIONS:
         return True
     operation = str(row.get("operation_name") or "")
-    return any(keyword in operation for keyword in ("登录", "解绑", "发布固件", "修改", "新增", "删除", "处理", "公告"))
+    return any(keyword in operation for keyword in ("登录", "解绑", "修改", "新增", "删除", "处理", "公告"))
 
 
 def format_audit_row(row, seed=False):
@@ -2886,166 +2849,6 @@ def device_alerts():
     total = sum(summary_counts.values())
     return response_ok({"total": total or len(rows), "summary": summary_counts, "list": rows})
 
-
-
-@admin_bp.get("/operator/device/firmware-packages")
-@require_admin("super", "operator")
-def firmware_packages():
-    db_rows = mysql_all(
-        """
-        SELECT firmware_id, model_name, version, version_code, file_size,
-               description, status, created_at, updated_at
-        FROM device_firmware
-        WHERE COALESCE(status, '') NOT IN ('deleted', 'disabled')
-        ORDER BY COALESCE(version_code, 0) DESC, updated_at DESC, created_at DESC, firmware_id DESC
-        LIMIT 50
-        """
-    )
-    if db_rows:
-        rows = [
-            {
-                "packageId": f"FW-{row.get('firmware_id')}",
-                "version": row.get("version") or "-",
-                "modelName": row.get("model_name") or "-",
-                "status": row.get("status") or "stable",
-                "sizeMb": round(_float(row.get("file_size"), 0) / 1024 / 1024, 2) if row.get("file_size") else 0,
-                "uploadedAt": fmt_dt(row.get("updated_at") or row.get("created_at")),
-                "releaseNote": row.get("description") or "",
-            }
-            for row in db_rows
-        ]
-        return response_ok({"total": len(rows), "list": rows})
-
-    return response_ok({"total": 0, "list": []})
-
-
-FIRMWARE_UPLOAD_PRESETS = [
-    {
-        "packageId": "preset-a1-v111",
-        "modelName": "A1",
-        "version": "v1.1.1",
-        "versionCode": 111,
-        "channel": "stable",
-        "sizeMb": 18.72,
-        "checksum": "A1B7C9D2",
-        "releaseNote": "A1 稳定版：优化配网恢复、播放缓存和夜间音量控制。",
-    },
-    {
-        "packageId": "preset-a2-v112-gray",
-        "modelName": "A2",
-        "version": "v1.1.2",
-        "versionCode": 112,
-        "channel": "gray",
-        "sizeMb": 19.16,
-        "checksum": "A2E4F6B8",
-        "releaseNote": "A2 灰度版：增加固件自检日志和弱网重试策略。",
-    },
-    {
-        "packageId": "preset-b1-v110-rollback",
-        "modelName": "B1",
-        "version": "v1.1.0",
-        "versionCode": 110,
-        "channel": "rollback",
-        "sizeMb": 17.94,
-        "checksum": "B1C3D5F7",
-        "releaseNote": "B1 回滚包：用于异常升级后的稳定版本回退。",
-    },
-]
-
-
-def firmware_upload_catalog():
-    uploaded_rows = mysql_all(
-        """
-        SELECT model_name, version
-        FROM device_firmware
-        WHERE COALESCE(status, '') NOT IN ('deleted', 'disabled')
-        """
-    )
-    uploaded = {(row.get("model_name"), row.get("version")) for row in uploaded_rows}
-    return [
-        {
-            **item,
-            "uploaded": (item["modelName"], item["version"]) in uploaded,
-        }
-        for item in FIRMWARE_UPLOAD_PRESETS
-    ]
-
-
-@admin_bp.get("/operator/device/firmware-upload-options")
-@require_admin("super", "operator")
-def firmware_upload_options():
-    rows = firmware_upload_catalog()
-    return response_ok({"total": len(rows), "list": rows})
-
-
-@admin_bp.post("/operator/device/firmware-upload")
-@require_admin("super", "operator")
-def upload_firmware_package():
-    body = request.get_json(silent=True) or {}
-    package_id = str(body.get("packageId") or "").strip()
-    package = next((item for item in FIRMWARE_UPLOAD_PRESETS if item["packageId"] == package_id), None)
-    if not package:
-        return response_error(404, "firmware package not found", "请选择系统预置固件包")
-
-    existing = mysql_one(
-        """
-        SELECT firmware_id
-        FROM device_firmware
-        WHERE model_name=%s AND version=%s AND COALESCE(status, '') NOT IN ('deleted', 'disabled')
-        ORDER BY firmware_id DESC
-        LIMIT 1
-        """,
-        (package["modelName"], package["version"]),
-    )
-    if existing:
-        return response_ok({**package, "uploaded": True, "firmwareId": existing.get("firmware_id")}, "firmware package already uploaded")
-
-    firmware_id = mysql_exec(
-        """
-        INSERT INTO device_firmware
-            (model_name, device_type, hardware_version, version, version_code,
-             file_url, file_md5, file_size, description, force_update, status,
-             created_at, updated_at)
-        VALUES (%s, 'speaker', %s, %s, %s, %s, %s, %s, %s, 0, %s, NOW(), NOW())
-        """,
-        (
-            package["modelName"],
-            f"HW-{package['modelName']}",
-            package["version"],
-            package["versionCode"],
-            f"https://cdn.example.com/firmware/{package['modelName'].lower()}-{package['version']}.bin",
-            hashlib.md5(package["checksum"].encode("utf-8")).hexdigest(),
-            int(package["sizeMb"] * 1024 * 1024),
-            package["releaseNote"],
-            package["channel"],
-        ),
-        fetch_last_id=True,
-    )
-    if not firmware_id:
-        return response_error(500, "firmware upload failed", "device_firmware is not writable")
-
-    write_admin_audit(
-        "upload_firmware_package",
-        "设备固件",
-        "上传固件包",
-        f"{package['modelName']} {package['version']}",
-        "success",
-        "",
-        params={"packageId": package_id, "firmwareId": firmware_id},
-    )
-    return response_ok({**package, "uploaded": True, "firmwareId": firmware_id}, "firmware package uploaded")
-
-
-@admin_bp.get("/operator/device/firmware-tasks")
-@require_admin("super", "operator")
-def firmware_tasks():
-    return response_error(404, "not found", "firmware task center has been removed")
-
-
-@admin_bp.post("/operator/device/firmware-task")
-@require_admin("super", "operator")
-def create_firmware_task():
-    return response_error(404, "not found", "firmware task center has been removed")
 
 
 @admin_bp.post("/operator/feedback/handle")
