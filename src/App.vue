@@ -1485,7 +1485,7 @@ onMounted(restoreSession)
               {{ state.feedbackLoading ? '刷新中' : '刷新' }}
             </button>
           </div>
-          <div class="data-table">
+          <div class="data-table scroll-list feedback-scroll">
             <div v-for="item in filteredFeedback" :key="item.feedbackId" class="table-row" @click="showFeedbackDetail(item)">
               <strong>{{ item.nickname }}</strong><span>{{ item.content }}</span><em>{{ item.statusText }}</em>
             </div>
@@ -1526,6 +1526,18 @@ onMounted(restoreSession)
               </div>
             </el-option>
           </el-select>
+          <div class="data-table scroll-list device-scroll">
+            <div
+              v-for="item in state.devices.list || []"
+              :key="`device-${item.deviceId}`"
+              :class="['table-row', 'device-pick-row', { active: item.deviceId === state.selectedDeviceId }]"
+              @click="showDeviceDetail(item)"
+            >
+              <strong><i :class="['dot', { online: item.online }]"></i>{{ item.deviceSn }}</strong>
+              <span>{{ item.deviceName }} / {{ item.ownerName || '未绑定' }}</span>
+              <em>{{ item.modelName }}</em>
+            </div>
+          </div>
           <div v-if="state.detail?.deviceId" class="device-actions">
             <button @click="renameDevice(state.detail)">改名</button>
             <button @click="unbindDevice(state.detail)">解绑</button>
@@ -1600,7 +1612,7 @@ onMounted(restoreSession)
       <section v-if="state.active === 'logs'" class="two-column detail-layout">
         <article class="panel">
           <div class="panel-head"><div><h3>设备日志</h3><p>设备上线、升级、异常事件</p></div></div>
-          <div class="data-table">
+          <div class="data-table scroll-list log-scroll">
             <div v-for="log in state.logs.list" :key="log.logId" class="table-row" @click="showLogDetail(log)">
               <strong>{{ log.deviceName }}</strong><span>{{ log.content }}</span><em>{{ log.createdAt }}</em>
             </div>
@@ -3163,6 +3175,38 @@ button {
   gap: 10px;
 }
 
+.scroll-list {
+  align-content: start;
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
+.feedback-scroll,
+.log-scroll {
+  max-height: min(62vh, 560px);
+}
+
+.device-scroll {
+  max-height: min(46vh, 420px);
+  margin-top: 14px;
+}
+
+.scroll-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll-list::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: rgba(132, 169, 140, 0.45);
+}
+
+.scroll-list::-webkit-scrollbar-track {
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
 .table-row {
   display: grid;
   grid-template-columns: minmax(100px, 0.28fr) minmax(0, 1fr) auto;
@@ -3294,6 +3338,22 @@ button {
   color: var(--text-muted);
   font-style: normal;
   font-size: 12px;
+}
+
+.device-pick-row {
+  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr) auto;
+}
+
+.device-pick-row.active {
+  border-color: rgba(74, 124, 89, 0.55);
+  background: rgba(229, 244, 235, 0.9);
+  box-shadow: inset 3px 0 0 var(--accent-green);
+}
+
+.device-pick-row strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .device-actions {
@@ -3714,8 +3774,13 @@ button {
 
   .table-row,
   .device-row,
-  .device-row > button {
+  .device-row > button,
+  .device-pick-row {
     grid-template-columns: 1fr;
+  }
+
+  .scroll-list {
+    max-height: 54vh;
   }
 
   .audit-row em {

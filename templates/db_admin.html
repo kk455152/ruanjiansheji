@@ -114,6 +114,9 @@
       overflow: hidden;
     }
     .catalog {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
       margin-bottom: 16px;
       border: 1px solid #dceee2;
       border-radius: 8px;
@@ -145,8 +148,29 @@
     .catalog-list {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      align-content: start;
       gap: 12px;
       padding: 12px;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    .catalog-list::-webkit-scrollbar,
+    aside::-webkit-scrollbar,
+    #items::-webkit-scrollbar {
+      width: 8px;
+    }
+    .catalog-list::-webkit-scrollbar-thumb,
+    aside::-webkit-scrollbar-thumb,
+    #items::-webkit-scrollbar-thumb {
+      border-radius: 999px;
+      background: rgba(79, 159, 114, .35);
+    }
+    .catalog-list::-webkit-scrollbar-track,
+    aside::-webkit-scrollbar-track,
+    #items::-webkit-scrollbar-track {
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .55);
     }
     .catalog-card {
       display: grid;
@@ -364,23 +388,29 @@
       display: block;
       height: calc(100vh - 61px);
       min-height: 0;
-      overflow-x: hidden;
-      overflow-y: auto;
+      overflow: hidden;
     }
     body.catalog-mode aside {
       display: none;
     }
     body.catalog-mode .data-section {
+      display: flex;
+      flex-direction: column;
       padding: 24px min(6vw, 72px);
-      min-height: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
     body.catalog-mode .data-section > :not(.catalog) {
       display: none;
     }
     body.catalog-mode .catalog {
+      flex: 1;
       margin: 0;
+      min-height: 0;
     }
     body.catalog-mode .catalog-list {
+      flex: 1;
       max-height: none;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     }
@@ -393,6 +423,7 @@
     }
     body.table-mode aside {
       min-height: 0;
+      overflow: hidden;
     }
     body.table-mode #items {
       max-height: calc(100vh - 132px);
@@ -403,7 +434,10 @@
       main { grid-template-columns: 1fr; }
       aside { max-height: 240px; }
       .form-grid { grid-template-columns: 1fr; }
-      body.catalog-mode .catalog-list { grid-template-columns: 1fr; }
+      body.catalog-mode .catalog-list {
+        grid-template-columns: 1fr;
+        max-height: calc(100vh - 190px);
+      }
       body.table-mode main { grid-template-columns: 1fr; }
       .maintenance-guide .guide-grid { grid-template-columns: 1fr; }
     }
