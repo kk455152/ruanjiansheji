@@ -1091,6 +1091,16 @@
       setStatus(`${prefix}，列表和前端数据目录已刷新`);
     }
 
+    async function refreshCurrentTable() {
+      if (state.source === "mysql" && DAILY_SUMMARY_TABLES.has(state.mysql.current)) {
+        await runDailyStats({ reloadRows: true, statusPrefix: `刷新 ${state.mysql.current}` });
+        return;
+      }
+      await loadRows();
+      if (state.source === "mysql") await refreshCatalog();
+      setStatus("当前列表已刷新");
+    }
+
     async function runDailyStats(options = {}) {
       el("runDailyBtn").disabled = true;
       const reloadRows = options.reloadRows !== false;
@@ -1126,12 +1136,14 @@
     };
     el("runDailyBtn").onclick = () => runDailyStats();
     el("backCatalogBtn").onclick = async () => {
+      closeEditor();
+      el("maintenanceGuide").style.display = "none";
       setView("catalog");
       await refreshCatalog();
       scrollContentTop("auto");
     };
     el("filterBtn").onclick = loadRows;
-    el("reloadBtn").onclick = loadRows;
+    el("reloadBtn").onclick = refreshCurrentTable;
     el("newBtn").onclick = openNew;
     el("saveBtn").onclick = saveRow;
     el("cancelBtn").onclick = closeEditor;
