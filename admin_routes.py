@@ -1318,37 +1318,7 @@ def firmware_version():
 @admin_bp.post("/operator/device/update-firmware")
 @require_admin("super", "operator")
 def update_firmware():
-    body = request.get_json(silent=True) or {}
-    device = current_device()
-    target_version = body.get("targetVersion") or _latest_firmware_version(os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"))
-    task_no = f"FWU-{datetime.now().strftime('%m%d%H%M%S')}"
-    inserted = mysql_exec(
-        """
-        INSERT INTO device_firmware_update_task
-            (task_no, device_id, current_version, target_version, status, progress, fail_reason, operator_name, started_at, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, 'pending', 0, '-', %s, NOW(), NOW(), NOW())
-        """,
-        (task_no, body.get("deviceId") or device["deviceId"], device["firmwareVersion"], target_version, g.admin.get("realName") or g.admin.get("username")),
-        fetch_last_id=True,
-    )
-    write_admin_audit(
-        "create_firmware_task",
-        "设备固件",
-        "下发固件升级任务",
-        target_version,
-        "success" if inserted else "failed",
-        "" if inserted else "任务写入失败",
-        params={"taskNo": task_no, "deviceId": body.get("deviceId") or device["deviceId"]},
-    )
-    return response_ok(
-        {
-            "taskId": inserted or task_no,
-            "deviceId": body.get("deviceId") or device["deviceId"],
-            "targetVersion": target_version,
-            "status": "pending",
-        },
-        "固件更新任务已创建",
-    )
+    return response_error(404, "not found", "firmware task creation has been removed")
 
 
 @admin_bp.get("/operator/device/list")
@@ -2027,7 +1997,6 @@ PERMISSION_CATALOG = {
     "groups": "设备分组",
     "alerts": "告警中心",
     "firmware": "设备固件",
-    "tasks": "任务中心",
     "logs": "设备日志",
     "users": "用户管理",
     "roles": "角色权限",
@@ -2041,7 +2010,7 @@ PERMISSION_CATALOG = {
 DEFAULT_ROLE_PERMISSIONS = {
     "super_admin": list(PERMISSION_CATALOG.keys()),
     "market_admin": ["overview", "decision", "trend", "region", "profile", "value", "segments", "insights", "songs", "reports", "account"],
-    "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "firmware", "tasks", "logs", "account"],
+    "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "firmware", "logs", "account"],
     "boss": ["overview", "trend", "region", "profile", "value", "songs", "feedback", "account"],
 }
 
@@ -2327,7 +2296,6 @@ def format_audit_row(row, seed=False):
         "用户管理": "超级管理员",
         "角色权限": "超级管理员",
         "设备管理": "售后人员",
-        "任务中心": "技术人员",
         "系统公告": "超级管理员",
         "用户反馈": "客服人员",
         "认证": "系统管理员",
@@ -2521,14 +2489,6 @@ def system_monitor():
     online_devices = count_sql(f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", fallback=0)
     feedback_total = len(feedback_rows())
     monitor_config = _system_config_values({"apiErrorRate": 0, "storageUsage": ""})
-    services = [
-        {
-            "name": row.get("config_name") or row.get("config_key") or "-",
-            "status": row.get("config_value") or "",
-            "latencyMs": _int(row.get("description"), 0),
-        }
-        for row in _system_config_group_rows("monitor_service", 20)
-    ]
     alert_counts = alert_summary_counts(total_devices, online_devices)
     exceptions = []
     if alert_counts["logAlerts"]:
@@ -2552,7 +2512,6 @@ def system_monitor():
             "level": row.get("config_type") or "",
         })
     return response_ok({
-        "services": services,
         "metrics": {
             "totalUsers": total_users,
             "totalDevices": total_devices,
@@ -3100,74 +3059,13 @@ def upload_firmware_package():
 @admin_bp.get("/operator/device/firmware-tasks")
 @require_admin("super", "operator")
 def firmware_tasks():
-    db_rows = mysql_all(
-        """
-        SELECT task_id, task_no, device_id, current_version, target_version,
-               status, progress, fail_reason, started_at, created_at, updated_at
-        FROM device_firmware_update_task
-        ORDER BY created_at DESC, updated_at DESC, task_id DESC
-        LIMIT 50
-        """
-    )
-    if db_rows:
-        tasks = [
-            {
-                "taskId": row.get("task_no") or row.get("task_id"),
-                "targetVersion": row.get("target_version") or "-",
-                "targetScope": f"device {row.get('device_id')}" if row.get("device_id") else "全部设备",
-                "status": row.get("status") or "pending",
-                "successCount": _int(row.get("progress"), 0),
-                "failCount": 0 if not row.get("fail_reason") or row.get("fail_reason") == "-" else 1,
-                "failureReason": row.get("fail_reason") or "-",
-                "createdAt": fmt_dt(row.get("created_at") or row.get("started_at") or row.get("updated_at")),
-            }
-            for row in db_rows
-        ]
-        return response_ok({"total": len(tasks), "list": tasks})
-
-    return response_ok({"total": 0, "list": []})
+    return response_error(404, "not found", "firmware task center has been removed")
 
 
 @admin_bp.post("/operator/device/firmware-task")
 @require_admin("super", "operator")
 def create_firmware_task():
-    body = request.get_json(silent=True) or {}
-    device = current_device()
-    task_no = f"FWU-{datetime.now().strftime('%m%d%H%M%S')}"
-    target_version = body.get("targetVersion") or _latest_firmware_version(os.environ.get("LATEST_FIRMWARE_VERSION", "1.0.5"))
-    inserted = mysql_exec(
-        """
-        INSERT INTO device_firmware_update_task
-            (task_no, device_id, current_version, target_version, status, progress, fail_reason, operator_name, started_at, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, 'pending', 0, '-', %s, NOW(), NOW(), NOW())
-        """,
-        (task_no, body.get("deviceId") or device["deviceId"], device["firmwareVersion"], target_version, g.admin.get("realName") or g.admin.get("username")),
-        fetch_last_id=True,
-    )
-    if inserted:
-        write_admin_audit(
-            "create_firmware_task",
-            "任务中心",
-            "下发灰度升级任务",
-            target_version,
-            "success",
-            "",
-            params={"taskNo": task_no, "targetScope": body.get("targetScope") or "", "deviceId": body.get("deviceId") or device["deviceId"]},
-        )
-        task = {
-            "taskId": task_no,
-            "targetVersion": target_version,
-            "targetScope": body.get("targetScope") or "",
-            "status": "pending",
-            "successCount": 0,
-            "failCount": 0,
-            "failureReason": "-",
-            "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        return response_ok(task, "firmware task created")
-
-    write_admin_audit("create_firmware_task", "任务中心", "下发灰度升级任务", target_version, "failed", "device_firmware_update_task is not writable")
-    return response_error(500, "firmware task create failed", "device_firmware_update_task is not writable")
+    return response_error(404, "not found", "firmware task center has been removed")
 
 
 @admin_bp.post("/operator/feedback/handle")

@@ -2975,7 +2975,7 @@ GET /api/admin/operator/device/firmware-packages
 ## GET 固件升级任务列表
 GET /api/admin/operator/device/firmware-tasks
 
-获取固件升级任务进度。
+该接口已随前端任务页面移除，当前返回 404。
 
 ### 请求参数
 
@@ -2985,15 +2985,13 @@ GET /api/admin/operator/device/firmware-tasks
 
 > 返回示例
 
-> 200 Response
+> 404 Response
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "result": true
-  }
+  "code": 404,
+  "message": "not found",
+  "error_details": "firmware task center has been removed"
 }
 ```
 
@@ -3010,20 +3008,20 @@ GET /api/admin/operator/device/firmware-tasks
 
 |状态码|含义|说明|
 |---|---|---|
-|200|OK|请求成功|
 |400|Bad Request|请求参数错误|
 |401|Unauthorized|未登录或 token 失效|
 |403|Forbidden|当前角色无权限访问|
+|404|Not Found|接口已移除|
 
 ### 返回数据结构
 
-状态码 **200**
+状态码 **404**
 
 |名称|类型|必选|说明|
 |---|---|---|---|
-|code|integer|是|业务状态码，成功为 200|
-|message|string|否|返回消息|
-|data|object|否|接口返回数据，字段见返回示例|
+|code|integer|是|业务状态码，已移除为 404|
+|message|string|是|返回消息|
+|error_details|string|否|移除说明|
 
 ## GET 固件上传选项
 GET /api/admin/operator/device/firmware-upload-options
@@ -3152,7 +3150,7 @@ POST /api/admin/operator/device/firmware-upload
 ## POST 创建固件升级任务
 POST /api/admin/operator/device/firmware-task
 
-创建固件灰度或全量升级任务。
+该接口已随前端任务创建功能移除，当前返回 404。
 
 > Body 请求示例
 
@@ -3173,15 +3171,13 @@ POST /api/admin/operator/device/firmware-task
 
 > 返回示例
 
-> 200 Response
+> 404 Response
 
 ```json
 {
-  "code": 200,
-  "message": "success",
-  "data": {
-    "result": true
-  }
+  "code": 404,
+  "message": "not found",
+  "error_details": "firmware task center has been removed"
 }
 ```
 
@@ -3198,20 +3194,20 @@ POST /api/admin/operator/device/firmware-task
 
 |状态码|含义|说明|
 |---|---|---|
-|200|OK|请求成功|
 |400|Bad Request|请求参数错误|
 |401|Unauthorized|未登录或 token 失效|
 |403|Forbidden|当前角色无权限访问|
+|404|Not Found|接口已移除|
 
 ### 返回数据结构
 
-状态码 **200**
+状态码 **404**
 
 |名称|类型|必选|说明|
 |---|---|---|---|
-|code|integer|是|业务状态码，成功为 200|
-|message|string|否|返回消息|
-|data|object|否|接口返回数据，字段见返回示例|
+|code|integer|是|业务状态码，已移除为 404|
+|message|string|是|返回消息|
+|error_details|string|否|移除说明|
 
 # 管理员用户管理
 ## GET 管理员账号列表

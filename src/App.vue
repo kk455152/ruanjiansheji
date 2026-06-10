@@ -26,7 +26,6 @@ const menus = [
   { key: "groups", label: "设备分组", icon: "fa-layer-group", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "alerts", label: "告警中心", icon: "fa-triangle-exclamation", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "firmware", label: "设备固件", icon: "fa-microchip", section: "运营管理", roles: ["super_admin", "operator_admin"] },
-  { key: "tasks", label: "任务中心", icon: "fa-list-check", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "logs", label: "设备日志", icon: "fa-clipboard-list", section: "运营管理", roles: ["super_admin", "operator_admin"] },
   { key: "users", label: "用户管理", icon: "fa-user-gear", section: "系统管理", roles: ["super_admin"] },
   { key: "roles", label: "角色权限", icon: "fa-user-shield", section: "系统管理", roles: ["super_admin"] },
@@ -70,7 +69,6 @@ const state = reactive({
   runtime: null,
   firmware: null,
   firmwarePackages: { total: 0, list: [] },
-  firmwareTasks: { total: 0, list: [] },
   firmwareUpload: { open: false, options: [], selected: "", uploading: false },
   logs: { total: 0, list: [] },
   users: { total: 0, list: [] },
@@ -78,7 +76,7 @@ const state = reactive({
   roleEditor: { open: false, role: "", roleName: "", selected: [], saving: false },
   userEditor: { open: false, mode: "create", saving: false, original: "", form: { username: "", password: "", role: "operator_admin", realName: "", phone: "", email: "", jobNo: "" } },
   settings: {},
-  monitor: { services: [], metrics: {}, exceptions: [] },
+  monitor: { metrics: {}, exceptions: [] },
   notices: { total: 0, list: [] },
   audit: { total: 0, list: [] },
   detail: null,
@@ -498,7 +496,6 @@ async function loadPage(initial = false) {
     if (state.active === "groups") await loadGroups()
     if (state.active === "alerts") await loadAlerts()
     if (state.active === "firmware") await loadFirmware()
-    if (state.active === "tasks") await loadTasks()
     if (state.active === "logs") await loadLogs()
     if (state.active === "users") await loadUsers()
     if (state.active === "roles") await loadRoles()
@@ -671,18 +668,12 @@ async function loadAlerts() {
 }
 
 async function loadFirmware() {
-  const [firmware, packages, tasks] = await Promise.all([
+  const [firmware, packages] = await Promise.all([
     api("/api/admin/operator/device/firmware-version"),
     silent(() => api("/api/admin/operator/device/firmware-packages"), { total: 0, list: [] }),
-    silent(() => api("/api/admin/operator/device/firmware-tasks"), { total: 0, list: [] }),
   ])
   state.firmware = firmware
   state.firmwarePackages = packages
-  state.firmwareTasks = tasks
-}
-
-async function loadTasks() {
-  state.firmwareTasks = await api("/api/admin/operator/device/firmware-tasks")
 }
 
 async function openFirmwareUpload() {
@@ -961,16 +952,6 @@ async function unbindDevice(item) {
   } catch (error) {
     if (!error?.action && error !== "cancel") ElMessage.error(error.message || "解绑失败")
   }
-}
-
-async function createFirmwareTask() {
-  const targetVersion = state.firmware?.latestVersion || "1.0.5"
-  await api("/api/admin/operator/device/firmware-task", {
-    method: "POST",
-    body: { targetVersion, targetScope: "灰度 20%" },
-  })
-  ElMessage.success("固件升级任务已创建")
-  await loadFirmware()
 }
 
 async function saveSystemConfig() {
@@ -1578,9 +1559,9 @@ onMounted(restoreSession)
       <section v-if="state.active === 'firmware'" class="dashboard-grid">
         <article class="panel">
           <div class="panel-head"><div><h3>{{ state.firmware?.deviceName || "设备固件" }}</h3><p>当前版本 {{ state.firmware?.currentVersion || "-" }}，最新版本 {{ state.firmware?.latestVersion || "-" }}</p></div></div>
-          <button class="primary-button compact" :disabled="!state.firmware?.needUpdate" @click="createFirmwareTask">
-            {{ state.firmware?.needUpdate ? "下发灰度升级任务" : "无需更新" }}
-          </button>
+          <span :class="['badge', state.firmware?.needUpdate ? 'warning' : 'normal']">
+            {{ state.firmware?.needUpdate ? "可更新" : "已是最新" }}
+          </span>
         </article>
         <article class="panel">
           <div class="panel-head">
@@ -1596,17 +1577,6 @@ onMounted(restoreSession)
             </li>
           </ul>
         </article>
-      </section>
-
-      <section v-if="state.active === 'tasks'" class="panel full">
-        <div class="panel-head"><div><h3>固件升级任务</h3><p>查看任务状态、成功数、失败数和失败原因</p></div><button class="ghost-button" @click="createFirmwareTask">新建灰度任务</button></div>
-        <div class="data-table">
-          <div v-for="task in state.firmwareTasks.list" :key="task.taskId" class="table-row">
-            <strong>{{ task.taskId }} / {{ task.targetVersion }}</strong>
-            <span>{{ task.targetScope }} / 成功 {{ task.successCount }} / 失败 {{ task.failCount }}</span>
-            <em>{{ statusText(task.status) }}</em>
-          </div>
-        </div>
       </section>
 
       <section v-if="state.active === 'logs'" class="two-column detail-layout">
@@ -1686,23 +1656,22 @@ onMounted(restoreSession)
         </div>
       </section>
 
-      <section v-if="state.active === 'monitor'" class="dashboard-grid">
-        <article class="panel">
-          <div class="panel-head"><div><h3>服务运行状态</h3><p>API、MySQL、MongoDB</p></div></div>
-          <ul class="pill-list">
-            <li v-for="service in state.monitor.services" :key="service.name" class="pill-row">
-              <strong>{{ service.name }}</strong><span>{{ service.status }} / {{ service.latencyMs }}ms</span>
-            </li>
-          </ul>
-        </article>
-        <article class="panel">
-          <div class="panel-head"><div><h3>最近异常</h3><p>接口错误率、存储、反馈与离线设备</p></div></div>
-          <ul class="pill-list">
-            <li v-for="item in state.monitor.exceptions" :key="item.code" class="pill-row">
-              <strong>{{ item.title }}</strong><span>{{ item.count }}</span>
-            </li>
-          </ul>
-        </article>
+      <section v-if="state.active === 'monitor'" class="panel full monitor-panel">
+        <div class="panel-head">
+          <div><h3>最近异常</h3><p>日志、反馈、离线设备与固件异常</p></div>
+          <span class="badge warning">{{ state.monitor.exceptions.length }} 项</span>
+        </div>
+        <div v-if="state.monitor.exceptions.length" class="exception-grid">
+          <article v-for="item in state.monitor.exceptions" :key="item.code" :class="['exception-card', item.level || 'warning']">
+            <span class="exception-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div>
+              <strong>{{ item.title }}</strong>
+              <small>{{ statusText(item.level) }}</small>
+            </div>
+            <b>{{ item.count }}</b>
+          </article>
+        </div>
+        <p v-else class="empty-state">暂无异常</p>
       </section>
 
       <section v-if="state.active === 'notices'" class="panel full">
@@ -2978,6 +2947,84 @@ button {
   font-weight: 500;
 }
 
+.monitor-panel {
+  align-self: start;
+}
+
+.exception-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.exception-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 84px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+}
+
+.exception-card.critical {
+  background: rgba(217, 138, 115, 0.12);
+}
+
+.exception-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  color: var(--accent-orange);
+  background: rgba(244, 162, 97, 0.15);
+}
+
+.exception-card strong,
+.exception-card small {
+  display: block;
+}
+
+.exception-card strong {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exception-card small {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.exception-card b {
+  color: var(--text-secondary);
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.exception-card.critical b,
+.exception-card.critical .exception-icon {
+  color: #d98a73;
+}
+
+.empty-state {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  margin: 0;
+  border: 1px dashed rgba(132, 169, 140, 0.35);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.28);
+}
+
 .badge {
   border-radius: 99px;
   padding: 4px 12px;
@@ -3728,6 +3775,10 @@ button {
   .dashboard-grid,
   .two-column,
   .detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .exception-grid {
     grid-template-columns: 1fr;
   }
 }
