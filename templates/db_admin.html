@@ -567,6 +567,12 @@
     };
     const el = (id) => document.getElementById(id);
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    const DAILY_SUMMARY_TABLES = new Set([
+      "user", "user_profile", "device", "user_device_binding",
+      "sales_order", "sales_order_item", "media_mapping", "play_history",
+      "user_feedback", "device_log", "device_alert", "device_firmware_update_task",
+      "daily_stats", "region_stats_daily", "hot_ranking_daily", "user_value_segment_daily",
+    ]);
 
     async function api(path, options = {}) {
       const res = await fetch(path, {
@@ -1008,10 +1014,7 @@
         await api(mysqlUpdateUrl(state.pk), { method: "PUT", body: data });
       }
       closeEditor();
-      await loadRows();
-      const catalog = await api("/api/db/front-data-catalog");
-      state.catalog = catalog.list || [];
-      renderCatalog();
+      await refreshAfterMysqlChange("保存成功");
     }
 
     async function saveMongoRow() {
@@ -1037,10 +1040,7 @@
         state.mysql.rows = state.mysql.rows.filter((item) => !sameMysqlPk(item, row));
         renderMysqlTable();
         setStatus("删除成功，正在刷新列表...");
-        await loadRows();
-        const catalog = await api("/api/db/front-data-catalog");
-        state.catalog = catalog.list || [];
-        renderCatalog();
+        await refreshAfterMysqlChange("删除成功");
       } catch (err) {
         setStatus(`删除失败：${err.message}`);
         alert(`删除失败：${err.message}`);
@@ -1074,19 +1074,37 @@
       setStatus(`已生成随机模拟数据，可修改后保存：${label}`);
     }
 
-    async function runDailyStats() {
+    async function refreshCatalog() {
+      const catalog = await api("/api/db/front-data-catalog");
+      state.catalog = catalog.list || [];
+      renderCatalog();
+    }
+
+    async function refreshAfterMysqlChange(prefix) {
+      if (DAILY_SUMMARY_TABLES.has(state.mysql.current)) {
+        setStatus(`${prefix}，正在运行每日汇总并刷新前端数据目录...`);
+        await runDailyStats({ reloadRows: true, statusPrefix: prefix });
+        return;
+      }
+      await loadRows();
+      await refreshCatalog();
+      setStatus(`${prefix}，列表和前端数据目录已刷新`);
+    }
+
+    async function runDailyStats(options = {}) {
       el("runDailyBtn").disabled = true;
-      setStatus("正在运行每日汇总...");
+      const reloadRows = options.reloadRows !== false;
+      const statusPrefix = options.statusPrefix || "";
+      setStatus(statusPrefix ? `${statusPrefix}，正在运行每日汇总...` : "正在运行每日汇总...");
       try {
         const data = await api("/api/db/daily-stats/run", {
           method: "POST",
           body: { skip_seed: true, skip_generate: true },
         });
-        setStatus(`每日汇总完成：${(data.refreshed_daily_tables || []).join(", ")}`);
-        await loadRows();
-        const catalog = await api("/api/db/front-data-catalog");
-        state.catalog = catalog.list || [];
-        renderCatalog();
+        if (reloadRows) await loadRows();
+        await refreshCatalog();
+        const tables = (data.refreshed_daily_tables || []).join(", ") || "daily_stats / region / ranking";
+        setStatus(`${statusPrefix ? `${statusPrefix}，` : ""}每日汇总完成，当前列表和前端数据目录已刷新：${tables}`);
       } catch (err) {
         setStatus(`每日汇总失败：${err.message}`);
       } finally {
@@ -1109,9 +1127,7 @@
     el("runDailyBtn").onclick = () => runDailyStats();
     el("backCatalogBtn").onclick = async () => {
       setView("catalog");
-      const catalog = await api("/api/db/front-data-catalog");
-      state.catalog = catalog.list || [];
-      renderCatalog();
+      await refreshCatalog();
       scrollContentTop("auto");
     };
     el("filterBtn").onclick = loadRows;
