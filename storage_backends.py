@@ -27,14 +27,14 @@ PLAY_QUEUE_TYPES = {"play_queue"}
 BIND_PROGRESS_TYPES = {"bind_progress"}
 MUSIC_SYNC_PROGRESS_TYPES = {"music_sync_progress"}
 
-DEFAULT_MONGO_URI = "mongodb://y:123@8.137.165.220:27017/musicplayer?authSource=musicplayer"
-DEFAULT_MONGO_HOST = "8.137.165.220"
+DEFAULT_MONGO_URI = os.environ.get("MONGO_URI", "mongodb://127.0.0.1:27017/musicplayer")
+DEFAULT_MONGO_HOST = os.environ.get("MONGO_HOST", "127.0.0.1")
 LOCAL_MONGO_HOST = "127.0.0.1"
-DEFAULT_MYSQL_HOST = "8.137.165.220"
+DEFAULT_MYSQL_HOST = os.environ.get("MYSQL_HOST", "127.0.0.1")
 DEFAULT_MYSQL_PORT = 3306
-DEFAULT_MYSQL_DATABASE = "smart_speaker"
-DEFAULT_MYSQL_USER = "team"
-DEFAULT_MYSQL_PASSWORD = "123456"
+DEFAULT_MYSQL_DATABASE = os.environ.get("MYSQL_DATABASE", "smart_speaker")
+DEFAULT_MYSQL_USER = os.environ.get("MYSQL_USER", "team")
+DEFAULT_MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD", "")
 DEFAULT_MYSQL_FALLBACK_HOSTS = (
     "172.25.91.167",
     "172.28.0.1",

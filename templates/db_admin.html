@@ -364,13 +364,15 @@
       display: block;
       height: calc(100vh - 61px);
       min-height: 0;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     body.catalog-mode aside {
       display: none;
     }
     body.catalog-mode .data-section {
       padding: 24px min(6vw, 72px);
+      min-height: 100%;
     }
     body.catalog-mode .data-section > :not(.catalog) {
       display: none;

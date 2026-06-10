@@ -40,9 +40,9 @@ services:
       - GATEWAY_METRICS_MULTIPROCESS=true
       - MQ_HOST=127.0.0.1
       - MQ_USER=migrate
-      - MQ_PASSWORD=2728
+      - MQ_PASSWORD=${MQ_PASSWORD:-}
       - MYSQL_FALLBACK_HOSTS=172.25.91.167,172.28.0.1,127.0.0.1,8.137.165.220
-      - MONGO_URI=mongodb://y:123@127.0.0.1:27017/musicplayer?authSource=musicplayer
+      - MONGO_URI=${MONGO_URI:-mongodb://127.0.0.1:27017/musicplayer}
       - MONGO_DATABASE=musicplayer
       - MONGO_DB=musicplayer
     depends_on:
@@ -63,7 +63,7 @@ services:
       - ./runtime:/runtime
     environment:
       - MQ_USER=migrate
-      - MQ_PASSWORD=2728
+      - MQ_PASSWORD=${MQ_PASSWORD:-}
       - GATEWAY_METRICS_URL=https://172.28.0.1/internal/metrics
       - GATEWAY_METRICS_FILE=/runtime/gateway_metrics.json
       - GATEWAY_METRICS_FILE_PATTERN=/runtime/gateway_metrics.*.json
@@ -92,14 +92,14 @@ services:
     environment:
       - MQ_HOST=rabbitmq
       - MQ_USER=migrate
-      - MQ_PASSWORD=2728
+      - MQ_PASSWORD=${MQ_PASSWORD:-}
       - MYSQL_HOST=172.28.0.1
       - MYSQL_PORT=3306
       - MYSQL_DATABASE=smart_speaker
-      - MYSQL_USER=team
-      - MYSQL_PASSWORD=123456
+      - MYSQL_USER=${MYSQL_USER:-team}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
       - MYSQL_FALLBACK_HOSTS=172.25.91.167,172.28.0.1,127.0.0.1,8.137.165.220
-      - MONGO_URI=mongodb://y:123@172.28.0.1:27017/musicplayer?authSource=musicplayer
+      - MONGO_URI=${MONGO_URI:-mongodb://172.28.0.1:27017/musicplayer}
       - MONGO_DATABASE=musicplayer
       - MONGO_COLLECTION=device_metrics
       - MONGO_SONG_COLLECTION=song_info
@@ -122,7 +122,7 @@ services:
     environment:
       - MQ_HOST=rabbitmq
       - MQ_USER=migrate
-      - MQ_PASSWORD=2728
+      - MQ_PASSWORD=${MQ_PASSWORD:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -136,7 +136,7 @@ services:
     environment:
       - MQ_HOST=rabbitmq
       - MQ_USER=migrate
-      - MQ_PASSWORD=2728
+      - MQ_PASSWORD=${MQ_PASSWORD:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -150,7 +150,7 @@ services:
     environment:
       - MQ_HOST=rabbitmq
       - MQ_USER=migrate
-      - MQ_PASSWORD=2728
+      - MQ_PASSWORD=${MQ_PASSWORD:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -167,10 +167,10 @@ services:
       - MYSQL_HOST=172.28.0.1
       - MYSQL_PORT=3306
       - MYSQL_DATABASE=smart_speaker
-      - MYSQL_USER=team
-      - MYSQL_PASSWORD=123456
+      - MYSQL_USER=${MYSQL_USER:-team}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
       - MYSQL_FALLBACK_HOSTS=172.25.91.167,172.28.0.1,127.0.0.1,8.137.165.220
-      - MONGO_URI=mongodb://y:123@172.28.0.1:27017/musicplayer?authSource=musicplayer
+      - MONGO_URI=${MONGO_URI:-mongodb://172.28.0.1:27017/musicplayer}
       - MONGO_DATABASE=musicplayer
       - MONGO_SONG_COLLECTION=song_info
       - MONGO_PLAY_LOG_COLLECTION=play_logs
