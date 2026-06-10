@@ -284,6 +284,74 @@ GET /api/admin/profile
 |message|string|否|返回消息|
 |data|object|否|接口返回数据，字段见返回示例|
 
+## POST 修改当前管理员密码
+POST /api/admin/password
+
+四种后台角色均可修改自己的登录密码。
+
+> Body 请求示例
+
+```json
+{
+  "currentPassword": "123456",
+  "newPassword": "newPass123",
+  "confirmPassword": "newPass123"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|Authorization|header|string|是|Bearer {{access_token}}，登录后返回的后台访问 token|
+|currentPassword|body|string|是|当前密码|
+|newPassword|body|string|是|新密码，6 到 32 位|
+|confirmPassword|body|string|是|确认新密码|
+
+> 返回示例
+
+> 200 Response
+
+```json
+{
+  "code": 200,
+  "message": "密码已更新",
+  "data": {
+    "username": "admin",
+    "role": "super_admin"
+  }
+}
+```
+
+> 401 Response
+
+```json
+{
+  "code": 401,
+  "message": "修改失败",
+  "error_details": "当前密码错误，请重新输入。"
+}
+```
+
+### 返回结果
+
+|状态码|含义|说明|
+|---|---|---|
+|200|OK|修改成功|
+|400|Bad Request|参数错误或两次密码不一致|
+|401|Unauthorized|未登录、token 失效或当前密码错误|
+|403|Forbidden|当前角色无权限访问|
+
+### 返回数据结构
+
+状态码 **200**
+
+|名称|类型|必选|说明|
+|---|---|---|---|
+|code|integer|是|业务状态码，成功为 200|
+|message|string|否|返回消息|
+|data|object|否|当前管理员资料|
+
 # 超级管理员 / 老板概览
 ## GET 用户数量概览
 GET /api/admin/super/overview/user-count

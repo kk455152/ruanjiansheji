@@ -75,6 +75,8 @@ const state = reactive({
   audit: { total: 0, list: [] },
   detail: null,
   deviceUser: { open: false, loading: false, info: null, deviceName: "" },
+  passwordForm: { currentPassword: "", newPassword: "", confirmPassword: "" },
+  passwordSaving: false,
 })
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"])
@@ -811,6 +813,46 @@ async function loadAudit() {
 async function loadAccount() {
   state.admin = await api("/api/admin/profile")
   localStorage.setItem("admin_info", JSON.stringify(state.admin))
+}
+
+function resetPasswordForm() {
+  state.passwordForm = { currentPassword: "", newPassword: "", confirmPassword: "" }
+}
+
+async function changePassword() {
+  const form = state.passwordForm
+  if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
+    ElMessage.warning("请完整填写密码信息")
+    return
+  }
+  if (form.newPassword.length < 6 || form.newPassword.length > 32) {
+    ElMessage.warning("新密码长度需为 6 到 32 位")
+    return
+  }
+  if (form.newPassword !== form.confirmPassword) {
+    ElMessage.warning("两次输入的新密码不一致")
+    return
+  }
+
+  state.passwordSaving = true
+  try {
+    const profile = await api("/api/admin/password", {
+      method: "POST",
+      body: {
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+        confirmPassword: form.confirmPassword,
+      },
+    })
+    state.admin = profile
+    localStorage.setItem("admin_info", JSON.stringify(state.admin))
+    resetPasswordForm()
+    ElMessage.success("密码已更新")
+  } catch (error) {
+    ElMessage.error(error.message || "密码修改失败")
+  } finally {
+    state.passwordSaving = false
+  }
 }
 
 async function showFeedbackDetail(item) {
@@ -1604,14 +1646,44 @@ onMounted(restoreSession)
         </div>
       </section>
 
-      <section v-if="state.active === 'account'" class="panel full account-card">
-        <div class="avatar big">{{ state.admin?.username?.slice(0, 1).toUpperCase() }}</div>
-        <div>
-          <h3>{{ state.admin?.realName || state.admin?.username }}</h3>
-          <p>{{ state.admin?.position || currentRoleName }} / 工号 {{ state.admin?.jobNo || "-" }}</p>
-          <p>{{ state.admin?.phone || "未配置手机号" }} · {{ state.admin?.email || "未配置邮箱" }}</p>
-          <p>权限：{{ currentRoleName }}，可访问 {{ visibleMenus.length }} 个后台模块。</p>
-        </div>
+      <section v-if="state.active === 'account'" class="account-layout">
+        <article class="panel account-card">
+          <div class="avatar big">{{ state.admin?.username?.slice(0, 1).toUpperCase() }}</div>
+          <div>
+            <h3>{{ state.admin?.realName || state.admin?.username }}</h3>
+            <p>{{ state.admin?.position || currentRoleName }} / 工号 {{ state.admin?.jobNo || "-" }}</p>
+            <p>{{ state.admin?.phone || "未配置手机号" }} · {{ state.admin?.email || "未配置邮箱" }}</p>
+            <p>权限：{{ currentRoleName }}，可访问 {{ visibleMenus.length }} 个后台模块。</p>
+          </div>
+        </article>
+        <article class="panel password-card">
+          <div class="panel-head">
+            <div>
+              <h3>修改密码</h3>
+              <p>{{ state.admin?.username }} · {{ currentRoleName }}</p>
+            </div>
+          </div>
+          <form class="password-form" @submit.prevent="changePassword">
+            <label>
+              <span>当前密码</span>
+              <input v-model="state.passwordForm.currentPassword" autocomplete="current-password" type="password" />
+            </label>
+            <label>
+              <span>新密码</span>
+              <input v-model="state.passwordForm.newPassword" autocomplete="new-password" type="password" />
+            </label>
+            <label>
+              <span>确认新密码</span>
+              <input v-model="state.passwordForm.confirmPassword" autocomplete="new-password" type="password" />
+            </label>
+            <div class="form-actions">
+              <button class="ghost-button compact" type="button" @click="resetPasswordForm">清空</button>
+              <button class="primary-button compact" type="submit" :disabled="state.passwordSaving">
+                {{ state.passwordSaving ? "保存中..." : "保存新密码" }}
+              </button>
+            </div>
+          </form>
+        </article>
       </section>
     </section>
 
@@ -3322,9 +3394,56 @@ button {
   color: white;
 }
 
+.account-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
+  gap: 24px;
+}
+
 .account-card {
   justify-content: flex-start;
   gap: 24px;
+}
+
+.password-card {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.password-form {
+  display: grid;
+  gap: 16px;
+}
+
+.password-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.password-form input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid rgba(132, 169, 140, 0.22);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0 14px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.password-form input:focus {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 0 3px rgba(132, 169, 140, 0.14);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .avatar.big {
@@ -3580,6 +3699,10 @@ button {
   .account-card {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .account-layout {
+    grid-template-columns: 1fr;
   }
 
   .search {

@@ -159,6 +159,34 @@ def find_admin(username):
     return all_admins().get(username)
 
 
+def update_admin_password(admin, new_password):
+    username = str(admin.get("username") or "").strip()
+    if not username:
+        return False
+
+    db_row = mysql_one(
+        "SELECT admin_id FROM admin_user WHERE username=%s LIMIT 1",
+        (username,),
+    )
+    if db_row and db_row.get("admin_id"):
+        updated = mysql_exec(
+            "UPDATE admin_user SET password_hash=%s, updated_at=NOW() WHERE admin_id=%s",
+            (new_password, db_row.get("admin_id")),
+        )
+        return bool(updated is not False)
+
+    overlay = admin_accounts_overlay()
+    accounts = dict(overlay["accounts"])
+    record = dict(accounts.get(username) or DEFAULT_ADMINS.get(username) or admin)
+    record["username"] = username
+    record["password"] = new_password
+    record["role"] = record.get("role") or admin.get("role")
+    record["roleName"] = ROLE_NAME_MAP.get(record.get("role"), record.get("roleName") or "")
+    accounts[username] = record
+    _save_admin_overlay({"accounts": accounts, "deleted": overlay["deleted"]})
+    return True
+
+
 def verify_admin_password(raw_password, stored_password):
     stored = str(stored_password or "")
     raw = str(raw_password or "")
@@ -980,6 +1008,35 @@ def wechat_login():
 @require_admin("super", "market", "operator", "boss")
 def profile():
     return response_ok(public_admin_info(g.admin, include_private=True))
+
+
+@admin_bp.post("/password")
+@require_admin("super", "market", "operator", "boss")
+def change_password():
+    body = request.get_json(silent=True) or {}
+    current_password = str(body.get("currentPassword") or "").strip()
+    new_password = str(body.get("newPassword") or "").strip()
+    confirm_password = str(body.get("confirmPassword") or "").strip()
+    username = g.admin.get("username") or ""
+
+    if not current_password or not new_password or not confirm_password:
+        return response_error(400, "修改失败", "当前密码、新密码和确认密码不能为空。")
+    if len(new_password) < 6 or len(new_password) > 32:
+        return response_error(400, "修改失败", "新密码长度需为 6 到 32 位。")
+    if new_password != confirm_password:
+        return response_error(400, "修改失败", "两次输入的新密码不一致。")
+    if not verify_admin_password(current_password, g.admin.get("password", "")):
+        write_admin_audit("change_own_password", "账户", "修改个人密码", username, "failed", "当前密码错误", g.admin)
+        return response_error(401, "修改失败", "当前密码错误，请重新输入。")
+    if verify_admin_password(new_password, g.admin.get("password", "")):
+        return response_error(400, "修改失败", "新密码不能与当前密码相同。")
+
+    if not update_admin_password(g.admin, new_password):
+        write_admin_audit("change_own_password", "账户", "修改个人密码", username, "failed", "密码保存失败", g.admin)
+        return response_error(500, "修改失败", "密码保存失败，请稍后重试。")
+
+    write_admin_audit("change_own_password", "账户", "修改个人密码", username, "success", "", g.admin)
+    return response_ok(public_admin_info(find_admin(username) or g.admin, include_private=True), "密码已更新")
 
 
 @admin_bp.post("/logout")
@@ -2222,6 +2279,7 @@ def is_seed_audit_row(row):
 MEANINGFUL_AUDIT_ACTIONS = {
     "login",
     "login_failed",
+    "change_own_password",
     "unbind_device",
     "rename_device",
     "update_role_permissions",
