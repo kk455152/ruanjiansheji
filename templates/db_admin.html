@@ -574,7 +574,13 @@
         headers: options.body ? { "Content-Type": "application/json" } : {},
         body: options.body ? JSON.stringify(options.body) : undefined,
       });
-      const payload = await res.json();
+      const text = await res.text();
+      let payload = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch (error) {
+        payload = { status: "error", message: text || res.statusText || "接口返回非 JSON 内容" };
+      }
       if (!res.ok || payload.status === "error") throw new Error(payload.message || "请求失败");
       return payload.data;
     }
@@ -611,22 +617,41 @@
     }
 
     async function loadSources() {
-      const [mysql, mongo, catalog] = await Promise.all([
+      const [mysqlResult, mongoResult, catalogResult] = await Promise.allSettled([
         api("/api/db/mysql/tables"),
         api("/api/db/mongo/collections"),
         api("/api/db/front-data-catalog"),
       ]);
-      state.mysql.items = mysql;
-      state.mongo.database = mongo.database;
-      state.mongo.items = mongo.collections;
-      state.catalog = catalog.list || [];
-      state.mysql.current = mysql[0]?.key || null;
-      state.mongo.current = mongo.collections[0]?.name || null;
+      const failures = [];
+      if (mysqlResult.status === "fulfilled") {
+        state.mysql.items = mysqlResult.value || [];
+        state.mysql.current = state.mysql.items[0]?.key || null;
+      } else {
+        state.mysql.items = [];
+        state.mysql.current = null;
+        failures.push(`MySQL 表目录：${mysqlResult.reason?.message || "加载失败"}`);
+      }
+      if (mongoResult.status === "fulfilled") {
+        state.mongo.database = mongoResult.value?.database || "";
+        state.mongo.items = mongoResult.value?.collections || [];
+        state.mongo.current = state.mongo.items[0]?.name || null;
+      } else {
+        state.mongo.database = "";
+        state.mongo.items = [];
+        state.mongo.current = null;
+        failures.push(`MongoDB 集合目录：${mongoResult.reason?.message || "加载失败"}`);
+      }
+      if (catalogResult.status === "fulfilled") {
+        state.catalog = catalogResult.value?.list || [];
+      } else {
+        state.catalog = [];
+        failures.push(`前端数据维护目录：${catalogResult.reason?.message || "加载失败"}`);
+      }
       renderItems();
       renderCatalog();
       setView("catalog");
       scrollContentTop("auto");
-      setStatus("已加载前端数据维护目录，点击卡片可定位到对应表和字段");
+      setStatus(failures.length ? `部分目录加载失败：${failures.join("；")}` : "已加载前端数据维护目录，点击卡片可定位到对应表和字段");
     }
 
     function renderItems() {
