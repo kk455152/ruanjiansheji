@@ -599,6 +599,7 @@ def current_device(device_id=None):
             d.online_status,
             d.last_active,
             d.firmware_version,
+            d.device_name,
             b.custom_device_name,
             b.current_network,
             u.username AS owner_name
@@ -626,7 +627,7 @@ def current_device(device_id=None):
         return {
             "deviceId": str(row.get("device_id")),
             "deviceSn": row.get("device_number") or "",
-            "deviceName": row.get("custom_device_name") or row.get("device_number") or "",
+            "deviceName": row.get("device_name") or row.get("custom_device_name") or row.get("device_number") or "",
             "modelName": row.get("model_name") or "",
             "ownerName": row.get("owner_name") or "",
             "online": device_online(row),
@@ -838,6 +839,11 @@ def heatmap(kind):
             LIMIT 20
             """
         )
+    rows = [
+        row for row in rows
+        if valid_region_row(row)
+    ]
+    rows = merge_region_rows(rows, kind)
     if kind == "sales":
         return [
             {
@@ -857,6 +863,75 @@ def heatmap(kind):
         }
         for row in rows
     ]
+
+
+PROVINCE_NAME_BY_CODE = {
+    "110000": "北京市",
+    "310000": "上海市",
+    "320000": "江苏省",
+    "330000": "浙江省",
+    "370000": "山东省",
+    "420000": "湖北省",
+    "440000": "广东省",
+    "500000": "重庆市",
+    "510000": "四川省",
+    "610000": "陕西省",
+}
+
+
+PROVINCE_CODE_BY_NAME = {name: code for code, name in PROVINCE_NAME_BY_CODE.items()}
+
+
+def normalize_region_group(row):
+    raw_code = str(row.get("region_code") or "").strip()
+    raw_name = str(row.get("region_name") or "").strip()
+    name = raw_name.split("/")[0].strip()
+    name = name.split("／")[0].strip()
+    if raw_code.isdigit() and len(raw_code) == 6:
+        province_code = raw_code[:2] + "0000"
+        province_name = PROVINCE_NAME_BY_CODE.get(province_code) or name
+        return province_code, province_name
+    if name in PROVINCE_CODE_BY_NAME:
+        return PROVINCE_CODE_BY_NAME[name], name
+    if raw_code in PROVINCE_CODE_BY_NAME:
+        return PROVINCE_CODE_BY_NAME[raw_code], raw_code
+    return raw_code or name, name or raw_code
+
+
+def merge_region_rows(rows, kind):
+    merged = {}
+    for row in rows:
+        code, name = normalize_region_group(row)
+        if not name:
+            continue
+        item = merged.setdefault(code or name, {
+            "region_code": code,
+            "region_name": name,
+            "sales_amount": 0,
+            "order_count": 0,
+            "user_count": 0,
+            "active_user_count": 0,
+        })
+        item["sales_amount"] += _float(row.get("sales_amount"), 0)
+        item["order_count"] += _int(row.get("order_count"), 0)
+        item["user_count"] += _int(row.get("user_count"), 0)
+        item["active_user_count"] += _int(row.get("active_user_count"), 0)
+    sort_key = (
+        (lambda item: (-_float(item.get("sales_amount"), 0), -_int(item.get("order_count"), 0), item.get("region_name") or ""))
+        if kind == "sales"
+        else (lambda item: (-_int(item.get("user_count"), 0), -_int(item.get("active_user_count"), 0), item.get("region_name") or ""))
+    )
+    return sorted(merged.values(), key=sort_key)[:20]
+
+
+def valid_region_row(row):
+    region_name = str(row.get("region_name") or "").strip()
+    region_code = str(row.get("region_code") or "").strip().lower()
+    if not region_name or set(region_name) <= {"?"}:
+        return False
+    if region_code in {"unknown", "datefix"}:
+        return False
+    return True
 
 
 def feedback_rows():
@@ -1357,6 +1432,7 @@ def operator_device_list():
             d.online_status,
             d.firmware_version,
             d.last_active,
+            d.device_name,
             b.user_id,
             b.custom_device_name,
             COALESCE(p.nickname, u.nickname, u.username) AS owner_name
@@ -1372,7 +1448,7 @@ def operator_device_list():
             {
                 "deviceId": str(row.get("device_id")),
                 "deviceSn": row.get("device_number") or "",
-                "deviceName": row.get("custom_device_name") or row.get("device_number") or "",
+                "deviceName": row.get("device_name") or row.get("custom_device_name") or row.get("device_number") or "",
                 "modelName": row.get("model_name") or "",
                 "ownerName": row.get("owner_name") or "",
                 "userId": str(row.get("user_id")) if row.get("user_id") is not None else "",
@@ -1493,6 +1569,10 @@ def rename_device():
     body = request.get_json(silent=True) or {}
     device_id = str(body.get("deviceId") or current_device()["deviceId"])
     name = str(body.get("name") or body.get("deviceName") or "客厅音箱").strip()
+    mysql_exec(
+        "UPDATE device SET device_name=%s, updated_at=NOW() WHERE device_id=%s",
+        (name, device_id),
+    )
     mysql_exec(
         "UPDATE user_device_binding SET custom_device_name=%s WHERE device_id=%s",
         (name, device_id),
@@ -2175,6 +2255,106 @@ def _validate_role(role):
     return role if role in ROLE_NAME_MAP else None
 
 
+def _nullable_text(value):
+    text = str(value or "").strip()
+    return text or None
+
+
+def _admin_db_row(username):
+    username = str(username or "").strip()
+    if not username:
+        return None
+    return mysql_one(
+        "SELECT admin_id, username, status FROM admin_user WHERE username=%s LIMIT 1",
+        (username,),
+    )
+
+
+def _insert_admin_user_from_body(body, username, password, role, real_name):
+    job_no = _nullable_text(body.get("jobNo"))
+    position = _nullable_text(body.get("position")) or ROLE_NAME_MAP[role]
+    phone = _nullable_text(body.get("phone"))
+    email = _nullable_text(body.get("email"))
+    admin_id = mysql_exec(
+        """
+        INSERT INTO admin_user
+            (username, password_hash, role, status, real_name, job_no,
+             position, phone, email, is_super_admin, created_at, updated_at)
+        VALUES
+            (%s, %s, %s, 1, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        """,
+        (
+            username,
+            password,
+            role,
+            real_name,
+            job_no,
+            position,
+            phone,
+            email,
+            1 if role == "super_admin" else 0,
+        ),
+        fetch_last_id=True,
+    )
+    if not admin_id:
+        return None
+    return {
+        "adminId": admin_id,
+        "username": username,
+        "password": password,
+        "role": role,
+        "roleName": ROLE_NAME_MAP[role],
+        "realName": real_name,
+        "jobNo": job_no or "-",
+        "position": position,
+        "phone": phone or "",
+        "email": email or "",
+        "status": "enabled",
+    }
+
+
+def _update_admin_user_from_body(admin, body):
+    username = str(admin.get("username") or "").strip()
+    db_row = _admin_db_row(username)
+    if not db_row or not db_row.get("admin_id"):
+        return False
+    fields = []
+    params = []
+    password = str(body.get("password", "")).strip()
+    role = str(body.get("role", "")).strip()
+    if password:
+        fields.append("password_hash=%s")
+        params.append(password)
+    if role:
+        fields.append("role=%s")
+        params.append(role)
+        fields.append("is_super_admin=%s")
+        params.append(1 if role == "super_admin" else 0)
+        if not _nullable_text(body.get("position")):
+            fields.append("position=%s")
+            params.append(ROLE_NAME_MAP[role])
+    mapping = {
+        "realName": "real_name",
+        "jobNo": "job_no",
+        "position": "position",
+        "phone": "phone",
+        "email": "email",
+    }
+    for form_key, column in mapping.items():
+        if form_key in body:
+            fields.append(f"{column}=%s")
+            params.append(_nullable_text(body.get(form_key)))
+    if not fields:
+        return True
+    fields.append("updated_at=NOW()")
+    params.append(db_row.get("admin_id"))
+    updated = mysql_exec(
+        f"UPDATE admin_user SET {', '.join(fields)} WHERE admin_id=%s",
+        tuple(params),
+    )
+    return bool(updated is not False)
+
+
 @admin_bp.post("/super/users/create")
 @require_admin("super")
 def admin_user_create():
@@ -2188,8 +2368,13 @@ def admin_user_create():
         return response_error(400, "创建失败", "用户名和密码不能为空。")
     if not role:
         return response_error(400, "创建失败", "请选择有效的角色。")
-    if find_admin(username):
+    if find_admin(username) or _admin_db_row(username):
         return response_error(409, "创建失败", "该用户名已存在。")
+
+    db_record = _insert_admin_user_from_body(body, username, password, role, real_name)
+    if db_record:
+        write_admin_audit("create_admin_user", "用户管理", "新增后台账号", username, "success", "", params={"role": role})
+        return response_ok(public_admin_info(db_record, include_private=True), "账号已创建")
 
     overlay = admin_accounts_overlay()
     accounts = dict(overlay["accounts"])
@@ -2233,6 +2418,19 @@ def admin_user_update():
             if len(supers) <= 1:
                 return response_error(400, "更新失败", "至少需保留一个超级管理员。")
 
+    if _update_admin_user_from_body(admin, body):
+        record = dict(admin)
+        if new_password:
+            record["password"] = new_password
+        if new_role:
+            record["role"] = new_role
+            record["roleName"] = ROLE_NAME_MAP[new_role]
+        for key in ("realName", "phone", "email", "jobNo", "position"):
+            if key in body and body.get(key) is not None:
+                record[key] = str(body.get(key)).strip()
+        write_admin_audit("update_admin_user", "用户管理", "修改后台账号", username, "success", "", params={"role": record.get("role")})
+        return response_ok(public_admin_info(record, include_private=True), "账号已更新")
+
     overlay = admin_accounts_overlay()
     accounts = dict(overlay["accounts"])
     record = dict(accounts.get(username) or admin)
@@ -2265,6 +2463,15 @@ def admin_user_delete():
         supers = [a for a in all_admins().values() if a.get("role") == "super_admin"]
         if len(supers) <= 1:
             return response_error(400, "删除失败", "至少需保留一个超级管理员。")
+
+    db_row = _admin_db_row(username)
+    if db_row and db_row.get("admin_id"):
+        mysql_exec(
+            "UPDATE admin_user SET status=0, updated_at=NOW() WHERE admin_id=%s",
+            (db_row.get("admin_id"),),
+        )
+        write_admin_audit("delete_admin_user", "用户管理", "删除后台账号", username, "success")
+        return response_ok(None, "账号已删除")
 
     overlay = admin_accounts_overlay()
     accounts = {u: r for u, r in overlay["accounts"].items() if u != username}
@@ -2719,6 +2926,7 @@ def market_segments():
                avg_play_count, avg_pay_amount, retention_rate
         FROM user_value_segment_daily
         WHERE stat_date = (SELECT MAX(stat_date) FROM user_value_segment_daily)
+          AND segment_code IN ('high', 'normal', 'low')
         ORDER BY user_count DESC, segment_code ASC
         """
     )
@@ -2739,6 +2947,7 @@ def market_segments():
                 0 AS avg_pay_amount,
                 COUNT(CASE WHEN active_level='high' THEN 1 END) / GREATEST(COUNT(*), 1) AS retention_rate
             FROM user_profile
+            WHERE value_level IN ('high', 'normal', 'low') OR value_level IS NULL OR value_level = ''
             GROUP BY COALESCE(value_level, 'normal')
             ORDER BY user_count DESC, segment_code ASC
             """
@@ -2932,11 +3141,14 @@ def device_alerts():
 
     task_rows = mysql_all(
         """
-        SELECT task_id, task_no, device_id, target_version, status, fail_reason, updated_at, created_at
-        FROM device_firmware_update_task
-        WHERE COALESCE(status, '') IN ('failed', 'fail', 'error')
-           OR COALESCE(fail_reason, '') NOT IN ('', '-')
-        ORDER BY updated_at DESC, created_at DESC, task_id DESC
+        SELECT t.task_id, t.task_no, t.device_id, t.target_version, t.status,
+               t.fail_reason, t.updated_at, t.created_at,
+               d.device_name, d.device_number, d.model_name
+        FROM device_firmware_update_task t
+        LEFT JOIN device d ON d.device_id = t.device_id
+        WHERE COALESCE(t.status, '') IN ('failed', 'fail', 'error')
+           OR COALESCE(t.fail_reason, '') NOT IN ('', '-')
+        ORDER BY t.updated_at DESC, t.created_at DESC, t.task_id DESC
         LIMIT 20
         """
     )
@@ -2945,32 +3157,11 @@ def device_alerts():
             "alertId": f"firmware-{row.get('task_id')}",
             "level": "critical",
             "title": row.get("fail_reason") or f"固件升级失败：{row.get('target_version') or '-'}",
-            "deviceName": f"device {row.get('device_id')}" if row.get("device_id") else "全部设备",
+            "deviceName": row.get("device_name") or row.get("device_number") or row.get("model_name") or (f"device {row.get('device_id')}" if row.get("device_id") else "全部设备"),
             "status": "open",
             "createdAt": fmt_dt(row.get("updated_at") or row.get("created_at")),
         }
         for row in task_rows
-    ])
-
-    feedback_alert_rows = mysql_all(
-        """
-        SELECT feedback_id, feedback_no, title, content, priority, created_at
-        FROM user_feedback
-        WHERE COALESCE(status, 'open') IN ('open', 'pending')
-        ORDER BY FIELD(priority, 'high', 'normal', 'low') ASC, created_at DESC, feedback_id DESC
-        LIMIT 20
-        """
-    )
-    rows.extend([
-        {
-            "alertId": f"feedback-{row.get('feedback_no') or row.get('feedback_id')}",
-            "level": "warning" if row.get("priority") != "high" else "critical",
-            "title": row.get("title") or row.get("content") or "待处理用户反馈",
-            "deviceName": "用户反馈",
-            "status": "open",
-            "createdAt": fmt_dt(row.get("created_at")),
-        }
-        for row in feedback_alert_rows
     ])
 
     rows = sorted(
@@ -2978,7 +3169,7 @@ def device_alerts():
         key=lambda item: (0 if item.get("level") == "critical" else 1, item.get("createdAt") or ""),
         reverse=False,
     )[:50]
-    total = sum(summary_counts.values())
+    total = summary_counts.get("logAlerts", 0) + summary_counts.get("offlineDevices", 0) + summary_counts.get("failedFirmwareTasks", 0)
     return response_ok({"total": total or len(rows), "summary": summary_counts, "list": rows})
 
 

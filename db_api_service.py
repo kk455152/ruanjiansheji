@@ -1,5 +1,5 @@
 # db_api_service.py
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import re
 import time
@@ -965,11 +965,12 @@ FRONT_DATA_CATALOG.extend([
     {"group": "决策驾驶舱", "title": "播放次数 / 活跃用户 / 活跃设备 / 平均播放时长", "frontend": "决策驾驶舱 / cards", "api": "/api/admin/super/decision/summary", "table": "daily_stats", "fields": ["stat_date", "total_play_count", "unique_user_count", "unique_device_count", "avg_play_duration_seconds"], "operation": "读取 daily_stats 最新日期；改 play_history 后需要运行每日汇总才会更新这些卡片。"},
     {"group": "决策驾驶舱", "title": "播放趋势", "frontend": "决策驾驶舱 / trend", "api": "/api/admin/super/decision/summary", "table": "daily_stats", "fields": ["stat_date", "total_play_count"], "operation": "按 stat_date 展示最近日报播放趋势；新增历史播放记录后运行每日汇总可补出对应日期趋势。"},
     {"group": "决策驾驶舱", "title": "异常风险提示", "frontend": "决策驾驶舱 / risks", "api": "/api/admin/super/decision/summary", "table": "system_config", "fields": ["config_group", "config_key", "config_name", "config_value", "config_type", "description"], "operation": "读取 config_group='decision_risk' 的配置项；新增配置行即可增加风险提示。"},
-    {"group": "营销洞察", "title": "新增-绑定-首播-7日活跃漏斗", "frontend": "营销洞察 / funnels", "api": "/api/admin/market/insights", "table": "user", "fields": ["user_id", "created_at"], "operation": "漏斗按近 30 天新增用户逐级推导：新增用户 -> 已绑定设备 -> 绑定后完成首播 -> 首播后跨天且最近 7 天仍播放。"},
-    {"group": "营销洞察", "title": "绑定设备漏斗步骤", "frontend": "营销洞察 / 绑定设备", "api": "/api/admin/market/insights", "table": "user_device_binding", "fields": ["user_id", "device_id", "bind_time"], "operation": "绑定设备步骤来自 user_device_binding；bind_time 必须不早于用户创建时间且不晚于当前时间。"},
-    {"group": "营销洞察", "title": "首播 / 7日活跃漏斗步骤", "frontend": "营销洞察 / 首播与活跃", "api": "/api/admin/market/insights", "table": "play_history", "fields": ["user_id", "created_at", "play_duration"], "operation": "首播要求绑定后存在播放记录；7 日活跃要求该用户至少两个播放日期，且最后播放在最近 7 天内。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 新增用户", "frontend": "营销洞察 / 转化漏斗 / 新增用户", "api": "/api/admin/market/insights", "table": "user", "targetTable": "user", "relatedTables": ["user_device_binding", "play_history"], "fields": ["user_id", "created_at", "status"], "operation": "新增用户是最近 30 天内 user.created_at 的用户数。要增加就新增 user 行或把 created_at 改到最近 30 天；要减少就删除该 user 或改成 30 天以前。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 绑定设备", "frontend": "营销洞察 / 转化漏斗 / 绑定设备", "api": "/api/admin/market/insights", "table": "user_device_binding", "targetTable": "user_device_binding", "relatedTables": ["user", "device"], "fields": ["user_id", "device_id", "bind_time"], "operation": "绑定设备来自 user_device_binding。对应 user_id 必须是最近 30 天新增用户；bind_time 要晚于或等于 user.created_at。删除绑定行会减少绑定设备数量。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 完成首播", "frontend": "营销洞察 / 转化漏斗 / 完成首播", "api": "/api/admin/market/insights", "table": "play_history", "targetTable": "play_history", "relatedTables": ["user", "user_device_binding", "media_mapping"], "fields": ["user_id", "device_id", "mapping_id", "play_duration", "created_at"], "operation": "完成首播来自 play_history：最近 30 天新增且已绑定的 user_id，在绑定时间之后有至少 1 条播放记录就计入。要增加就在 play_history 新增该 user_id/device_id 的播放记录；要减少就删除该用户绑定后的播放记录。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 7日活跃", "frontend": "营销洞察 / 转化漏斗 / 7 日活跃", "api": "/api/admin/market/insights", "table": "play_history", "targetTable": "play_history", "relatedTables": ["user", "user_device_binding"], "fields": ["user_id", "created_at", "play_duration"], "operation": "7 日活跃来自 play_history：同一个 user_id 至少有两个不同播放日期，且最后一次播放在最近 7 天内。要增加就给该用户补一条最近 7 天播放记录，并保留另一个不同日期的播放记录。"},
     {"group": "营销洞察", "title": "运营建议", "frontend": "营销洞察 / recommendations", "api": "/api/admin/market/insights", "table": "system_config", "fields": ["config_group", "config_name", "config_value", "description"], "operation": "读取 config_group='market_recommendation'；新增配置即可增加建议文案。"},
-    {"group": "用户分群", "title": "分群饼图占比", "frontend": "用户分群 / segmentPie", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "fields": ["stat_date", "segment_code", "segment_name", "user_count"], "operation": "饼图占比=user_count/最新分群总人数；如果分群日报为空，接口会回退按 user_profile.value_level 实时分组。"},
+    {"group": "用户分群", "title": "分群饼图占比", "frontend": "用户分群 / segmentPie", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "targetTable": "user_profile", "relatedTables": ["user_value_segment_daily"], "fields": ["value_level"], "summaryFields": ["stat_date", "segment_code", "segment_name", "user_count"], "operation": "前端只展示 high、normal、low 三类。优先读 user_value_segment_daily 最新日期；源数据是 user_profile.value_level。误填 medium 后，改回 user_profile.value_level 并运行每日汇总，或删除/修正 user_value_segment_daily 里 segment_code=medium 的行。"},
     {"group": "设备运行", "title": "当前设备运行状态", "frontend": "设备管理 / runtime-status", "api": "/api/admin/operator/device/runtime-status", "table": "device", "fields": ["device_id", "online_status", "firmware_version", "last_active"], "operation": "基础信息来自 device；音量、电量、信号等运行值来自 Mongo runtime 文档，缺失时返回默认值。"},
     {"group": "设备运行", "title": "设备运行附加指标", "frontend": "设备详情 / 音量、电量、信号、网络", "api": "/api/admin/operator/device/runtime-status", "table": "MongoDB device_runtime", "fields": ["volume", "battery", "signal_strength", "current_network"], "operation": "修改 MongoDB 设备运行文档会影响详情运行指标；MySQL device 只保存基础设备信息。"},
     {"group": "设备运行", "title": "设备分组", "frontend": "设备分组 / groups", "api": "/api/admin/operator/device/groups", "table": "device", "fields": ["model_name", "online_status", "status", "firmware_version"], "operation": "按 model_name 聚合；onlineCount 使用统一在线口径，firmwareVersions 来自 device.firmware_version。"},
@@ -1064,7 +1065,10 @@ FRONT_DATA_CATALOG = [
     {"group": "用户分群", "title": "分群规模占比", "roles": ["super_admin", "market_admin"], "frontend": "用户分群 / 饼图", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "summaryTable": "user_value_segment_daily", "targetTable": "user_profile", "relatedTables": ["play_history", "sales_order"], "fields": ["value_level", "active_level"], "summaryFields": ["stat_date", "segment_code", "segment_name", "user_count"], "operation": "分群占比优先读取 user_value_segment_daily；源数据来自画像、播放和订单。"},
     {"group": "用户分群", "title": "用户分群列表", "roles": ["super_admin", "market_admin"], "frontend": "用户分群 / 表格", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "summaryTable": "user_value_segment_daily", "targetTable": "user_profile", "relatedTables": ["play_history", "sales_order"], "fields": ["value_level", "active_level"], "summaryFields": ["stat_date", "segment_name", "user_count", "active_user_count", "avg_play_count", "avg_pay_amount", "retention_rate"], "operation": "列表读取分群日报；调整画像等级、播放和订单后运行每日汇总。"},
 
-    {"group": "营销洞察", "title": "转化漏斗", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 转化漏斗", "api": "/api/admin/market/insights", "table": "user", "targetTable": "user", "relatedTables": ["user_device_binding", "play_history"], "fields": ["user_id", "created_at"], "operation": "漏斗按新增用户、绑定设备、首播和 7 日活跃逐级计算。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 新增用户", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 转化漏斗 / 新增用户", "api": "/api/admin/market/insights", "table": "user", "targetTable": "user", "relatedTables": ["user_device_binding", "play_history"], "fields": ["user_id", "created_at", "status"], "operation": "新增用户是最近 30 天内 user.created_at 的用户数。要增加就新增 user 行或把 created_at 改到最近 30 天；要减少就删除该 user 或改成 30 天以前。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 绑定设备", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 转化漏斗 / 绑定设备", "api": "/api/admin/market/insights", "table": "user_device_binding", "targetTable": "user_device_binding", "relatedTables": ["user", "device"], "fields": ["user_id", "device_id", "bind_time"], "operation": "绑定设备来自 user_device_binding。对应 user_id 必须是最近 30 天新增用户；bind_time 要晚于或等于 user.created_at。删除绑定行会减少绑定设备数量。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 完成首播", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 转化漏斗 / 完成首播", "api": "/api/admin/market/insights", "table": "play_history", "targetTable": "play_history", "relatedTables": ["user", "user_device_binding", "media_mapping"], "fields": ["user_id", "device_id", "mapping_id", "play_duration", "created_at"], "operation": "完成首播来自 play_history：最近 30 天新增且已绑定的 user_id，在绑定时间之后有至少 1 条播放记录就计入。要增加就在 play_history 新增该 user_id/device_id 的播放记录；要减少就删除该用户绑定后的播放记录。"},
+    {"group": "营销洞察", "title": "转化漏斗 - 7日活跃", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 转化漏斗 / 7 日活跃", "api": "/api/admin/market/insights", "table": "play_history", "targetTable": "play_history", "relatedTables": ["user", "user_device_binding"], "fields": ["user_id", "created_at", "play_duration"], "operation": "7 日活跃来自 play_history：同一个 user_id 至少有两个不同播放日期，且最后一次播放在最近 7 天内。要增加就给该用户补一条最近 7 天播放记录，并保留另一个不同日期的播放记录。"},
     {"group": "营销洞察", "title": "运营建议", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 运营建议", "api": "/api/admin/market/insights", "table": "system_config", "targetTable": "system_config", "fields": ["config_group", "config_name", "config_value", "description"], "operation": "运营建议来自 system_config 中 market_recommendation 配置。"},
 
     {"group": "热歌排行", "title": "热歌排行列表", "roles": ["super_admin", "market_admin", "boss"], "frontend": "热歌排行 / 列表", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "summaryTable": "hot_ranking_daily", "targetTable": "play_history", "relatedTables": ["media_mapping"], "fields": ["mapping_id", "source_platform", "created_at"], "summaryFields": ["ranking_date", "target_name", "target_category", "metric_value", "rank_no"], "operation": "热歌排行读取 hot_ranking_daily；源数据来自 play_history 和 media_mapping。"},
@@ -1204,6 +1208,318 @@ def build_insert_statement(table, data):
         f"({column_sql}) VALUES ({placeholder_sql})"
     )
     return columns, values, sql
+
+
+def auto_increment_columns_for_table(cursor, table):
+    cursor.execute(
+        """
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND EXTRA LIKE '%%auto_increment%%'
+        """,
+        (table,),
+    )
+    return {row.get("COLUMN_NAME") for row in (cursor.fetchall() or []) if row.get("COLUMN_NAME")}
+
+
+FUNNEL_COHORT_FILTER = "u.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) AND u.created_at <= NOW()"
+
+
+def funnel_counts(cursor):
+    cursor.execute(f"SELECT COUNT(*) AS c FROM `user` u WHERE {FUNNEL_COHORT_FILTER}")
+    new_users = int((cursor.fetchone() or {}).get("c") or 0)
+    cursor.execute(
+        f"""
+        SELECT COUNT(DISTINCT u.user_id) AS c
+        FROM `user` u
+        JOIN user_device_binding b ON b.user_id = u.user_id
+        WHERE {FUNNEL_COHORT_FILTER}
+          AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+          AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+        """
+    )
+    bound_users = int((cursor.fetchone() or {}).get("c") or 0)
+    cursor.execute(
+        f"""
+        SELECT COUNT(*) AS c
+        FROM (
+            SELECT u.user_id
+            FROM `user` u
+            JOIN user_device_binding b ON b.user_id = u.user_id
+            JOIN play_history ph ON ph.user_id = u.user_id
+            WHERE {FUNNEL_COHORT_FILTER}
+              AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+              AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+              AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+              AND ph.created_at <= NOW()
+            GROUP BY u.user_id
+        ) x
+        """
+    )
+    first_play_users = int((cursor.fetchone() or {}).get("c") or 0)
+    cursor.execute(
+        f"""
+        SELECT COUNT(*) AS c
+        FROM (
+            SELECT u.user_id, MIN(ph.created_at) AS first_play_at,
+                   MAX(ph.created_at) AS last_play_at,
+                   COUNT(DISTINCT DATE(ph.created_at)) AS play_days
+            FROM `user` u
+            JOIN user_device_binding b ON b.user_id = u.user_id
+            JOIN play_history ph ON ph.user_id = u.user_id
+            WHERE {FUNNEL_COHORT_FILTER}
+              AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+              AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+              AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+              AND ph.created_at <= NOW()
+            GROUP BY u.user_id
+            HAVING play_days >= 2
+               AND last_play_at >= DATE_ADD(first_play_at, INTERVAL 1 DAY)
+               AND last_play_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ) x
+        """
+    )
+    retained_users = int((cursor.fetchone() or {}).get("c") or 0)
+    return {
+        "newUsers": new_users,
+        "boundUsers": min(bound_users, new_users),
+        "firstPlayUsers": min(first_play_users, bound_users, new_users),
+        "retainedUsers": min(retained_users, first_play_users, bound_users, new_users),
+    }
+
+
+def ensure_quick_media_mapping(cursor):
+    cursor.execute("SELECT mapping_id FROM media_mapping ORDER BY mapping_id ASC LIMIT 1")
+    row = cursor.fetchone()
+    if row and row.get("mapping_id"):
+        return row.get("mapping_id")
+    external_id = f"quick-song-{int(time.time())}"
+    cursor.execute(
+        """
+        INSERT INTO media_mapping
+            (user_id, song_title, artist, platform, external_id, cover_url)
+        VALUES
+            (NULL, '快捷首播歌曲', '系统生成', '网易云音乐', %s, 'https://cdn.example.com/quick-song.jpg')
+        """,
+        (external_id,),
+    )
+    return cursor.lastrowid
+
+
+def create_quick_user(cursor, index):
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    created_at = datetime.now() - timedelta(days=1)
+    username = f"funnel_user_{stamp}_{index}"
+    cursor.execute(
+        """
+        INSERT INTO `user`
+            (username, password_hash, phone, created_at, nickname, avatar, email, status, last_login_at)
+        VALUES
+            (%s, '123456', %s, %s, %s, '', %s, 'active', %s)
+        """,
+        (
+            username,
+            f"17{stamp[-9:]}",
+            created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            f"漏斗用户{stamp[-6:]}",
+            f"{username}@smart-speaker.local",
+            created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        ),
+    )
+    return cursor.lastrowid, created_at
+
+
+def create_quick_device(cursor, index):
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+    device_number = f"SPK-QF-{stamp[-10:]}-{index}"
+    now_text = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        """
+        INSERT INTO device
+            (device_number, model_name, status, firmware_version, last_active,
+             created_at, device_name, device_type, online_status, ip_address,
+             hardware_version, location)
+        VALUES
+            (%s, 'A1', 1, 'v1.0.0', %s, %s, '漏斗音箱', 'speaker',
+             'online', '192.168.10.88', 'HW-A1', '快捷漏斗')
+        """,
+        (device_number, now_text, now_text),
+    )
+    return cursor.lastrowid
+
+
+def create_quick_binding(cursor, user_id, user_created_at, index):
+    device_id = create_quick_device(cursor, index)
+    bind_at = max(user_created_at + timedelta(hours=1), datetime.now() - timedelta(hours=6))
+    cursor.execute(
+        """
+        INSERT IGNORE INTO user_device_binding
+            (user_id, device_id, custom_device_name, is_primary, default_room, current_network, bind_time)
+        VALUES
+            (%s, %s, '漏斗音箱', 1, '客厅', 'QuickNet-5G', %s)
+        """,
+        (user_id, device_id, bind_at.strftime("%Y-%m-%d %H:%M:%S")),
+    )
+    return device_id, bind_at
+
+
+def users_without_valid_binding(cursor, limit):
+    cursor.execute(
+        f"""
+        SELECT u.user_id, u.created_at
+        FROM `user` u
+        LEFT JOIN user_device_binding b
+          ON b.user_id = u.user_id
+         AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+         AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+        WHERE {FUNNEL_COHORT_FILTER}
+          AND b.user_id IS NULL
+        ORDER BY u.created_at DESC, u.user_id DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    return cursor.fetchall() or []
+
+
+def bound_users_without_first_play(cursor, limit):
+    cursor.execute(
+        f"""
+        SELECT u.user_id, u.created_at, b.device_id, b.bind_time
+        FROM `user` u
+        JOIN user_device_binding b ON b.user_id = u.user_id
+        LEFT JOIN play_history ph
+          ON ph.user_id = u.user_id
+         AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+         AND ph.created_at <= NOW()
+        WHERE {FUNNEL_COHORT_FILTER}
+          AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+          AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+        GROUP BY u.user_id, u.created_at, b.device_id, b.bind_time
+        HAVING COUNT(ph.history_id) = 0
+        ORDER BY u.user_id DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    return cursor.fetchall() or []
+
+
+def first_play_users_without_retention(cursor, limit):
+    cursor.execute(
+        f"""
+        SELECT u.user_id, COALESCE(MIN(b.device_id), 0) AS device_id,
+               MIN(COALESCE(b.bind_time, u.created_at)) AS bind_time,
+               MIN(ph.created_at) AS first_play_at,
+               MAX(ph.created_at) AS last_play_at,
+               COUNT(DISTINCT DATE(ph.created_at)) AS play_days
+        FROM `user` u
+        JOIN user_device_binding b ON b.user_id = u.user_id
+        JOIN play_history ph ON ph.user_id = u.user_id
+        WHERE {FUNNEL_COHORT_FILTER}
+          AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+          AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+          AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+          AND ph.created_at <= NOW()
+        GROUP BY u.user_id
+        HAVING NOT (
+            play_days >= 2
+            AND last_play_at >= DATE_ADD(first_play_at, INTERVAL 1 DAY)
+            AND last_play_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        )
+        ORDER BY u.user_id DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    return cursor.fetchall() or []
+
+
+def add_play_history(cursor, user_id, device_id, mapping_id, played_at):
+    cursor.execute(
+        """
+        INSERT INTO play_history
+            (device_id, user_id, mapping_id, play_duration, created_at, style, source_platform)
+        VALUES
+            (%s, %s, %s, 210, %s, '快捷漏斗', '网易云音乐')
+        """,
+        (device_id, user_id, mapping_id, played_at.strftime("%Y-%m-%d %H:%M:%S")),
+    )
+
+
+@db_api.route("/funnel/quick-adjust", methods=["POST"])
+def quick_adjust_funnel():
+    body = request.get_json(silent=True) or {}
+    targets = {
+        "boundUsers": max(0, int(body.get("boundUsers") or 0)),
+        "firstPlayUsers": max(0, int(body.get("firstPlayUsers") or 0)),
+        "retainedUsers": max(0, int(body.get("retainedUsers") or 0)),
+    }
+    conn = None
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
+            before = funnel_counts(cursor)
+            max_target = max(targets.values())
+            created_users = 0
+            created_bindings = 0
+            created_plays = 0
+
+            if max_target > before["newUsers"]:
+                for i in range(max_target - before["newUsers"]):
+                    create_quick_user(cursor, i + 1)
+                    created_users += 1
+
+            current = funnel_counts(cursor)
+            need_bound = max(0, targets["boundUsers"] - current["boundUsers"])
+            candidates = users_without_valid_binding(cursor, need_bound)
+            for index in range(need_bound):
+                if index < len(candidates):
+                    row = candidates[index]
+                    user_id = row.get("user_id")
+                    created_at = row.get("created_at") or (datetime.now() - timedelta(days=1))
+                else:
+                    user_id, created_at = create_quick_user(cursor, index + 1)
+                    created_users += 1
+                create_quick_binding(cursor, user_id, created_at, index + 1)
+                created_bindings += 1
+
+            mapping_id = ensure_quick_media_mapping(cursor)
+            current = funnel_counts(cursor)
+            need_first = max(0, targets["firstPlayUsers"] - current["firstPlayUsers"])
+            candidates = bound_users_without_first_play(cursor, need_first)
+            for index, row in enumerate(candidates):
+                bind_time = row.get("bind_time") or datetime.now() - timedelta(hours=6)
+                add_play_history(cursor, row.get("user_id"), row.get("device_id"), mapping_id, bind_time + timedelta(hours=1))
+                created_plays += 1
+
+            current = funnel_counts(cursor)
+            need_retained = max(0, targets["retainedUsers"] - current["retainedUsers"])
+            candidates = first_play_users_without_retention(cursor, need_retained)
+            for row in candidates:
+                first_play_at = row.get("first_play_at") or datetime.now() - timedelta(days=2)
+                retained_at = max(datetime.now() - timedelta(days=1), first_play_at + timedelta(days=1))
+                add_play_history(cursor, row.get("user_id"), row.get("device_id"), mapping_id, retained_at)
+                created_plays += 1
+
+            after = funnel_counts(cursor)
+        conn.commit()
+        return success({
+            "before": before,
+            "after": after,
+            "createdUsers": created_users,
+            "createdBindings": created_bindings,
+            "createdPlayHistory": created_plays,
+        }, "转化漏斗已补齐")
+    except Exception as exc:
+        if conn:
+            conn.rollback()
+        return error(f"快捷调整转化漏斗失败: {exc}", 500)
+    finally:
+        if conn:
+            conn.close()
 
 
 def build_where_by_pk(config, values):
@@ -1390,6 +1706,21 @@ def uniquify_sample_record(table_key, data):
     return normalize_record(table_key, sample)
 
 
+def available_user_id_for_profile(cursor):
+    cursor.execute(
+        """
+        SELECT u.user_id
+        FROM `user` u
+        LEFT JOIN user_profile p ON p.user_id = u.user_id
+        WHERE p.user_id IS NULL
+        ORDER BY u.user_id DESC
+        LIMIT 1
+        """
+    )
+    row = cursor.fetchone() or {}
+    return row.get("user_id")
+
+
 def reorder_hot_ranking(cursor, ranking_date, ranking_type="song", scope_type="global", scope_code="global"):
     if not ranking_date:
         return
@@ -1539,9 +1870,12 @@ def existing_record_seed(cursor, config):
     return {column: row.get(column) for column in columns if column in row}
 
 
-def build_sample_record(cursor, config):
+def build_sample_record(cursor, config, table_key=None):
     # 复制一条真实记录做草稿，但时间列重置为当前时间，避免带入历史时间
-    return reset_sample_timestamps(existing_record_seed(cursor, config))
+    sample = reset_sample_timestamps(existing_record_seed(cursor, config))
+    if table_key == "user_profile":
+        sample["user_id"] = available_user_id_for_profile(cursor)
+    return sample
 
 
 def sample_mongo_document_from_collection(collection):
@@ -1560,6 +1894,13 @@ def mongo_collection_or_error(collection_name):
     if collection_name not in db.list_collection_names():
         return None, error(f"不支持的 MongoDB 集合: {collection_name}", 404)
     return db[collection_name], None
+
+
+def write_error_message(table_key, exc):
+    text = str(exc)
+    if table_key == "user_profile" and ("uk_user_profile_user" in text or "Duplicate entry" in text):
+        return "新增失败：这个 user_id 已经有用户画像了。请换一个没有画像的 user_id，或先在 user 表新增用户后再新增画像。"
+    return f"新增失败: {exc}"
 
 
 # =========================================================
@@ -2026,20 +2367,25 @@ def create_record(table_key):
     if not data:
         return error("没有可新增的字段", 400)
 
-    columns, values, sql = build_insert_statement(table, data)
-    if table_key == "daily_stats" and "stat_date" in columns:
-        update_columns = [column for column in columns if column != "stat_date"]
-        if update_columns:
-            update_sql = ", ".join(
-                f"{quote_identifier(column)} = VALUES({quote_identifier(column)})"
-                for column in update_columns
-            )
-            sql = f"{sql} ON DUPLICATE KEY UPDATE {update_sql}"
-
     conn = None
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
+            for column in auto_increment_columns_for_table(cursor, table):
+                data.pop(column, None)
+            if not data:
+                return error("没有可新增的字段", 400)
+
+            columns, values, sql = build_insert_statement(table, data)
+            if table_key == "daily_stats" and "stat_date" in columns:
+                update_columns = [column for column in columns if column != "stat_date"]
+                if update_columns:
+                    update_sql = ", ".join(
+                        f"{quote_identifier(column)} = VALUES({quote_identifier(column)})"
+                        for column in update_columns
+                    )
+                    sql = f"{sql} ON DUPLICATE KEY UPDATE {update_sql}"
+
             if table_key == "hot_ranking_daily":
                 prepare_hot_ranking_create(cursor, data)
                 columns, values, sql = build_insert_statement(table, data)
@@ -2057,7 +2403,7 @@ def create_record(table_key):
     except Exception as exc:
         if conn:
             conn.rollback()
-        return error(f"新增失败: {exc}", 500)
+        return error(write_error_message(table_key, exc), 500)
     finally:
         if conn:
             conn.close()
@@ -2081,9 +2427,11 @@ def sample_record(table_key):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
-            data = uniquify_sample_record(table_key, build_sample_record(cursor, config))
+            data = uniquify_sample_record(table_key, build_sample_record(cursor, config, table_key))
             if table_key == "user":
                 data = ensure_unique_user_sample(cursor, data)
+            if table_key == "user_profile" and not data.get("user_id"):
+                return error("没有可用于新增画像的用户：所有 user 都已经有 user_profile。请先在 user 表新增用户，再新增用户画像。", 400)
         return success(serialize_row(data), "real sample loaded")
     except Exception as exc:
         return error(f"real sample load failed: {exc}", 500)
