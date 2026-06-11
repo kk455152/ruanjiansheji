@@ -2216,7 +2216,23 @@ def update_record(table_key, pk_value):
             conn.close()
 
 
-def delete_referencing_rows(cursor, parent_table, parent_pk_column, parent_pk_value):
+def primary_key_columns_for_table(cursor, table):
+    cursor.execute(
+        """
+        SELECT COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = %s
+          AND CONSTRAINT_NAME = 'PRIMARY'
+        ORDER BY ORDINAL_POSITION
+        """,
+        (table,),
+    )
+    return [row.get("COLUMN_NAME") for row in (cursor.fetchall() or []) if row.get("COLUMN_NAME")]
+
+
+def delete_referencing_rows(cursor, parent_table, parent_pk_column, parent_pk_value, seen=None):
+    seen = seen or set()
     cursor.execute(
         """
         SELECT TABLE_NAME, COLUMN_NAME
@@ -2235,13 +2251,41 @@ def delete_referencing_rows(cursor, parent_table, parent_pk_column, parent_pk_va
         child_column = ref.get("COLUMN_NAME")
         if not child_table or not child_column:
             continue
-        cursor.execute(
-            f"DELETE FROM {quote_identifier(child_table)} "
-            f"WHERE {quote_identifier(child_column)} = %s",
-            (parent_pk_value,),
+        pk_columns = primary_key_columns_for_table(cursor, child_table)
+        if not pk_columns:
+            cursor.execute(
+                f"DELETE FROM {quote_identifier(child_table)} "
+                f"WHERE {quote_identifier(child_column)} = %s",
+                (parent_pk_value,),
+            )
+            if cursor.rowcount:
+                deleted[child_table] = deleted.get(child_table, 0) + cursor.rowcount
+            continue
+
+        select_sql = (
+            f"SELECT {', '.join(quote_identifier(column) for column in pk_columns)} "
+            f"FROM {quote_identifier(child_table)} "
+            f"WHERE {quote_identifier(child_column)} = %s"
         )
-        if cursor.rowcount:
-            deleted[child_table] = deleted.get(child_table, 0) + cursor.rowcount
+        cursor.execute(select_sql, (parent_pk_value,))
+        child_rows = cursor.fetchall() or []
+        for child_row in child_rows:
+            pk_values = tuple(child_row.get(column) for column in pk_columns)
+            row_key = (child_table, pk_values)
+            if row_key in seen:
+                continue
+            seen.add(row_key)
+            for pk_column, pk_value in zip(pk_columns, pk_values):
+                nested_deleted = delete_referencing_rows(cursor, child_table, pk_column, pk_value, seen)
+                for table_name, count in nested_deleted.items():
+                    deleted[table_name] = deleted.get(table_name, 0) + count
+            where_sql = " AND ".join(f"{quote_identifier(column)} = %s" for column in pk_columns)
+            cursor.execute(
+                f"DELETE FROM {quote_identifier(child_table)} WHERE {where_sql}",
+                pk_values,
+            )
+            if cursor.rowcount:
+                deleted[child_table] = deleted.get(child_table, 0) + cursor.rowcount
     return deleted
 
 
@@ -2277,9 +2321,7 @@ def delete_record(table_key, pk_value):
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
             old_hot_group = fetch_hot_ranking_group(cursor, pk_value) if table_key == "hot_ranking_daily" else None
-            child_deleted = {}
-            if table_key == "user":
-                child_deleted = delete_referencing_rows(cursor, table, pk_column, pk_value)
+            child_deleted = delete_referencing_rows(cursor, table, pk_column, pk_value)
             cursor.execute(sql, (pk_value,))
 
             if cursor.rowcount == 0:
@@ -2473,6 +2515,11 @@ def delete_composite_record(table_key):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
+            child_deleted = {}
+            for pk_column, pk_value in zip(config["pk"], pk_values):
+                nested_deleted = delete_referencing_rows(cursor, table, pk_column, pk_value)
+                for table_name, count in nested_deleted.items():
+                    child_deleted[table_name] = child_deleted.get(table_name, 0) + count
             cursor.execute(sql, params)
 
             if cursor.rowcount == 0:
@@ -2480,7 +2527,7 @@ def delete_composite_record(table_key):
                 return error("数据不存在", 404)
 
         conn.commit()
-        return success(None, "删除成功")
+        return success({"deletedChildren": child_deleted}, "删除成功")
     except Exception as exc:
         if conn:
             conn.rollback()

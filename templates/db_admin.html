@@ -1592,13 +1592,17 @@
     }
 
     async function deleteMysqlRow(row) {
-      if (!confirm("确定删除这条 MySQL 记录吗？")) return;
+      if (!confirm("确定删除这条 MySQL 记录吗？如果其它表引用了它，维护接口会先删除这些引用明细，再删除当前记录。")) return;
       try {
-        await api(mysqlDeleteUrl(row), { method: "DELETE" });
+        const deleted = await api(mysqlDeleteUrl(row), { method: "DELETE" });
+        const children = deleted?.deletedChildren || {};
+        const childText = Object.entries(children)
+          .map(([table, count]) => `${table} ${count} 行`)
+          .join("，");
         state.mysql.rows = state.mysql.rows.filter((item) => !sameMysqlPk(item, row));
         renderMysqlTable();
-        setStatus("删除成功，正在刷新列表...");
-        await refreshAfterMysqlChange("删除成功", row);
+        setStatus(childText ? `删除成功，已同步删除引用明细：${childText}。正在刷新列表...` : "删除成功，正在刷新列表...");
+        await refreshAfterMysqlChange(childText ? `删除成功，已同步删除引用明细：${childText}` : "删除成功", row);
       } catch (err) {
         setStatus(`删除失败：${err.message}`);
         alert(`删除失败：${err.message}`);
