@@ -306,7 +306,10 @@ def public_admin_info(admin, include_private=False):
     ]
     if include_private:
         keys += ["phone", "email", "wechatOpenId"]
-    return {key: admin.get(key) for key in keys if key in admin}
+    info = {key: admin.get(key) for key in keys if key in admin}
+    info["permissions"] = effective_role_permissions(admin.get("role"))
+    info["permissionsUpdatedAt"] = role_permissions_updated_at()
+    return info
 
 
 def sign_token(admin):
@@ -346,6 +349,19 @@ def bearer_token():
     return auth or None
 
 
+def request_permission_keys():
+    path = request.path
+    for prefixes, permissions in API_PERMISSION_RULES:
+        if any(path.startswith(prefix) for prefix in prefixes):
+            return permissions
+    return ()
+
+
+def admin_has_any_permission(admin, permissions):
+    granted = set(effective_role_permissions(admin.get("role")))
+    return any(permission in granted for permission in permissions)
+
+
 def require_admin(*scopes):
     def decorator(func):
         @wraps(func)
@@ -354,9 +370,14 @@ def require_admin(*scopes):
             if not admin:
                 return response_error(401, "未登录", "请先登录后台管理系统")
 
-            allowed = ROLE_SCOPES.get(admin["role"], set())
-            if scopes and not any(scope in allowed for scope in scopes):
-                return response_error(403, "无权限访问", "当前账号无权访问该后台接口")
+            permission_keys = request_permission_keys()
+            if permission_keys:
+                if not admin_has_any_permission(admin, permission_keys):
+                    return response_error(403, "无权限访问", "当前账号无权访问该功能模块")
+            else:
+                allowed = ROLE_SCOPES.get(admin["role"], set())
+                if scopes and not any(scope in allowed for scope in scopes):
+                    return response_error(403, "无权限访问", "当前账号无权访问该后台接口")
 
             g.admin = admin
             return func(*args, **kwargs)
@@ -2022,11 +2043,72 @@ DEFAULT_ROLE_DESCRIPTIONS = {
 }
 
 
-def role_permissions_for_display(role, permissions=None):
+def ensure_required_role_permissions(role, permissions):
+    if role != "super_admin" and "account" in PERMISSION_CATALOG and "account" not in permissions:
+        return [*permissions, "account"]
+    return permissions
+
+
+def role_permissions_for_display(role, permissions=None, allow_empty=False):
     if role == "super_admin":
         return list(PERMISSION_CATALOG.keys())
+    if permissions is None:
+        return DEFAULT_ROLE_PERMISSIONS.get(role, [])
     cleaned = [p for p in (permissions or []) if p in PERMISSION_CATALOG]
-    return cleaned or DEFAULT_ROLE_PERMISSIONS.get(role, [])
+    if cleaned or allow_empty:
+        return ensure_required_role_permissions(role, cleaned)
+    return DEFAULT_ROLE_PERMISSIONS.get(role, [])
+
+
+def role_permission_overrides():
+    return ((load_state().get("admin_console", {}) or {}).get("rolePermissions") or {})
+
+
+def role_permissions_updated_at():
+    return ((load_state().get("admin_console", {}) or {}).get("rolePermissionsUpdatedAt") or "")
+
+
+def effective_role_permissions(role):
+    overrides = role_permission_overrides()
+    saved = overrides.get(role)
+    if isinstance(saved, list):
+        return role_permissions_for_display(role, saved, allow_empty=True)
+    return role_permissions_for_display(role)
+
+
+API_PERMISSION_RULES = [
+    (("/api/admin/super/roles",), ("roles",)),
+    (("/api/admin/super/users",), ("users",)),
+    (("/api/admin/super/system/config",), ("system",)),
+    (("/api/admin/super/security/logs",), ("audit",)),
+    (("/api/admin/super/notices",), ("notices",)),
+    (("/api/admin/super/monitor",), ("monitor", "overview")),
+    (("/api/admin/super/decision", "/api/admin/market/decision"), ("decision", "overview")),
+    (("/api/admin/super/overview",), ("overview",)),
+    (("/api/admin/super/trend",), ("trend", "overview")),
+    (("/api/admin/super/region", "/api/admin/market/region"), ("region", "overview")),
+    (("/api/admin/super/user-value", "/api/admin/market/user-value"), ("value", "overview")),
+    (("/api/admin/super/user-profile", "/api/admin/market/user-profile"), ("profile", "overview")),
+    (("/api/admin/operator/feedback/handle",), ("feedback",)),
+    (("/api/admin/super/feedback", "/api/admin/operator/feedback"), ("feedback", "overview")),
+    (("/api/admin/market/top-songs",), ("songs", "overview")),
+    (("/api/admin/market/retention",), ("trend", "overview")),
+    (("/api/admin/market/segments",), ("segments",)),
+    (("/api/admin/market/insights",), ("insights",)),
+    (("/api/admin/operator/device/groups",), ("groups",)),
+    (("/api/admin/operator/device/alerts",), ("alerts", "overview")),
+    (("/api/admin/operator/device/log",), ("logs", "trend", "overview")),
+    (("/api/admin/operator/device/rename", "/api/admin/operator/device/unbind"), ("devices",)),
+    (
+        (
+            "/api/admin/operator/device/list",
+            "/api/admin/operator/device/detail",
+            "/api/admin/operator/device/bound-user",
+            "/api/admin/operator/device/runtime-status",
+        ),
+        ("devices", "overview"),
+    ),
+]
 
 
 def merged_role_rows():
@@ -2037,7 +2119,7 @@ def merged_role_rows():
         row = dict(base)
         saved = overrides.get(base["role"])
         if isinstance(saved, list):
-            row["permissions"] = role_permissions_for_display(base["role"], saved)
+            row["permissions"] = role_permissions_for_display(base["role"], saved, allow_empty=True)
         else:
             row["permissions"] = role_permissions_for_display(base["role"], row.get("permissions"))
         rows.append(row)
@@ -2220,14 +2302,27 @@ def update_role_permissions():
 
     # 去重并按目录顺序归一化
     cleaned = list(PERMISSION_CATALOG.keys()) if role == "super_admin" else [key for key in PERMISSION_CATALOG if key in set(permissions)]
+    if role != "super_admin" and "account" not in cleaned:
+        cleaned.append("account")
 
     overrides = dict(admin_state_section("rolePermissions", {}))
     overrides[role] = cleaned
     save_admin_state_section("rolePermissions", overrides)
+    updated_at = fmt_dt(datetime.now())
+    save_admin_state_section("rolePermissionsUpdatedAt", updated_at)
+    affected_user_count = sum(1 for admin in all_admins().values() if admin.get("role") == role)
     write_admin_audit("update_role_permissions", "角色权限", "修改用户权限", role, "success", "", params={"permissions": cleaned})
 
     rows = merged_role_rows()
-    return response_ok({"list": rows}, "角色权限已更新")
+    return response_ok(
+        {
+            "list": rows,
+            "updatedAt": updated_at,
+            "affectedUserCount": affected_user_count,
+            "currentPermissions": effective_role_permissions(g.admin.get("role")),
+        },
+        "角色权限已更新",
+    )
 
 
 def audit_result_level(result_status, error_message=""):

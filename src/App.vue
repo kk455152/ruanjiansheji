@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive } from "vue"
+import { computed, nextTick, onMounted, onUnmounted, reactive } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { ApiError, API_BASE, login as loginApi, logout as logoutApi, request } from "./api"
 
@@ -33,6 +33,10 @@ const menus = [
   { key: "audit", label: "审计日志", icon: "fa-shield-halved", section: "系统管理", roles: ["super_admin"] },
   { key: "account", label: "个人信息", icon: "fa-circle-user", section: "账户", roles: ["super_admin", "market_admin", "operator_admin", "boss"] },
 ]
+
+const MENU_KEYS = new Set(menus.map((item) => item.key))
+const PROFILE_REFRESH_INTERVAL_MS = 30000
+let profileRefreshTimer = null
 
 const state = reactive({
   loginForm: {
@@ -83,7 +87,9 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"])
 const isLoggedIn = computed(() => Boolean(state.token && state.admin))
 const currentRole = computed(() => state.admin?.role || "")
 const currentRoleName = computed(() => state.admin?.roleName || roleNames[currentRole.value] || "未登录")
-const visibleMenus = computed(() => menus.filter((item) => item.roles.includes(currentRole.value)))
+const currentPermissions = computed(() => permissionsForRole(currentRole.value, state.admin?.permissions))
+const currentPermissionSet = computed(() => new Set(currentPermissions.value))
+const visibleMenus = computed(() => menus.filter((item) => currentPermissionSet.value.has(item.key)))
 const activeMenu = computed(() => menus.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
 const apiLabel = computed(() => API_BASE || (LOCAL_HOSTS.has(window.location.hostname) ? "服务器接口" : "当前站点"))
 
@@ -351,6 +357,18 @@ function setUpdated() {
   })
 }
 
+function permissionsForRole(role, permissions) {
+  if (Array.isArray(permissions)) {
+    return permissions.filter((key) => MENU_KEYS.has(key))
+  }
+  return menus.filter((item) => item.roles.includes(role)).map((item) => item.key)
+}
+
+function firstMenuForAdmin(admin) {
+  const keys = permissionsForRole(admin?.role || "", admin?.permissions)
+  return menus.find((item) => keys.includes(item.key))?.key || "overview"
+}
+
 function canUse(key) {
   return visibleMenus.value.some((item) => item.key === key)
 }
@@ -405,16 +423,14 @@ function applySession(data) {
   state.admin = data.adminInfo
   localStorage.setItem("admin_token", token)
   localStorage.setItem("admin_info", JSON.stringify(data.adminInfo))
-  state.active = firstMenuForRole(data.adminInfo.role)
-}
-
-function firstMenuForRole(role) {
-  return menus.find((item) => item.roles.includes(role))?.key || "overview"
+  state.active = firstMenuForAdmin(data.adminInfo)
+  startProfileRefresh()
 }
 
 function clearSession() {
   state.token = ""
   state.admin = null
+  stopProfileRefresh()
   localStorage.removeItem("admin_token")
   localStorage.removeItem("admin_info")
 }
@@ -426,6 +442,44 @@ async function handleLogout() {
   ElMessage.success("已退出登录")
 }
 
+async function refreshAdminProfile() {
+  const previousActive = state.active
+  const admin = await api("/api/admin/profile")
+  state.admin = admin
+  localStorage.setItem("admin_info", JSON.stringify(admin))
+  if (!canUse(state.active)) {
+    state.active = firstMenuForAdmin(admin)
+  }
+  return { admin, activeChanged: previousActive !== state.active }
+}
+
+async function syncAdminProfile() {
+  if (!isLoggedIn.value || state.loading) return
+  const before = JSON.stringify(state.admin?.permissions || [])
+  try {
+    const { activeChanged } = await refreshAdminProfile()
+    const after = JSON.stringify(state.admin?.permissions || [])
+    if (before !== after) {
+      ElMessage.info("当前账号权限已同步")
+      if (activeChanged) await loadPage(true)
+    }
+  } catch (error) {
+    console.warn(error)
+  }
+}
+
+function startProfileRefresh() {
+  stopProfileRefresh()
+  profileRefreshTimer = window.setInterval(syncAdminProfile, PROFILE_REFRESH_INTERVAL_MS)
+}
+
+function stopProfileRefresh() {
+  if (profileRefreshTimer) {
+    window.clearInterval(profileRefreshTimer)
+    profileRefreshTimer = null
+  }
+}
+
 async function restoreSession() {
   if (!state.token) {
     state.booting = false
@@ -433,9 +487,7 @@ async function restoreSession() {
   }
 
   try {
-    state.admin = await api("/api/admin/profile")
-    localStorage.setItem("admin_info", JSON.stringify(state.admin))
-    state.active = canUse(state.active) ? state.active : firstMenuForRole(state.admin.role)
+    await refreshAdminProfile()
     await loadPage(true)
   } catch {
     clearSession()
@@ -445,6 +497,10 @@ async function restoreSession() {
 }
 
 async function selectPage(key) {
+  if (!canUse(key)) {
+    state.active = firstMenuForAdmin(state.admin)
+    return
+  }
   if (state.active === key) return
   state.active = key
   state.detail = null
@@ -678,7 +734,12 @@ async function saveRolePermissions() {
       body: { role: state.roleEditor.role, permissions: state.roleEditor.selected },
     })
     if (data?.list) state.roles.list = data.list
-    ElMessage.success("角色权限已更新")
+    if (Array.isArray(data?.currentPermissions) && state.admin) {
+      state.admin.permissions = data.currentPermissions
+      state.admin.permissionsUpdatedAt = data.updatedAt || state.admin.permissionsUpdatedAt
+      localStorage.setItem("admin_info", JSON.stringify(state.admin))
+    }
+    ElMessage.success(`角色权限已更新，已应用到 ${data?.affectedUserCount ?? 0} 个账号`)
     state.roleEditor.open = false
   } catch (error) {
     ElMessage.error(error.message || "保存失败")
@@ -979,7 +1040,11 @@ function exportRows(filename, rows) {
   ElMessage.success("导出文件已生成")
 }
 
-onMounted(restoreSession)
+onMounted(async () => {
+  await restoreSession()
+  if (isLoggedIn.value) startProfileRefresh()
+})
+onUnmounted(stopProfileRefresh)
 </script>
 
 <template>
