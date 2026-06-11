@@ -93,7 +93,7 @@ FIELD_COMMENTS = {
     "real_name": ("真实姓名", "后台管理员姓名。"),
     "job_no": ("工号", "后台管理员工号。"),
     "position": ("岗位", "后台管理员岗位名称。"),
-    "wechat_open_id": ("微信OpenID", "微信快捷登录绑定标识，可为空。"),
+    "wechat_open_id": ("微信OpenID", "微信 OpenID 绑定标识，可为空。"),
     "is_super_admin": ("是否超级管理员", "1 表示超级管理员，0 表示普通管理员。"),
     "device_id": ("设备ID", "关联 device 表的设备主键。"),
     "device_number": ("设备编号", "设备唯一 SN/编号，如 SPK-A1-0001。"),

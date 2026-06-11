@@ -399,24 +399,6 @@ async function handleLogin() {
   }
 }
 
-async function handleWechatLogin() {
-  state.loading = true
-  try {
-    const data = await request("/api/admin/wechat-login", {
-      method: "POST",
-      token: "",
-      body: { code: "demo-wechat-code" },
-    })
-    applySession(data)
-    ElMessage.success("微信快捷登录成功")
-    await loadPage(true)
-  } catch (error) {
-    ElMessage.error(error.message || "微信登录失败")
-  } finally {
-    state.loading = false
-  }
-}
-
 function applySession(data) {
   const token = data.token || data.access_token
   state.token = token
@@ -1037,10 +1019,6 @@ onMounted(restoreSession)
       <button class="primary-button" :disabled="state.loading" @click="handleLogin">
         <i class="fa-solid fa-right-to-bracket"></i>
         {{ state.loading ? "登录中..." : "账号登录" }}
-      </button>
-      <button class="ghost-button wide" :disabled="state.loading" @click="handleWechatLogin">
-        <i class="fa-brands fa-weixin"></i>
-        微信快捷登录
       </button>
       <p class="api-note"><i class="fa-solid fa-link"></i> API：{{ apiLabel }}</p>
     </section>

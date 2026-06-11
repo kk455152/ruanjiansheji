@@ -432,7 +432,6 @@ def _config_default():
         "apiTimeoutSeconds": 15,
         "dataRetentionDays": 365,
         "tokenExpireSeconds": TOKEN_EXPIRE_SECONDS,
-        "wechatLoginEnabled": True,
         "apiErrorRate": 0.004,
         "storageUsage": "62%",
     }
@@ -982,26 +981,6 @@ def login():
     record_admin_login(admin)
     write_admin_audit("login", "认证", "登录系统", username, "success", "", admin)
     return response_ok({"token": token, "adminInfo": public_admin_info(admin)}, "登录成功")
-
-
-@admin_bp.post("/wechat-login")
-def wechat_login():
-    body = request.get_json(silent=True) or {}
-    if not str(body.get("code", "")).strip():
-        return response_error(400, "请求参数错误", "code 不能为空")
-
-    admin = DEFAULT_ADMINS["market"]
-    token = sign_token(admin)
-    return response_ok(
-        {
-            "access_token": token,
-            "token": token,
-            "token_type": "Bearer",
-            "expires_in": TOKEN_EXPIRE_SECONDS,
-            "adminInfo": public_admin_info(admin, include_private=True),
-        },
-        "微信登录成功",
-    )
 
 
 @admin_bp.get("/profile")
