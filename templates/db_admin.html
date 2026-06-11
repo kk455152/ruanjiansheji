@@ -256,10 +256,11 @@
     }
     .catalog-actions {
       display: flex;
+      gap: 8px;
       justify-content: stretch;
     }
     .catalog-actions button {
-      width: 100%;
+      flex: 1;
       padding: 8px 10px;
       white-space: nowrap;
     }
@@ -354,6 +355,39 @@
       color: #7a4a00;
       font-size: 12px;
       line-height: 1.5;
+    }
+    .unbind-check {
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid #cfe3d5;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    .unbind-check h3 {
+      margin: 0 0 8px;
+      color: #234934;
+      font-size: 15px;
+    }
+    .unbind-check p,
+    .unbind-check .unbind-result {
+      margin: 6px 0 10px;
+      color: #526d5d;
+      font-size: 12px;
+      line-height: 1.58;
+    }
+    .unbind-check-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .unbind-result.success {
+      color: #2f7d55;
+      font-weight: 600;
+    }
+    .unbind-result.warning {
+      color: #a45f00;
+      font-weight: 600;
     }
     .field-focus {
       outline: 2px solid #e3a338;
@@ -527,6 +561,7 @@
           <div class="catalog-tools">
             <input id="catalogKeyword" placeholder="搜索页面、数字、表名或字段">
             <button id="catalogFilterBtn" class="secondary">搜索</button>
+            <input id="dailyRunDate" type="date" title="每日汇总日期；留空则按今天">
             <button id="runDailyBtn">运行每日汇总</button>
           </div>
         </div>
@@ -549,8 +584,55 @@
         </div>
         <div id="quickAdjustResult" class="quick-adjust-result"></div>
       </div>
+      <div id="salesQuickPanel" class="quick-adjust" style="display:none">
+        <h3>快捷调整地区销售</h3>
+        <p>按地区和日期补已支付订单，保存后自动运行该日期每日汇总。适合把某个地区销售热力调大；调小请筛选并删除或改掉对应订单。</p>
+        <div class="quick-adjust-row">
+          <label>统计日期
+            <input id="salesQuickDate" type="date">
+          </label>
+          <label>省份 / 城市
+            <input id="salesQuickRegion" placeholder="例如 浙江省 / 杭州市">
+          </label>
+          <label>订单数
+            <input id="salesQuickCount" type="number" min="1" max="100" step="1" value="1">
+          </label>
+          <label>单笔金额
+            <input id="salesQuickAmount" type="number" min="0" step="0.01" value="199">
+          </label>
+          <button id="salesQuickBtn">补订单并汇总</button>
+        </div>
+        <div id="salesQuickResult" class="quick-adjust-result"></div>
+      </div>
+      <div id="userRegionQuickPanel" class="quick-adjust" style="display:none">
+        <h3>快捷调整地区用户</h3>
+        <p>按地区补用户和用户画像，保存后自动运行该日期每日汇总。地区用户热力和用户画像地区分布看的是 user_profile，不看 sales_order。</p>
+        <div class="quick-adjust-row">
+          <label>统计日期
+            <input id="userRegionQuickDate" type="date">
+          </label>
+          <label>省份 / 城市
+            <input id="userRegionQuickRegion" placeholder="例如 浙江省 / 杭州市">
+          </label>
+          <label>用户数
+            <input id="userRegionQuickCount" type="number" min="1" max="100" step="1" value="1">
+          </label>
+          <button id="userRegionQuickBtn">补用户并汇总</button>
+        </div>
+        <div id="userRegionQuickResult" class="quick-adjust-result"></div>
+      </div>
+      <div id="unbindCheckPanel" class="unbind-check" style="display:none">
+        <h3>设备操作核验</h3>
+        <p>输入前端设备列表里的设备编号，系统会先查 device 表拿到真实 device_id，再查 user_device_binding 是否还有绑定关系和改名后的 custom_device_name。</p>
+        <div class="unbind-check-row">
+          <input id="unbindDeviceKeyword" placeholder="例如 SPK-A2-0317 或 317">
+          <button id="unbindCheckBtn">核验解绑</button>
+          <button id="unbindLocateBtn" class="secondary" disabled>定位绑定行</button>
+        </div>
+        <div id="unbindCheckResult" class="unbind-result"></div>
+      </div>
       <div class="toolbar" id="mysqlToolbar">
-        <input id="quickKeyword" placeholder="关键词：用户名 / 设备名 / 编号 / 手机号">
+        <input id="quickKeyword" placeholder="输入行里任意内容：订单号 / 地区 / 用户名 / 设备编号 / 手机号">
         <input id="keyword" placeholder="MySQL 字段名，例如 username">
         <input id="keywordValue" placeholder="筛选值">
         <input id="rowLimit" type="number" min="1" max="500" value="500" title="最多显示 500 行">
@@ -714,7 +796,9 @@
       state.source = source;
       el("mysqlTab").classList.toggle("active", source === "mysql");
       el("mongoTab").classList.toggle("active", source === "mongo");
-      el("mysqlToolbar").style.display = source === "mysql" ? "flex" : "none";
+      el("mysqlToolbar").style.display = "flex";
+      el("keyword").style.display = source === "mysql" ? "block" : "none";
+      el("keywordValue").style.display = source === "mysql" ? "block" : "none";
       closeEditor();
       renderItems();
       const store = currentStore();
@@ -775,7 +859,7 @@
       const word = (state.catalogKeyword || "").trim().toLowerCase();
       const rows = state.catalog.filter((item) => {
         if (!word) return true;
-        return [item.group, item.title, item.frontend, item.api, item.table, ...(item.fields || []), item.operation]
+        return [item.group, item.title, item.frontend, item.api, item.table, ...(item.roles || []), ...(item.fields || []), item.operation]
           .some((value) => String(value || "").toLowerCase().includes(word));
       });
       el("catalogList").innerHTML = rows.map((item, index) => `
@@ -785,6 +869,7 @@
               <span class="catalog-group">${escapeHtml(item.group)}</span>
               <strong>${escapeHtml(item.title)}</strong>
             </div>
+            ${item.roles?.length ? `<div class="catalog-meta">${item.roles.map((role) => `<span>${escapeHtml(roleLabel(role))}</span>`).join("")}</div>` : ""}
             <div class="catalog-current">当前前端值：${escapeHtml(item.current || "正在读取或暂无数据")}</div>
             ${item.warning && !String(item.warning).startsWith("0 ") ? `<div class="catalog-warning">需要处理：${escapeHtml(item.warning)}</div>` : ""}
             ${isDerivedCatalogItem(item) ? `<div class="catalog-derived">${escapeHtml(derivedNotice(item))}</div>` : ""}
@@ -792,13 +877,23 @@
             <div class="catalog-route primary-route">${escapeHtml(routeLabel(item))}</div>
           </div>
           <div class="catalog-actions">
-            <button data-catalog-index="${index}">${escapeHtml(isDerivedCatalogItem(item) ? "去改原始表" : "去维护")}</button>
+            <button data-catalog-index="${index}" data-mode="source">${escapeHtml(isDerivedCatalogItem(item) ? "改源数据" : "去维护")}</button>
+            ${summaryTarget(item).key ? `<button class="secondary" data-catalog-index="${index}" data-mode="summary">看结果表</button>` : ""}
           </div>
         </div>
       `).join("") || "<p class='status'>没有匹配的前端数据项</p>";
       el("catalogList").querySelectorAll("[data-catalog-index]").forEach((btn) => {
-        btn.onclick = () => openCatalogTarget(rows[Number(btn.dataset.catalogIndex)]);
+        btn.onclick = () => openCatalogTarget(rows[Number(btn.dataset.catalogIndex)], btn.dataset.mode || "source");
       });
+    }
+
+    function roleLabel(role) {
+      return {
+        super_admin: "超级管理员",
+        market_admin: "市场分析管理员",
+        operator_admin: "普通管理员",
+        boss: "老板",
+      }[role] || role;
     }
 
     function splitTables(value) {
@@ -846,7 +941,7 @@
       const rawTable = firstRawTable(item);
       const related = (item.relatedTables || []).join(", ");
       if (rawTable) {
-        return `这是汇总计算结果。优先改 ${rawTable}${related ? ` 等原始表` : ""}，保存后点“运行每日汇总”。直接改汇总表只适合临时展示，后续重算会覆盖。`;
+        return `这是汇总计算结果。优先改 ${rawTable}${related ? ` 等原始表` : ""}；保存后系统会按记录日期自动运行每日汇总，手动点“运行每日汇总”也可以补跑。直接改汇总表只适合临时展示，后续重算会覆盖。`;
       }
       return "这是汇总计算结果，不建议直接改；应先改原始明细或调整 daily_stats_job.py 的统计口径，再运行每日汇总。";
     }
@@ -869,9 +964,33 @@
         || /播放次数|播放总量|播放趋势|热歌/.test(text);
     }
 
+    function supportsSalesQuickAdjust(item, target) {
+      if (!item || target?.source !== "mysql" || target?.key !== "sales_order") return false;
+      const text = `${item.group || ""} ${item.title || ""} ${item.frontend || ""} ${item.operation || ""}`;
+      return /销售|订单|sales|region_stats_daily|区域热力图/.test(text);
+    }
+
+    function supportsUserRegionQuickAdjust(item, target) {
+      if (!item || target?.source !== "mysql" || target?.key !== "user_profile") return false;
+      const text = `${item.group || ""} ${item.title || ""} ${item.frontend || ""} ${item.operation || ""}`;
+      return /地区|用户分布|用户画像|区域热力图|分群|用户价值/.test(text);
+    }
+
     function renderQuickAdjust(item, target) {
       const panel = el("quickAdjustPanel");
       const result = el("quickAdjustResult");
+      const salesPanel = el("salesQuickPanel");
+      const salesResult = el("salesQuickResult");
+      const userRegionPanel = el("userRegionQuickPanel");
+      const userRegionResult = el("userRegionQuickResult");
+
+      salesPanel.style.display = supportsSalesQuickAdjust(item, target) ? "block" : "none";
+      userRegionPanel.style.display = supportsUserRegionQuickAdjust(item, target) ? "block" : "none";
+      if (salesPanel.style.display === "block" && !el("salesQuickDate").value) el("salesQuickDate").value = yesterdayString();
+      if (userRegionPanel.style.display === "block" && !el("userRegionQuickDate").value) el("userRegionQuickDate").value = yesterdayString();
+      if (salesPanel.style.display === "none") salesResult.textContent = "";
+      if (userRegionPanel.style.display === "none") userRegionResult.textContent = "";
+
       if (!supportsPlayCountQuickAdjust(item, target)) {
         panel.style.display = "none";
         result.textContent = "";
@@ -880,6 +999,90 @@
       panel.style.display = "block";
       if (!el("quickStatDate").value) el("quickStatDate").value = yesterdayString();
       result.textContent = "提示：只能自动把播放总数调大；调小需要删除对应日期的 play_history 明细，避免误删真实记录。";
+    }
+
+    function supportsUnbindCheck(item, target) {
+      return target?.source === "mysql"
+        && target?.key === "user_device_binding";
+    }
+
+    function renderUnbindCheck(item, target) {
+      const panel = el("unbindCheckPanel");
+      const result = el("unbindCheckResult");
+      if (!supportsUnbindCheck(item, target)) {
+        panel.style.display = "none";
+        result.textContent = "";
+        el("unbindLocateBtn").disabled = true;
+        el("unbindLocateBtn").dataset.deviceId = "";
+        return;
+      }
+      panel.style.display = "block";
+      const currentText = (el("quickKeyword").value || el("keywordValue").value || "").trim();
+      if (currentText && !el("unbindDeviceKeyword").value) el("unbindDeviceKeyword").value = currentText;
+      result.className = "unbind-result";
+      result.textContent = "改名是否生效看 user_device_binding.custom_device_name；解绑是否成功看 user_device_binding 里是否还存在该 device_id。";
+    }
+
+    async function findDeviceForCheck(keyword) {
+      const text = String(keyword || "").trim();
+      if (!text) throw new Error("请先输入前端看到的设备编号或数字 ID");
+      const params = new URLSearchParams({ limit: "20", offset: "0", q: text });
+      const data = await api(`/api/db/device?${params.toString()}`);
+      const rows = data.list || [];
+      const exact = rows.find((row) =>
+        String(row.device_number || "").toLowerCase() === text.toLowerCase()
+        || String(row.device_id || "") === text
+      );
+      const device = exact || rows[0];
+      if (!device) throw new Error(`device 表里没有找到 ${text}`);
+      return device;
+    }
+
+    async function checkDeviceOperation() {
+      const result = el("unbindCheckResult");
+      const keyword = el("unbindDeviceKeyword").value.trim();
+      result.className = "unbind-result";
+      result.textContent = "正在核验 device 和 user_device_binding...";
+      el("unbindCheckBtn").disabled = true;
+      el("unbindLocateBtn").disabled = true;
+      el("unbindLocateBtn").dataset.deviceId = "";
+      try {
+        const device = await findDeviceForCheck(keyword);
+        const deviceId = device.device_id;
+        const params = new URLSearchParams({ limit: "20", offset: "0", device_id: String(deviceId) });
+        const bindingData = await api(`/api/db/user_device_binding?${params.toString()}`);
+        const bindings = bindingData.list || [];
+        el("unbindLocateBtn").dataset.deviceId = String(deviceId);
+        el("unbindLocateBtn").disabled = false;
+        if (!bindings.length) {
+          result.className = "unbind-result success";
+          result.textContent = `解绑成功：device 表仍有 ${device.device_number || keyword}，真实 device_id=${deviceId}；user_device_binding 里已经没有绑定行。`;
+          return;
+        }
+        const names = bindings.map((row) => row.custom_device_name || "(空)").join("，");
+        const users = bindings.map((row) => row.user_id).join("，");
+        result.className = "unbind-result warning";
+        result.textContent = `仍有绑定：${device.device_number || keyword} 的真实 device_id=${deviceId}，user_device_binding 还有 ${bindings.length} 行；user_id=${users}；当前改名值 custom_device_name=${names}。`;
+      } catch (err) {
+        result.className = "unbind-result warning";
+        result.textContent = `核验失败：${err.message}`;
+      } finally {
+        el("unbindCheckBtn").disabled = false;
+      }
+    }
+
+    async function locateDeviceBindingRows() {
+      const deviceId = el("unbindLocateBtn").dataset.deviceId;
+      if (!deviceId) return;
+      state.source = "mysql";
+      state.mysql.current = "user_device_binding";
+      el("keyword").value = "device_id";
+      el("keywordValue").value = deviceId;
+      el("quickKeyword").value = "";
+      setSource("mysql", true);
+      renderItems();
+      await loadRows();
+      setStatus(`已按真实 device_id=${deviceId} 定位 user_device_binding 绑定行；如果没有行，就表示解绑成功。`);
     }
 
     function catalogTarget(item) {
@@ -898,22 +1101,184 @@
       return { source: "mysql", key: table };
     }
 
+    function summaryTarget(item) {
+      if (item?.source === "mongo") return { source: "", key: "" };
+      const candidates = splitTables(item?.table).filter((table) => DERIVED_RESULT_TABLES.has(table));
+      const key = item?.summaryTable || candidates[0] || "";
+      return key ? { source: "mysql", key } : { source: "", key: "" };
+    }
+
     function maintenanceHint(item) {
       const related = (item.relatedTables || []).join(", ");
       const sourceText = related ? `；汇总类数据先改原始表（${related}），再运行每日汇总` : "";
       return `增加：新增有效记录，或把高亮数值字段调大${sourceText}。减少：删除无效记录，或把状态改为不参与统计/把高亮数值字段调小${sourceText}。`;
     }
 
+    function frontendMergeNotice(item, target) {
+      const api = String(item?.api || "");
+      const text = `${item?.group || ""} ${item?.title || ""} ${item?.frontend || ""} ${item?.operation || ""}`;
+      if (api.includes("/operator/device/logs") || /设备日志|鏃ュ織/.test(text)) {
+        return "前端设备日志不是 device_log 原表直出：后端会合并 device_log 原始日志、device 表动态生成的在线/离线日志、device_firmware_update_task 动态生成的固件任务日志，再按 createdAt 倒序分页。所以维护页看 device_log 只能看到原始日志；在线/离线看 device.online_status/status/last_active，固件日志看 device_firmware_update_task。";
+      }
+      if (api.includes("/operator/device/alerts") || /告警|alerts/.test(text)) {
+        return "前端设备告警不是单表直出：后端会合并 device_log 中 warning/error/alert 日志、device 表里的离线设备、device_firmware_update_task 里的失败任务、user_feedback 里的待处理反馈，再按严重级别和时间排序。维护时要按告警来源分别去这些表核验。";
+      }
+      return "";
+    }
+
+    function parseRegionInput(value) {
+      const raw = String(value || "").trim();
+      if (!raw) throw new Error("请填写省份 / 城市，例如 浙江省 / 杭州市");
+      const parts = raw.split(/[\/,，、\s]+/).map((part) => part.trim()).filter(Boolean);
+      const provinceName = parts[0] || raw;
+      const cityName = parts[1] || provinceName.replace(/省|市|自治区|特别行政区/g, "") + "市";
+      return {
+        provinceName,
+        cityName,
+        provinceCode: provinceName,
+        cityCode: cityName,
+      };
+    }
+
+    function uniqueSuffix() {
+      return `${Date.now()}${Math.floor(Math.random() * 100000).toString().padStart(5, "0")}`;
+    }
+
+    async function quickAdjustSalesRegion() {
+      const dateValue = el("salesQuickDate").value;
+      const count = Number(el("salesQuickCount").value);
+      const amount = Number(el("salesQuickAmount").value);
+      const result = el("salesQuickResult");
+      if (!dateValue) {
+        result.textContent = "请先选择统计日期。";
+        return;
+      }
+      if (!Number.isInteger(count) || count < 1 || count > 100) {
+        result.textContent = "订单数必须是 1 到 100 的整数。";
+        return;
+      }
+      if (!Number.isFinite(amount) || amount < 0) {
+        result.textContent = "单笔金额必须是大于等于 0 的数字。";
+        return;
+      }
+      el("salesQuickBtn").disabled = true;
+      try {
+        const region = parseRegionInput(el("salesQuickRegion").value);
+        const sample = await api("/api/db/sales_order/sample");
+        result.textContent = `正在补 ${count} 笔 ${region.provinceName}${region.cityName} 已支付订单...`;
+        for (let i = 0; i < count; i += 1) {
+          const suffix = uniqueSuffix();
+          const row = {
+            ...sample,
+            order_no: `QSO${suffix}${String(i + 1).padStart(3, "0")}`,
+            order_amount: amount,
+            pay_amount: amount,
+            order_status: "finished",
+            pay_status: "paid",
+            province_code: region.provinceCode,
+            province_name: region.provinceName,
+            city_code: region.cityCode,
+            city_name: region.cityName,
+            paid_at: randomTimeOnDate(dateValue, i),
+          };
+          await api("/api/db/sales_order", { method: "POST", body: row });
+        }
+        result.textContent = "订单已补完，正在重跑该日期每日汇总...";
+        await runDailyStats({
+          reloadRows: true,
+          statusPrefix: `已补 ${count} 笔地区销售订单`,
+          body: { date: dateValue },
+        });
+        result.textContent = `完成：${region.provinceName}${region.cityName} 已补 ${count} 笔订单，可点“看结果表”核验 region_stats_daily。`;
+      } catch (err) {
+        result.textContent = `快捷调整失败：${err.message}`;
+        setStatus(`快捷调整失败：${err.message}`);
+      } finally {
+        el("salesQuickBtn").disabled = false;
+      }
+    }
+
+    async function quickAdjustUserRegion() {
+      const dateValue = el("userRegionQuickDate").value;
+      const count = Number(el("userRegionQuickCount").value);
+      const result = el("userRegionQuickResult");
+      if (!dateValue) {
+        result.textContent = "请先选择统计日期。";
+        return;
+      }
+      if (!Number.isInteger(count) || count < 1 || count > 100) {
+        result.textContent = "用户数必须是 1 到 100 的整数。";
+        return;
+      }
+      el("userRegionQuickBtn").disabled = true;
+      try {
+        const region = parseRegionInput(el("userRegionQuickRegion").value);
+        const userSample = await api("/api/db/user/sample");
+        const profileSample = await api("/api/db/user_profile/sample");
+        result.textContent = `正在补 ${count} 个 ${region.provinceName}${region.cityName} 用户和画像...`;
+        for (let i = 0; i < count; i += 1) {
+          const suffix = uniqueSuffix();
+          const username = `quick_user_${suffix}_${i + 1}`;
+          const createdAt = randomTimeOnDate(dateValue, i);
+          const userRow = {
+            ...userSample,
+            username,
+            nickname: `快捷用户${suffix.slice(-6)}${i + 1}`,
+            phone: `139${String((Number(suffix.slice(-8)) + i) % 100000000).padStart(8, "0")}`,
+            email: `${username}@smart-speaker.local`,
+            status: "active",
+            created_at: createdAt,
+            last_login_at: createdAt,
+          };
+          await api("/api/db/user", { method: "POST", body: userRow });
+          const users = await api(`/api/db/user?${new URLSearchParams({ limit: "1", offset: "0", username }).toString()}`);
+          const userId = users.list?.[0]?.user_id;
+          if (!userId) throw new Error(`用户 ${username} 已创建但没有查到 user_id`);
+          const profileRow = {
+            ...profileSample,
+            user_id: userId,
+            nickname: userRow.nickname,
+            email: userRow.email,
+            age: profileSample.age || 28,
+            age_range: profileSample.age_range || "26-35",
+            province_code: region.provinceCode,
+            province_name: region.provinceName,
+            city_code: region.cityCode,
+            city_name: region.cityName,
+            active_level: profileSample.active_level || "high",
+            value_level: profileSample.value_level || "high",
+            bound_platforms: profileSample.bound_platforms || "netease",
+            user_status: "active",
+          };
+          await api("/api/db/user_profile", { method: "POST", body: profileRow });
+        }
+        result.textContent = "用户画像已补完，正在重跑该日期每日汇总...";
+        await runDailyStats({
+          reloadRows: true,
+          statusPrefix: `已补 ${count} 个地区用户画像`,
+          body: { date: dateValue },
+        });
+        result.textContent = `完成：${region.provinceName}${region.cityName} 已补 ${count} 个用户画像，可点“看结果表”核验 region_stats_daily。`;
+      } catch (err) {
+        result.textContent = `快捷调整失败：${err.message}`;
+        setStatus(`快捷调整失败：${err.message}`);
+      } finally {
+        el("userRegionQuickBtn").disabled = false;
+      }
+    }
+
     function renderMaintenanceGuide(item, target) {
       state.maintenance = { item, target };
       const guideFields = item.targetFields || item.fields || [];
       const related = (item.relatedTables || []).join(", ");
+      const mergeNotice = frontendMergeNotice(item, target);
       const guide = el("maintenanceGuide");
       guide.style.display = "block";
       guide.classList.toggle("derived-guide", isDerivedCatalogItem(item));
       guide.innerHTML = `
         <h3>${escapeHtml(item.group || "")} / ${escapeHtml(item.title || "")}</h3>
         ${isDerivedCatalogItem(item) ? `<div class="guide-alert">${escapeHtml(derivedNotice(item))}</div>` : ""}
+        ${mergeNotice ? `<div class="guide-alert">${escapeHtml(mergeNotice)}</div>` : ""}
         <p><strong>当前前端值：</strong>${escapeHtml(item.current || "暂无当前值")}。打开后黄色高亮列就是主要维护位置。</p>
         <p><strong>具体怎么改：</strong>${escapeHtml(item.operation || "")}</p>
         <div class="guide-grid">
@@ -925,11 +1290,11 @@
       `;
     }
 
-    async function openCatalogTarget(item) {
-      const target = catalogTarget(item);
+    async function openCatalogTarget(item, mode = "source") {
+      const target = mode === "summary" ? summaryTarget(item) : catalogTarget(item);
       if (!target.key) return;
       setView("table");
-      state.focusFields = item.targetFields || item.fields || [];
+      state.focusFields = mode === "summary" ? (item.summaryFields || []) : (item.targetFields || item.fields || []);
       if (state.source !== target.source) setSource(target.source, true);
       if (target.source === "mysql") {
         state.mysql.current = target.key;
@@ -940,8 +1305,9 @@
       renderItems();
       renderMaintenanceGuide(item, target);
       renderQuickAdjust(item, target);
+      renderUnbindCheck(item, target);
       await loadRows();
-      setStatus(`已定位：${item.title} / ${target.key}，黄色字段就是建议修改的位置`);
+      setStatus(`已定位：${item.title} / ${target.key}，${mode === "summary" ? "这里用于核验结果" : "黄色字段就是建议修改的位置"}`);
       scrollContentTop("smooth");
     }
 
@@ -951,6 +1317,9 @@
       state.maintenance = null;
       el("maintenanceGuide").style.display = "none";
       el("quickAdjustPanel").style.display = "none";
+      el("salesQuickPanel").style.display = "none";
+      el("userRegionQuickPanel").style.display = "none";
+      el("unbindCheckPanel").style.display = "none";
       closeEditor();
       renderItems();
       await loadRows();
@@ -984,13 +1353,17 @@
     async function loadMongoRows() {
       const store = state.mongo;
       if (!store.current) return;
-      const data = await api(`/api/db/mongo/${encodeURIComponent(store.current)}?limit=100&offset=0`);
+      const limit = Math.max(1, Math.min(500, Number(el("rowLimit").value || 500)));
+      const keyword = el("quickKeyword").value.trim();
+      const params = new URLSearchParams({ limit: String(limit), offset: "0" });
+      if (keyword) params.set("q", keyword);
+      const data = await api(`/api/db/mongo/${encodeURIComponent(store.current)}?${params.toString()}`);
       store.columns = data.columns || [];
       store.rows = data.list || [];
       renderMongoTable();
       applyMongoFieldFocus();
       el("tableTitle").innerHTML = `${escapeHtml(data.collection)} <small>${escapeHtml(MONGO_META[data.collection]?.label || "MongoDB collection")}</small>`;
-      setStatus(`MongoDB / ${data.collection}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
+      setStatus(`MongoDB / ${data.collection}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条${keyword ? `，关键词：${keyword}` : ""}`);
     }
 
     function renderMysqlTable() {
@@ -1199,7 +1572,7 @@
         await api(mysqlUpdateUrl(state.pk), { method: "PUT", body: data });
       }
       closeEditor();
-      await refreshAfterMysqlChange("保存成功");
+      await refreshAfterMysqlChange("保存成功", data);
     }
 
     async function saveMongoRow() {
@@ -1225,7 +1598,7 @@
         state.mysql.rows = state.mysql.rows.filter((item) => !sameMysqlPk(item, row));
         renderMysqlTable();
         setStatus("删除成功，正在刷新列表...");
-        await refreshAfterMysqlChange("删除成功");
+        await refreshAfterMysqlChange("删除成功", row);
       } catch (err) {
         setStatus(`删除失败：${err.message}`);
         alert(`删除失败：${err.message}`);
@@ -1265,10 +1638,29 @@
       renderCatalog();
     }
 
-    async function refreshAfterMysqlChange(prefix) {
+    function summaryDateFromRecord(record) {
+      const candidates = ["created_at", "paid_at", "stat_date", "ranking_date", "metric_date", "updated_at"];
+      for (const field of candidates) {
+        const value = String(record?.[field] || "").trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+      }
+      return "";
+    }
+
+    function dailySummaryBodyForRecord(record) {
+      const date = summaryDateFromRecord(record);
+      return date ? { date } : {};
+    }
+
+    async function refreshAfterMysqlChange(prefix, changedRecord = null) {
       if (DAILY_SUMMARY_TABLES.has(state.mysql.current)) {
-        setStatus(`${prefix}，正在运行每日汇总并刷新前端数据目录...`);
-        await runDailyStats({ reloadRows: true, statusPrefix: prefix });
+        const date = summaryDateFromRecord(changedRecord);
+        setStatus(`${prefix}，正在${date ? `按 ${date} ` : ""}运行每日汇总并刷新前端数据目录...`);
+        await runDailyStats({
+          reloadRows: true,
+          statusPrefix: prefix,
+          body: dailySummaryBodyForRecord(changedRecord),
+        });
         return;
       }
       await loadRows();
@@ -1290,7 +1682,8 @@
       el("runDailyBtn").disabled = true;
       const reloadRows = options.reloadRows !== false;
       const statusPrefix = options.statusPrefix || "";
-      const body = { skip_seed: true, skip_generate: true, ...(options.body || {}) };
+      const manualDate = String(el("dailyRunDate")?.value || "").trim();
+      const body = { skip_seed: true, skip_generate: true, ...(manualDate ? { date: manualDate } : {}), ...(options.body || {}) };
       setStatus(statusPrefix ? `${statusPrefix}，正在运行每日汇总...` : "正在运行每日汇总...");
       try {
         const data = await api("/api/db/daily-stats/run", {
@@ -1403,10 +1796,20 @@
     };
     el("runDailyBtn").onclick = () => runDailyStats();
     el("quickAdjustBtn").onclick = quickAdjustPlayCount;
+    el("salesQuickBtn").onclick = quickAdjustSalesRegion;
+    el("userRegionQuickBtn").onclick = quickAdjustUserRegion;
+    el("unbindCheckBtn").onclick = checkDeviceOperation;
+    el("unbindLocateBtn").onclick = locateDeviceBindingRows;
+    el("unbindDeviceKeyword").onkeydown = (event) => {
+      if (event.key === "Enter") checkDeviceOperation();
+    };
     el("backCatalogBtn").onclick = async () => {
       closeEditor();
       el("maintenanceGuide").style.display = "none";
       el("quickAdjustPanel").style.display = "none";
+      el("salesQuickPanel").style.display = "none";
+      el("userRegionQuickPanel").style.display = "none";
+      el("unbindCheckPanel").style.display = "none";
       setView("catalog");
       await refreshCatalog();
       scrollContentTop("auto");

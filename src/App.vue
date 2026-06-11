@@ -1399,7 +1399,7 @@ onMounted(restoreSession)
 
       <section v-if="state.active === 'songs'" class="panel full">
         <div class="panel-head"><div><h3>热歌排行</h3><p>播放量、用户数与平台来源</p></div><button class="ghost-button" @click="exportRows('songs.csv', state.songs)">导出</button></div>
-        <div class="data-table">
+        <div class="data-table scroll-list notice-scroll">
           <div v-for="song in state.songs" :key="`${song.rank}-${song.songName}`" class="table-row">
             <strong>#{{ song.rank }} {{ song.songName }}</strong>
             <span>{{ song.artist }} / {{ song.platform }}</span>
@@ -1491,7 +1491,7 @@ onMounted(restoreSession)
 
       <section v-if="state.active === 'groups'" class="panel full">
         <div class="panel-head"><div><h3>设备分组</h3><p>共 {{ state.groups.total || 0 }} 台设备 / {{ state.groups.groupTotal || state.groups.list.length }} 个分组，按型号、固件和在线状态聚合</p></div></div>
-        <div class="data-table">
+        <div class="data-table scroll-list audit-scroll">
           <div v-for="group in state.groups.list" :key="group.groupName" class="table-row">
             <strong>{{ group.groupName }}</strong><span>固件：{{ group.firmwareVersions }} / 离线 {{ group.offlineCount }}</span><em>{{ group.onlineCount }}/{{ group.deviceCount }} 在线</em>
           </div>
@@ -3140,7 +3140,9 @@ button {
 }
 
 .feedback-scroll,
-.log-scroll {
+.log-scroll,
+.notice-scroll,
+.audit-scroll {
   max-height: min(62vh, 560px);
 }
 

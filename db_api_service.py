@@ -1,6 +1,7 @@
 # db_api_service.py
 from datetime import date, datetime
 from decimal import Decimal
+import re
 import time
 import uuid
 
@@ -940,8 +941,8 @@ FRONT_DATA_CATALOG = [
     {"group": "总览卡片", "title": "销售额 / 订单数", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/sales-amount", "table": "sales_order", "fields": ["pay_amount", "pay_status", "created_at"], "operation": "销售额统计 pay_status 为 paid/success/finished 的 pay_amount 总和；新增订单或调高 pay_amount 会增加，改成 pending/closed 会减少统计。"},
     {"group": "总览卡片", "title": "活跃度 / 活跃用户", "frontend": "数据总览 / metricCards", "api": "/api/admin/super/overview/activity-rate", "table": "user_profile", "fields": ["active_level", "user_id"], "operation": "活跃用户由 active_level='high' 的画像数量决定；把用户画像 active_level 改为 high 增加，改为 medium/low 减少。"},
     {"group": "趋势分析", "title": "用户/设备/销售趋势柱状图", "frontend": "趋势分析 / state.trend.list", "api": "/api/admin/super/trend/growth", "table": "daily_stats", "fields": ["stat_date", "new_user_count", "new_device_count", "total_sales_amount", "active_user_count"], "operation": "按 stat_date 找到对应日期行，用户趋势改 new_user_count，设备趋势改 new_device_count，销售趋势改 total_sales_amount。"},
-    {"group": "地区热力", "title": "地区销售热力", "frontend": "地区热力 / 销售热力", "api": "/api/admin/super/region/sales-heatmap", "table": "region_stats_daily", "fields": ["stat_date", "region_name", "sales_amount", "order_count"], "operation": "销售热力读取最新 stat_date 的累计地区销售额，来自 sales_order 中截至该日的已支付订单；要调整就改 sales_order 的地区或金额后重跑每日汇总。"},
-    {"group": "地区热力", "title": "地区用户热力", "frontend": "地区热力 / 用户热力", "api": "/api/admin/super/region/user-heatmap", "table": "region_stats_daily", "fields": ["stat_date", "region_name", "user_count", "active_user_count"], "operation": "用户热力读取最新 stat_date 的累计地区用户数，来自 user_profile.province_name；要调整就改用户画像地区后重跑每日汇总。"},
+    {"group": "地区热力", "title": "地区销售热力", "frontend": "地区热力 / 销售热力", "api": "/api/admin/super/region/sales-heatmap", "table": "region_stats_daily", "targetTable": "sales_order", "relatedTables": ["region_stats_daily"], "fields": ["province_code", "province_name", "city_code", "city_name", "pay_amount", "pay_status", "created_at"], "targetFields": ["province_code", "province_name", "city_code", "city_name", "pay_amount", "pay_status", "created_at"], "operation": "销售热力展示 region_stats_daily 的汇总结果，但来源是 sales_order。修改订单地区、金额或支付状态后，维护页会按订单日期自动重跑每日汇总；如果手动点“运行每日汇总”，也会刷新汇总。"},
+    {"group": "地区热力", "title": "地区用户热力", "frontend": "地区热力 / 用户热力", "api": "/api/admin/super/region/user-heatmap", "table": "region_stats_daily", "targetTable": "user_profile", "relatedTables": ["region_stats_daily"], "fields": ["province_code", "province_name", "city_code", "city_name", "active_level", "user_id"], "targetFields": ["province_code", "province_name", "city_code", "city_name", "active_level", "user_id"], "operation": "用户热力展示 region_stats_daily 的汇总结果，但来源是 user_profile。只改 sales_order 不会改变用户分布；要改用户分布，请修改用户画像地区后重跑每日汇总。"},
     {"group": "用户画像", "title": "年龄占比", "frontend": "用户画像 / 年龄分布饼图", "api": "/api/admin/super/user-profile/age-distribution", "table": "user_profile", "fields": ["age", "age_range"], "operation": "占比由 age_range 分组计数决定；要提高某年龄段占比，就新增/修改更多用户画像的 age_range 为该段。"},
     {"group": "用户画像", "title": "地区占比", "frontend": "用户画像 / 地区分布饼图", "api": "/api/admin/super/user-profile/region-distribution", "table": "user_profile", "fields": ["province_code", "province_name", "city_name"], "operation": "占比由 province_name 分组计数决定；修改用户画像省份即可调整地区占比。"},
     {"group": "用户画像", "title": "活跃分层占比", "frontend": "用户画像 / 活跃分层饼图", "api": "/api/admin/super/user-profile/activity-distribution", "table": "user_profile", "fields": ["active_level"], "operation": "占比由 active_level 分组计数决定；常用值 high/medium/low。"},
@@ -954,7 +955,7 @@ FRONT_DATA_CATALOG = [
     {"group": "运营管理", "title": "反馈总数 / 待处理数 / 评分", "frontend": "用户反馈", "api": "/api/admin/*/feedback/list", "table": "user_feedback", "fields": ["feedback_type", "status", "priority", "star_rating", "created_at"], "operation": "新增反馈行增加总数；status 改为 pending/open 会增加待处理，改为 processed/closed 会减少。"},
     {"group": "运营管理", "title": "设备列表 / 固件版本 / 在线状态", "frontend": "设备管理", "api": "/api/admin/operator/device/list", "table": "device", "fields": ["device_number", "model_name", "online_status", "status", "firmware_version", "last_active"], "operation": "新增设备行会增加设备列表；online_status=online 显示在线、offline 显示离线；online_status 为空才看 status，firmware_version 影响固件版本展示。"},
     {"group": "运营管理", "title": "设备所属用户 / 房间", "frontend": "设备详情 / bound-user", "api": "/api/admin/operator/device/bound-user", "table": "user_device_binding", "fields": ["user_id", "device_id", "custom_device_name", "default_room", "bind_time"], "operation": "绑定关系决定设备详情里的用户、设备别名和房间；新增绑定或修改 custom_device_name/default_room 即可调整。"},
-    {"group": "运营管理", "title": "设备日志数量 / 内容", "frontend": "设备日志", "api": "/api/admin/operator/device/logs", "table": "device_log", "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "新增日志行增加列表；修改 log_level/title/content 改变前端展示。"},
+    {"group": "运营管理", "title": "设备日志数量 / 内容", "frontend": "设备日志", "api": "/api/admin/operator/device/logs", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task"], "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "设备日志不是只读 device_log：真实日志来自 device_log，同时会动态合并 device 的在线/离线状态、device_firmware_update_task 的固件任务。要改日志正文改 device_log；要改在线/离线日志改 device.online_status/status；要改固件任务日志改 device_firmware_update_task。"},
     {"group": "小程序播放", "title": "播放历史 / 歌曲名 / 播放次数", "frontend": "小程序播放历史、后台热歌来源", "api": "/api/play-history 与 /api/admin/market/top-songs", "table": "play_history", "fields": ["device_id", "user_id", "mapping_id", "play_duration", "created_at", "style"], "operation": "新增播放记录会增加播放历史；每日任务会把播放记录聚合到 hot_ranking_daily 和 daily_stats。"},
     {"group": "小程序播放", "title": "歌曲标题 / 歌手 / 平台", "frontend": "小程序当前歌曲、热歌排行", "api": "/api/song-info 与 /api/admin/market/top-songs", "table": "media_mapping", "fields": ["song_title", "artist", "platform", "external_id", "cover_url"], "operation": "修改 media_mapping 可改变歌曲名、歌手、平台和封面；play_history.mapping_id 关联到这张表。"},
     {"group": "日报任务", "title": "每日自动汇总时间", "frontend": "所有日报型图表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["generated_at", "updated_at"], "operation": "“运行每日汇总”只聚合现有明细，并自动补齐上次汇总日期到今天之间漏掉的日报；每日新增明细由后端自动任务生成。"},
@@ -972,10 +973,10 @@ FRONT_DATA_CATALOG.extend([
     {"group": "设备运行", "title": "当前设备运行状态", "frontend": "设备管理 / runtime-status", "api": "/api/admin/operator/device/runtime-status", "table": "device", "fields": ["device_id", "online_status", "firmware_version", "last_active"], "operation": "基础信息来自 device；音量、电量、信号等运行值来自 Mongo runtime 文档，缺失时返回默认值。"},
     {"group": "设备运行", "title": "设备运行附加指标", "frontend": "设备详情 / 音量、电量、信号、网络", "api": "/api/admin/operator/device/runtime-status", "table": "MongoDB device_runtime", "fields": ["volume", "battery", "signal_strength", "current_network"], "operation": "修改 MongoDB 设备运行文档会影响详情运行指标；MySQL device 只保存基础设备信息。"},
     {"group": "设备运行", "title": "设备分组", "frontend": "设备分组 / groups", "api": "/api/admin/operator/device/groups", "table": "device", "fields": ["model_name", "online_status", "status", "firmware_version"], "operation": "按 model_name 聚合；onlineCount 使用统一在线口径，firmwareVersions 来自 device.firmware_version。"},
-    {"group": "设备运行", "title": "告警中心", "frontend": "告警中心 / alerts", "api": "/api/admin/operator/device/alerts", "table": "device_log", "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "优先读取 warning/error/alert 日志；同时从离线设备、失败固件任务、待处理反馈动态生成真实异常，不再只依赖日志表。"},
+    {"group": "设备运行", "title": "告警中心", "frontend": "告警中心 / alerts", "api": "/api/admin/operator/device/alerts", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task", "user_feedback"], "fields": ["log_type", "log_level", "title", "content", "created_at"], "targetFields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "告警中心是多来源合并：device_log 的 warning/error/alert、device 的离线设备、device_firmware_update_task 的失败任务、user_feedback 的待处理反馈都会进入告警。目录会先定位 device_log；其它来源请点“离线设备告警来源”“固件失败告警来源”或“反馈总数 / 待处理数”。"},
     {"group": "设备运行", "title": "离线设备告警来源", "frontend": "告警中心 / 设备离线", "api": "/api/admin/operator/device/alerts", "table": "device", "fields": ["device_id", "device_number", "device_name", "online_status", "status", "last_active"], "operation": "online_status=offline 或回退 status=0 会生成离线设备告警。"},
     {"group": "设备运行", "title": "固件失败告警来源", "frontend": "告警中心 / 固件失败", "api": "/api/admin/operator/device/alerts", "table": "device_firmware_update_task", "fields": ["task_no", "device_id", "target_version", "status", "fail_reason"], "operation": "status 为 failed/fail/error 或 fail_reason 不为空会生成固件失败告警。"},
-    {"group": "设备日志", "title": "设备日志列表", "frontend": "设备日志 / logs", "api": "/api/admin/operator/device/logs", "table": "device_log", "fields": ["log_id", "log_level", "title", "content", "device_name", "online_status", "created_at"], "operation": "日志列表按 created_at/log_id 倒序；新增日志行会立即出现在运营日志页。"},
+    {"group": "设备日志", "title": "设备日志列表", "frontend": "设备日志 / logs", "api": "/api/admin/operator/device/logs", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task"], "fields": ["log_id", "log_level", "title", "content", "device_name", "online_status", "created_at"], "operation": "日志列表按 created_at/log_id 倒序，并合并设备状态和固件任务生成的动态日志；新增 device_log 行会立即出现，设备上下线请改 device，固件任务请改 device_firmware_update_task。"},
     {"group": "设备日志", "title": "设备日志详情", "frontend": "设备日志 / log-detail", "api": "/api/admin/operator/device/log-detail", "table": "device_log", "fields": ["log_id", "trace_id", "event_code", "title", "content", "ip_address", "network_type"], "operation": "点击日志读取同一行详情；修改 title/content/event_code 会影响详情展示。"},
     {"group": "反馈管理", "title": "反馈详情", "frontend": "用户反馈 / detail", "api": "/api/admin/operator/feedback/detail", "table": "user_feedback", "fields": ["feedback_no", "title", "content", "status", "star_rating", "reply_content", "handled_at"], "operation": "反馈详情来自 user_feedback 联表 user；status=open/pending 按待处理显示。"},
     {"group": "反馈管理", "title": "处理反馈", "frontend": "用户反馈 / 标记已处理", "api": "/api/admin/operator/feedback/handle", "table": "user_feedback", "fields": ["status", "handler_name", "reply_content", "handled_at"], "operation": "点击处理会把 status 更新为 processed，并写入处理人、回复和处理时间。"},
@@ -987,7 +988,7 @@ FRONT_DATA_CATALOG.extend([
     {"group": "系统监控", "title": "系统监控指标", "frontend": "系统监控 / metrics", "api": "/api/admin/super/monitor", "table": "user,device,user_feedback", "targetTable": "user", "relatedTables": ["device", "user_feedback"], "fields": ["user_id", "device_id", "online_status", "status", "feedback_id"], "targetFields": ["user_id", "status", "created_at"], "operation": "totalUsers 来自 user，totalDevices/onlineDevices 来自 device，feedbackTotal 来自 user_feedback。"},
     {"group": "系统监控", "title": "最近异常", "frontend": "系统监控 / exceptions", "api": "/api/admin/super/monitor", "table": "system_config", "fields": ["config_group", "config_key", "config_name", "config_type", "description"], "operation": "优先读取 monitor_exception 配置；为空时后端从离线设备、待处理反馈、失败固件任务动态生成异常。"},
     {"group": "系统公告", "title": "公告列表", "frontend": "系统公告 / notices", "api": "/api/admin/super/notices", "table": "system_config", "fields": ["config_group", "config_key", "config_value", "config_type", "config_name", "description"], "operation": "公告来自 notice/notices/system_notice 配置组或 notice.* key；新增公告会新增 system_config 行。"},
-    {"group": "审计日志", "title": "后台操作审计", "frontend": "审计日志 / audit", "api": "/api/admin/super/security/logs", "table": "admin_operation_log", "fields": ["admin_id", "action", "module", "operation_name", "path", "request_method", "result_status", "error_message", "created_at"], "operation": "审计日志只展示有管理意义的操作：登录、解绑设备、发布固件、处理反馈、修改权限、发布公告；记录谁、时间、操作、对象、结果、IP。"},
+    {"group": "审计日志", "title": "后台操作审计", "frontend": "审计日志 / audit", "api": "/api/admin/super/security/logs", "table": "admin_operation_log", "targetTable": "admin_operation_log", "relatedTables": ["admin_user", "device_firmware_update_task", "user_feedback", "system_config"], "fields": ["admin_id", "action", "module", "operation_name", "path", "request_method", "result_status", "error_message", "created_at"], "operation": "审计日志优先读 admin_operation_log 中有管理意义的操作；不足时会从管理员登录、固件任务、反馈处理、系统公告动态补充。要改真实操作审计请维护 admin_operation_log；要改动态补充项请维护对应来源表。"},
     {"group": "账户信息", "title": "当前登录账号资料", "frontend": "个人信息 / account", "api": "/api/admin/profile", "table": "admin_user", "fields": ["username", "role", "real_name", "job_no", "position", "phone", "email", "wechat_open_id"], "operation": "登录 token 解析当前账号；资料来自 admin_user 或 DEFAULT_ADMINS 回退。"},
     {"group": "账户信息", "title": "修改个人密码", "frontend": "个人信息 / password", "api": "/api/admin/password", "table": "admin_user", "fields": ["username", "password_hash", "updated_at"], "operation": "四种后台角色均可修改自己的密码；数据库账号更新 admin_user.password_hash，默认账号写入后台账号覆盖层。"},
     {"group": "模拟原始数据", "title": "中文模拟用户与画像", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "user,user_profile,auth_token", "targetTable": "user_profile", "relatedTables": ["user", "auth_token"], "fields": ["username", "nickname", "age", "age_range", "province_name", "active_level", "value_level", "bound_platforms", "platform_type"], "targetFields": ["user_id", "nickname", "age", "age_range", "province_name", "active_level", "value_level", "bound_platforms"], "operation": "每日自动任务写入中文用户名、自然昵称、地区、年龄、活跃/价值等级；绑定平台只写网易云音乐或 QQ音乐。"},
@@ -995,7 +996,12 @@ FRONT_DATA_CATALOG.extend([
     {"group": "模拟原始数据", "title": "中文模拟订单", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "sales_order", "fields": ["order_no", "user_id", "device_id", "pay_amount", "pay_status", "province_name", "created_at"], "operation": "模拟订单 pay_status=paid，会进入销售额、订单数、区域销售、购买留存分母。"},
     {"group": "模拟原始数据", "title": "中文模拟歌曲与播放", "frontend": "后端每日自动任务", "api": "/api/db/daily-stats/run", "table": "media_mapping,play_history", "targetTable": "play_history", "relatedTables": ["media_mapping"], "fields": ["song_title", "artist", "platform", "external_id", "play_duration", "source_platform", "created_at"], "targetFields": ["device_id", "user_id", "mapping_id", "play_duration", "source_platform", "created_at"], "operation": "播放记录是热歌、播放总量、活跃用户、留存分子的原始来源；改完明细后运行每日汇总重算。"},
     {"group": "汇总计算数据", "title": "日报主表计算结果", "frontend": "趋势/决策/报表", "api": "/api/db/daily-stats/run", "table": "daily_stats", "fields": ["total_play_count", "unique_user_count", "unique_device_count", "online_device_count", "new_user_count", "new_device_count", "total_sales_amount"], "operation": "daily_stats 是计算结果，不是原始数据；改原始 user/device/sales_order/play_history 后运行每日汇总重算。"},
-    {"group": "汇总计算数据", "title": "地区/热歌/分群/活跃日报", "frontend": "地区热力、热歌排行、用户分群", "api": "/api/db/daily-stats/run", "table": "region_stats_daily,hot_ranking_daily,user_value_segment_daily,user_activity_daily,analytics_metric_daily", "targetTable": "region_stats_daily", "relatedTables": ["hot_ranking_daily", "user_value_segment_daily", "user_activity_daily", "analytics_metric_daily"], "fields": ["stat_date", "ranking_date", "metric_date", "metric_value", "user_count", "sales_amount"], "targetFields": ["stat_date", "region_name", "user_count", "active_user_count", "order_count", "sales_amount"], "operation": "这些表都由每日汇总从原始明细计算；需要改口径时改 daily_stats_job.py，维护表值只影响当前展示。"},
+    {"group": "汇总计算数据", "title": "地区销售日报", "frontend": "地区热力 / 销售热力", "api": "/api/admin/super/region/sales-heatmap", "table": "region_stats_daily", "targetTable": "sales_order", "relatedTables": ["region_stats_daily"], "fields": ["province_name", "city_name", "pay_amount", "pay_status", "created_at"], "targetFields": ["province_name", "city_name", "pay_amount", "pay_status", "created_at"], "operation": "地区销售日报由 sales_order 汇总生成；快捷调整可按地区和日期补已支付订单，保存后自动重跑该日期汇总。"},
+    {"group": "汇总计算数据", "title": "地区用户日报", "frontend": "地区热力 / 用户热力、用户画像 / 地区分布", "api": "/api/admin/super/region/user-heatmap", "table": "region_stats_daily", "targetTable": "user_profile", "relatedTables": ["user", "region_stats_daily"], "fields": ["province_name", "city_name", "active_level", "value_level", "user_id"], "targetFields": ["province_name", "city_name", "active_level", "value_level", "user_id"], "operation": "地区用户日报由 user_profile 汇总生成；快捷调整可给指定地区补用户和画像，保存后自动重跑该日期汇总。"},
+    {"group": "汇总计算数据", "title": "热歌排行日报", "frontend": "热歌排行 / 播放量与排名", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "targetTable": "play_history", "relatedTables": ["media_mapping", "hot_ranking_daily"], "fields": ["user_id", "device_id", "mapping_id", "play_duration", "source_platform", "created_at"], "targetFields": ["user_id", "device_id", "mapping_id", "play_duration", "source_platform", "created_at"], "operation": "热歌排行由 play_history 按日期和歌曲聚合生成；可用快捷调整播放总数补播放明细，再自动重跑热歌日报。"},
+    {"group": "汇总计算数据", "title": "用户分群日报", "frontend": "用户分群 / 分群人数、均值、留存", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "targetTable": "user_profile", "relatedTables": ["play_history", "sales_order", "user_value_segment_daily"], "fields": ["value_level", "active_level", "user_id"], "targetFields": ["value_level", "active_level", "user_id"], "operation": "用户分群日报由 user_profile、play_history、sales_order 汇总生成；先维护用户价值/活跃等级和行为明细，再运行每日汇总。"},
+    {"group": "汇总计算数据", "title": "用户活跃日报", "frontend": "用户活跃、活跃用户数、用户价值", "api": "/api/db/daily-stats/run", "table": "user_activity_daily", "targetTable": "play_history", "relatedTables": ["user_activity_daily"], "fields": ["user_id", "play_duration", "created_at"], "targetFields": ["user_id", "play_duration", "created_at"], "operation": "用户活跃日报由 play_history 汇总生成；补播放明细后会刷新用户活跃次数、时长和活跃状态。"},
+    {"group": "汇总计算数据", "title": "指标日报", "frontend": "系统监控、销售额、活跃用户等指标", "api": "/api/db/daily-stats/run", "table": "analytics_metric_daily", "targetTable": "sales_order", "relatedTables": ["user", "device", "play_history", "analytics_metric_daily"], "fields": ["pay_amount", "pay_status", "created_at"], "targetFields": ["pay_amount", "pay_status", "created_at"], "operation": "指标日报由用户、设备、订单和播放明细汇总生成；按要影响的指标维护对应原始表后运行每日汇总。"},
 ])
 
 FRONT_DATA_CATALOG.extend([
@@ -1018,6 +1024,88 @@ FRONT_DATA_CATALOG.extend([
     {"group": "播放与趋势", "title": "歌曲映射与平台", "frontend": "热歌排行 / 平台来源", "api": "/api/admin/market/top-songs", "table": "media_mapping", "targetTable": "media_mapping", "relatedTables": ["play_history", "hot_ranking_daily"], "fields": ["mapping_id", "song_title", "artist", "platform", "external_id", "cover_url"], "operation": "歌曲名称、歌手、平台映射来自 media_mapping；播放记录 source_platform 和映射 platform 会共同影响热歌展示。"},
     {"group": "关系与社交", "title": "好友关系", "frontend": "小程序好友关系、社交数据", "api": "/api/db/friendship/detail", "table": "friendship", "targetTable": "friendship", "fields": ["user_id_1", "user_id_2"], "operation": "friendship 是联合主键表；维护页现在会使用 detail 接口删除 user_id_1 + user_id_2 对应关系。"},
 ])
+
+# 主维护目录只覆盖后台页面里实际可见的数据。按“前端大页面 -> 具体卡片/图表/列表”
+# 组织，并给汇总型数据同时提供源表和结果表入口。
+FRONT_DATA_CATALOG = [
+    {"group": "数据总览", "title": "总用户 / 新增用户", "roles": ["super_admin", "boss"], "frontend": "数据总览 / 指标卡片", "api": "/api/admin/super/overview/user-count", "table": "user", "targetTable": "user", "fields": ["user_id", "created_at", "status"], "operation": "总用户来自 user 行数；新增用户来自 created_at 为今天的用户。"},
+    {"group": "数据总览", "title": "设备数 / 在线率", "roles": ["super_admin", "boss", "operator_admin"], "frontend": "数据总览 / 指标卡片、普通管理员设备概览", "api": "/api/admin/super/overview/device-count；/api/admin/operator/device/list", "table": "device", "targetTable": "device", "fields": ["device_id", "device_number", "online_status", "status", "created_at"], "operation": "设备数来自 device；在线状态优先看 online_status，空值时回退 status。"},
+    {"group": "数据总览", "title": "销售额 / 订单数", "roles": ["super_admin", "boss"], "frontend": "数据总览 / 指标卡片", "api": "/api/admin/super/overview/sales-amount", "table": "sales_order", "targetTable": "sales_order", "fields": ["pay_amount", "pay_status", "created_at"], "operation": "销售额和订单数统计 pay_status 为 paid/success/finished 的 sales_order。"},
+    {"group": "数据总览", "title": "活跃度 / 活跃用户", "roles": ["super_admin", "boss", "market_admin"], "frontend": "数据总览 / 指标卡片", "api": "/api/admin/super/overview/activity-rate；/api/admin/*/user-value/high-active-users", "table": "user_profile", "targetTable": "user_profile", "fields": ["active_level", "user_id"], "operation": "活跃用户来自 user_profile.active_level='high'。"},
+    {"group": "数据总览", "title": "增长趋势预览", "roles": ["super_admin", "boss"], "frontend": "数据总览 / 增长趋势", "api": "/api/admin/super/trend/growth", "table": "daily_stats", "summaryTable": "daily_stats", "targetTable": "user", "relatedTables": ["device", "sales_order", "play_history"], "fields": ["created_at"], "summaryFields": ["stat_date", "new_user_count", "new_device_count", "total_sales_amount"], "operation": "趋势预览读取 daily_stats；改用户、设备、订单或播放明细后运行每日汇总。"},
+    {"group": "数据总览", "title": "热歌排行预览", "roles": ["super_admin", "boss", "market_admin"], "frontend": "数据总览 / 热歌排行", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "summaryTable": "hot_ranking_daily", "targetTable": "play_history", "relatedTables": ["media_mapping"], "fields": ["mapping_id", "source_platform", "created_at"], "summaryFields": ["ranking_date", "target_name", "metric_value", "rank_no"], "operation": "热歌预览读取 hot_ranking_daily；源数据是 play_history 和 media_mapping。"},
+    {"group": "数据总览", "title": "反馈预览 / 待处理反馈", "roles": ["operator_admin", "super_admin", "boss"], "frontend": "数据总览 / 待处理反馈", "api": "/api/admin/*/feedback/list", "table": "user_feedback", "targetTable": "user_feedback", "fields": ["feedback_type", "status", "priority", "star_rating", "created_at"], "operation": "反馈总数和待处理数来自 user_feedback；status 为 open/pending 时进入待处理。"},
+    {"group": "数据总览", "title": "市场热歌播放", "roles": ["market_admin"], "frontend": "数据总览 / 热歌播放卡片", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "summaryTable": "hot_ranking_daily", "targetTable": "play_history", "relatedTables": ["media_mapping"], "fields": ["mapping_id", "source_platform", "created_at"], "summaryFields": ["ranking_date", "target_name", "metric_value"], "operation": "市场管理员数据总览的热歌播放来自热歌排行汇总；源数据是 play_history。"},
+    {"group": "数据总览", "title": "市场普通用户 / 高活用户", "roles": ["market_admin"], "frontend": "数据总览 / 普通用户、高活用户卡片", "api": "/api/admin/market/user-value/*", "table": "user_profile", "targetTable": "user_profile", "fields": ["active_level", "value_level"], "operation": "市场管理员数据总览的普通用户和高活用户来自 user_profile.active_level。"},
+    {"group": "数据总览", "title": "市场 7 日留存", "roles": ["market_admin"], "frontend": "数据总览 / 7 日留存卡片", "api": "/api/admin/market/retention/device-purchase", "table": "sales_order", "targetTable": "sales_order", "relatedTables": ["play_history"], "fields": ["user_id", "pay_status", "created_at"], "operation": "7 日留存分母来自已支付订单用户，分子来自购买后第 7 天的 play_history。"},
+
+    {"group": "决策驾驶舱", "title": "管理决策指标", "roles": ["super_admin", "market_admin"], "frontend": "决策驾驶舱 / 管理决策指标", "api": "/api/admin/*/decision/summary", "table": "daily_stats", "summaryTable": "daily_stats", "targetTable": "play_history", "relatedTables": ["user", "device", "sales_order"], "fields": ["created_at"], "summaryFields": ["stat_date", "total_play_count", "unique_user_count", "unique_device_count", "avg_play_duration_seconds"], "operation": "决策指标读取 daily_stats；源数据来自用户、设备、订单和播放明细。"},
+    {"group": "决策驾驶舱", "title": "每日播放次数趋势", "roles": ["super_admin", "market_admin"], "frontend": "决策驾驶舱 / 每日播放次数趋势", "api": "/api/admin/*/decision/summary", "table": "daily_stats", "summaryTable": "daily_stats", "targetTable": "play_history", "fields": ["user_id", "device_id", "mapping_id", "created_at"], "summaryFields": ["stat_date", "total_play_count"], "operation": "播放趋势来自 daily_stats.total_play_count；新增或删除 play_history 后运行每日汇总。"},
+    {"group": "决策驾驶舱", "title": "异常提醒", "roles": ["super_admin", "market_admin"], "frontend": "决策驾驶舱 / 异常提醒", "api": "/api/admin/*/decision/summary", "table": "system_config", "targetTable": "system_config", "relatedTables": ["device", "user_feedback", "device_firmware_update_task"], "fields": ["config_group", "config_key", "config_value", "description"], "operation": "异常提醒优先来自 decision_risk 配置；为空时结合设备、反馈、固件任务动态生成。"},
+
+    {"group": "趋势分析", "title": "用户增长趋势", "roles": ["super_admin", "boss"], "frontend": "趋势分析 / 用户", "api": "/api/admin/super/trend/growth?type=user", "table": "daily_stats", "summaryTable": "daily_stats", "targetTable": "user", "fields": ["created_at", "status"], "summaryFields": ["stat_date", "new_user_count"], "operation": "用户趋势读取 daily_stats.new_user_count；源数据是 user.created_at。"},
+    {"group": "趋势分析", "title": "设备增长趋势", "roles": ["super_admin", "boss"], "frontend": "趋势分析 / 设备", "api": "/api/admin/super/trend/growth?type=device", "table": "daily_stats", "summaryTable": "daily_stats", "targetTable": "device", "fields": ["created_at", "status", "online_status"], "summaryFields": ["stat_date", "new_device_count"], "operation": "设备趋势读取 daily_stats.new_device_count；源数据是 device.created_at。"},
+    {"group": "趋势分析", "title": "销售趋势", "roles": ["super_admin", "boss"], "frontend": "趋势分析 / 销售", "api": "/api/admin/super/trend/growth?type=sales", "table": "daily_stats", "summaryTable": "daily_stats", "targetTable": "sales_order", "fields": ["pay_amount", "pay_status", "created_at"], "summaryFields": ["stat_date", "total_sales_amount"], "operation": "销售趋势读取 daily_stats.total_sales_amount；源数据是已支付 sales_order。"},
+    {"group": "趋势分析", "title": "留存趋势", "roles": ["market_admin"], "frontend": "趋势分析 / 留存", "api": "/api/admin/market/retention/device-purchase", "table": "sales_order", "targetTable": "sales_order", "relatedTables": ["play_history"], "fields": ["user_id", "pay_status", "created_at"], "operation": "市场角色趋势展示购买后留存；购买分母来自 sales_order，留存分子来自购买后的 play_history。"},
+    {"group": "趋势分析", "title": "设备日志趋势", "roles": ["operator_admin"], "frontend": "趋势分析 / 设备日志趋势", "api": "/api/admin/operator/device/logs", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task"], "fields": ["device_id", "log_level", "title", "content", "created_at"], "operation": "普通管理员趋势页展示设备日志列表；后端还会合并设备状态和固件任务动态日志。"},
+
+    {"group": "区域热力图", "title": "销售额分布", "roles": ["super_admin", "market_admin", "boss"], "frontend": "区域热力图 / 销售额分布", "api": "/api/admin/*/region/sales-heatmap", "table": "region_stats_daily", "summaryTable": "region_stats_daily", "targetTable": "sales_order", "fields": ["province_code", "province_name", "city_code", "city_name", "pay_amount", "pay_status", "created_at"], "summaryFields": ["stat_date", "region_name", "sales_amount", "order_count"], "operation": "销售额分布读取 region_stats_daily；源数据是已支付 sales_order。"},
+    {"group": "区域热力图", "title": "用户分布", "roles": ["super_admin", "market_admin", "boss"], "frontend": "区域热力图 / 用户分布", "api": "/api/admin/*/region/user-heatmap", "table": "region_stats_daily", "summaryTable": "region_stats_daily", "targetTable": "user_profile", "fields": ["province_code", "province_name", "city_code", "city_name", "active_level"], "summaryFields": ["stat_date", "region_name", "user_count", "active_user_count"], "operation": "用户分布读取 region_stats_daily；源数据是 user_profile，不是 sales_order。"},
+
+    {"group": "用户画像", "title": "年龄分布", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户画像 / 年龄分布", "api": "/api/admin/*/user-profile/age-distribution", "table": "user_profile", "targetTable": "user_profile", "fields": ["age", "age_range"], "operation": "年龄分布按 user_profile.age_range 分组。"},
+    {"group": "用户画像", "title": "地区分布", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户画像 / 地区分布", "api": "/api/admin/*/user-profile/region-distribution", "table": "user_profile", "targetTable": "user_profile", "fields": ["province_code", "province_name", "city_name"], "operation": "地区分布按 user_profile.province_name 分组。"},
+    {"group": "用户画像", "title": "活跃分层", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户画像 / 活跃分层", "api": "/api/admin/*/user-profile/activity-distribution", "table": "user_profile", "targetTable": "user_profile", "fields": ["active_level"], "operation": "活跃分层按 user_profile.active_level 分组。"},
+    {"group": "用户画像", "title": "绑定软件", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户画像 / 绑定软件", "api": "/api/admin/*/user-profile/music-service-distribution", "table": "user_profile", "targetTable": "user_profile", "fields": ["bound_platforms"], "operation": "绑定软件按 user_profile.bound_platforms 归并统计。"},
+
+    {"group": "用户价值", "title": "用户价值构成", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户价值 / 环图", "api": "/api/admin/*/user-value/*", "table": "user_profile", "targetTable": "user_profile", "fields": ["active_level", "value_level"], "operation": "普通用户和高活跃用户来自 user_profile 的活跃等级。"},
+    {"group": "用户价值", "title": "普通用户", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户价值 / 普通用户", "api": "/api/admin/*/user-value/normal-users", "table": "user_profile", "targetTable": "user_profile", "fields": ["active_level", "value_level"], "operation": "普通用户是总画像数减 active_level='high'。"},
+    {"group": "用户价值", "title": "高活跃用户", "roles": ["super_admin", "market_admin", "boss"], "frontend": "用户价值 / 高活跃用户", "api": "/api/admin/*/user-value/high-active-users", "table": "user_profile", "targetTable": "user_profile", "fields": ["active_level"], "operation": "高活跃用户来自 active_level='high'。"},
+
+    {"group": "用户分群", "title": "分群规模占比", "roles": ["super_admin", "market_admin"], "frontend": "用户分群 / 饼图", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "summaryTable": "user_value_segment_daily", "targetTable": "user_profile", "relatedTables": ["play_history", "sales_order"], "fields": ["value_level", "active_level"], "summaryFields": ["stat_date", "segment_code", "segment_name", "user_count"], "operation": "分群占比优先读取 user_value_segment_daily；源数据来自画像、播放和订单。"},
+    {"group": "用户分群", "title": "用户分群列表", "roles": ["super_admin", "market_admin"], "frontend": "用户分群 / 表格", "api": "/api/admin/market/segments", "table": "user_value_segment_daily", "summaryTable": "user_value_segment_daily", "targetTable": "user_profile", "relatedTables": ["play_history", "sales_order"], "fields": ["value_level", "active_level"], "summaryFields": ["stat_date", "segment_name", "user_count", "active_user_count", "avg_play_count", "avg_pay_amount", "retention_rate"], "operation": "列表读取分群日报；调整画像等级、播放和订单后运行每日汇总。"},
+
+    {"group": "营销洞察", "title": "转化漏斗", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 转化漏斗", "api": "/api/admin/market/insights", "table": "user", "targetTable": "user", "relatedTables": ["user_device_binding", "play_history"], "fields": ["user_id", "created_at"], "operation": "漏斗按新增用户、绑定设备、首播和 7 日活跃逐级计算。"},
+    {"group": "营销洞察", "title": "运营建议", "roles": ["super_admin", "market_admin"], "frontend": "营销洞察 / 运营建议", "api": "/api/admin/market/insights", "table": "system_config", "targetTable": "system_config", "fields": ["config_group", "config_name", "config_value", "description"], "operation": "运营建议来自 system_config 中 market_recommendation 配置。"},
+
+    {"group": "热歌排行", "title": "热歌排行列表", "roles": ["super_admin", "market_admin", "boss"], "frontend": "热歌排行 / 列表", "api": "/api/admin/market/top-songs", "table": "hot_ranking_daily", "summaryTable": "hot_ranking_daily", "targetTable": "play_history", "relatedTables": ["media_mapping"], "fields": ["mapping_id", "source_platform", "created_at"], "summaryFields": ["ranking_date", "target_name", "target_category", "metric_value", "rank_no"], "operation": "热歌排行读取 hot_ranking_daily；源数据来自 play_history 和 media_mapping。"},
+    {"group": "热歌排行", "title": "歌曲名称 / 歌手 / 平台", "roles": ["super_admin", "market_admin", "boss"], "frontend": "热歌排行 / 歌曲元信息", "api": "/api/admin/market/top-songs", "table": "media_mapping", "targetTable": "media_mapping", "relatedTables": ["play_history"], "fields": ["mapping_id", "song_title", "artist", "platform", "external_id", "cover_url"], "operation": "歌曲名称、歌手和平台来自 media_mapping。"},
+
+    {"group": "用户反馈", "title": "反馈列表", "roles": ["super_admin", "operator_admin", "boss"], "frontend": "用户反馈 / 列表", "api": "/api/admin/*/feedback/list", "table": "user_feedback", "targetTable": "user_feedback", "fields": ["feedback_type", "status", "priority", "star_rating", "title", "content", "created_at"], "operation": "反馈列表来自 user_feedback。"},
+    {"group": "用户反馈", "title": "反馈详情", "roles": ["super_admin", "operator_admin", "boss"], "frontend": "用户反馈 / 详情", "api": "/api/admin/*/feedback/detail", "table": "user_feedback", "targetTable": "user_feedback", "relatedTables": ["user"], "fields": ["feedback_no", "title", "content", "status", "star_rating", "reply_content", "handled_at"], "operation": "反馈详情来自 user_feedback 联表 user。"},
+    {"group": "用户反馈", "title": "处理反馈", "roles": ["super_admin", "operator_admin", "boss"], "frontend": "用户反馈 / 标记已处理", "api": "/api/admin/operator/feedback/handle", "table": "user_feedback", "targetTable": "user_feedback", "fields": ["status", "handler_name", "reply_content", "handled_at"], "operation": "处理反馈会更新 user_feedback 的状态、处理人、回复和处理时间。"},
+
+    {"group": "设备管理", "title": "设备列表", "roles": ["super_admin", "operator_admin"], "frontend": "设备管理 / 设备列表", "api": "/api/admin/operator/device/list", "table": "device", "targetTable": "device", "relatedTables": ["user_device_binding", "user_profile"], "fields": ["device_id", "device_number", "model_name", "online_status", "status", "firmware_version", "last_active"], "operation": "设备列表基础数据来自 device，绑定用户和设备别名来自 user_device_binding。"},
+    {"group": "设备管理", "title": "设备详情 / 实时状态", "roles": ["super_admin", "operator_admin"], "frontend": "设备管理 / 详情", "api": "/api/admin/operator/device/detail；/runtime-status", "table": "device", "targetTable": "device", "relatedTables": ["user_device_binding", "play_history"], "fields": ["device_id", "device_number", "model_name", "online_status", "firmware_version", "last_active"], "operation": "详情基础信息来自 device；绑定用户来自 user_device_binding；当前歌曲回退读取 play_history。"},
+    {"group": "设备管理", "title": "设备改名 / 解绑", "roles": ["super_admin", "operator_admin"], "frontend": "设备管理 / 改名、解绑", "api": "/api/admin/operator/device/rename；/unbind", "table": "user_device_binding", "targetTable": "user_device_binding", "relatedTables": ["device"], "fields": ["device_id", "user_id", "custom_device_name", "default_room", "bind_time"], "operation": "改名更新 user_device_binding.custom_device_name；解绑删除 user_device_binding 绑定关系，不删除 device。"},
+
+    {"group": "设备分组", "title": "设备分组列表", "roles": ["super_admin", "operator_admin"], "frontend": "设备分组 / 列表", "api": "/api/admin/operator/device/groups", "table": "device", "targetTable": "device", "fields": ["model_name", "online_status", "status", "firmware_version"], "operation": "设备分组按 device.model_name 聚合，并统计在线数、离线数和固件版本。"},
+
+    {"group": "告警中心", "title": "设备告警列表", "roles": ["super_admin", "operator_admin"], "frontend": "告警中心 / 列表", "api": "/api/admin/operator/device/alerts", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task", "user_feedback"], "fields": ["log_type", "log_level", "title", "content", "created_at"], "operation": "告警中心合并 device_log 告警、离线设备、失败固件任务和待处理反馈。"},
+    {"group": "告警中心", "title": "离线设备告警", "roles": ["super_admin", "operator_admin"], "frontend": "告警中心 / 离线设备", "api": "/api/admin/operator/device/alerts", "table": "device", "targetTable": "device", "fields": ["device_number", "online_status", "status", "last_active"], "operation": "离线设备告警来自 device.online_status/status。"},
+    {"group": "告警中心", "title": "固件失败告警", "roles": ["super_admin", "operator_admin"], "frontend": "告警中心 / 固件失败", "api": "/api/admin/operator/device/alerts", "table": "device_firmware_update_task", "targetTable": "device_firmware_update_task", "fields": ["task_no", "device_id", "target_version", "status", "fail_reason", "updated_at"], "operation": "固件失败告警来自失败状态或 fail_reason 非空的固件任务。"},
+    {"group": "告警中心", "title": "待处理反馈告警", "roles": ["super_admin", "operator_admin"], "frontend": "告警中心 / 待处理反馈", "api": "/api/admin/operator/device/alerts", "table": "user_feedback", "targetTable": "user_feedback", "fields": ["feedback_no", "title", "status", "priority", "created_at"], "operation": "待处理反馈会生成告警，来源是 user_feedback.status open/pending。"},
+
+    {"group": "设备日志", "title": "设备日志列表", "roles": ["super_admin", "operator_admin"], "frontend": "设备日志 / 列表", "api": "/api/admin/operator/device/logs", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task"], "fields": ["device_id", "log_type", "log_level", "title", "content", "created_at"], "operation": "设备日志列表合并 device_log 原始日志、设备上下线动态日志和固件任务动态日志。"},
+    {"group": "设备日志", "title": "设备日志详情", "roles": ["super_admin", "operator_admin"], "frontend": "设备日志 / 详情", "api": "/api/admin/operator/device/log-detail", "table": "device_log", "targetTable": "device_log", "relatedTables": ["device", "device_firmware_update_task"], "fields": ["log_id", "trace_id", "event_code", "title", "content", "ip_address", "network_type"], "operation": "真实日志详情看 device_log；动态设备状态详情看 device；动态固件任务详情看 device_firmware_update_task。"},
+
+    {"group": "用户管理", "title": "管理员账号列表", "roles": ["super_admin"], "frontend": "用户管理 / 列表", "api": "/api/admin/super/users", "table": "admin_user", "targetTable": "admin_user", "fields": ["admin_id", "username", "password_hash", "role", "status", "real_name", "job_no", "phone", "email", "last_login_at"], "operation": "用户管理页展示管理员和老板账号，来源是 admin_user。"},
+    {"group": "用户管理", "title": "新增 / 编辑 / 删除账号", "roles": ["super_admin"], "frontend": "用户管理 / 账号维护", "api": "/api/admin/super/users/create；/update；/delete", "table": "admin_user", "targetTable": "admin_user", "fields": ["username", "password_hash", "role", "status", "real_name", "job_no", "phone", "email"], "operation": "账号维护写入 admin_user，并影响后台登录和角色权限。"},
+
+    {"group": "角色权限", "title": "角色权限矩阵", "roles": ["super_admin"], "frontend": "角色权限 / 权限矩阵", "api": "/api/admin/super/roles", "table": "system_config", "targetTable": "system_config", "fields": ["config_group", "config_key", "config_name", "description"], "operation": "权限目录可由 system_config 中 admin_role 配置覆盖；超级管理员后端强制拥有全部权限。"},
+    {"group": "角色权限", "title": "编辑权限", "roles": ["super_admin"], "frontend": "角色权限 / 编辑权限", "api": "/api/admin/super/roles/permissions", "table": "system_config", "targetTable": "system_config", "fields": ["config_group", "config_key", "config_value", "description"], "operation": "保存角色权限会写入持久化权限配置，并写入审计日志。"},
+
+    {"group": "系统配置", "title": "系统全局配置", "roles": ["super_admin"], "frontend": "系统配置 / 表单", "api": "/api/admin/super/system/config", "table": "system_config", "targetTable": "system_config", "fields": ["config_key", "config_value", "config_type", "config_group", "config_name", "description"], "operation": "系统名称、Logo、主题、上传限制、接口超时和数据保留来自 system_config。"},
+
+    {"group": "系统监控", "title": "最近异常", "roles": ["super_admin"], "frontend": "系统监控 / 最近异常", "api": "/api/admin/super/monitor", "table": "system_config", "targetTable": "system_config", "relatedTables": ["device", "user_feedback", "device_firmware_update_task"], "fields": ["config_group", "config_key", "config_value", "description"], "operation": "系统监控异常优先读取 monitor_exception；为空时从设备离线、待处理反馈和失败固件任务动态生成。"},
+
+    {"group": "系统公告", "title": "系统公告列表", "roles": ["super_admin"], "frontend": "系统公告 / 列表", "api": "/api/admin/super/notices", "table": "system_config", "targetTable": "system_config", "fields": ["config_group", "config_key", "config_value", "config_type", "config_name", "description"], "operation": "公告来自 notice/notices/system_notice 配置组或 notice.* key。"},
+    {"group": "系统公告", "title": "新建公告", "roles": ["super_admin"], "frontend": "系统公告 / 新建公告", "api": "/api/admin/super/notices", "table": "system_config", "targetTable": "system_config", "fields": ["config_key", "config_value", "config_type", "config_group", "config_name", "description", "created_at", "updated_at"], "operation": "新建公告会新增 system_config 行，并写入审计日志。"},
+
+    {"group": "审计日志", "title": "审计与安全日志", "roles": ["super_admin"], "frontend": "审计日志 / 列表", "api": "/api/admin/super/security/logs", "table": "admin_operation_log", "targetTable": "admin_operation_log", "relatedTables": ["admin_user", "device_firmware_update_task", "user_feedback", "system_config"], "fields": ["admin_id", "action", "module", "operation_name", "path", "request_method", "ip_address", "result_status", "error_message", "created_at"], "operation": "审计日志优先读 admin_operation_log；不足时从管理员登录、固件任务、反馈处理、系统公告动态补充。"},
+
+    {"group": "个人信息", "title": "当前登录账号资料", "roles": ["super_admin", "market_admin", "operator_admin", "boss"], "frontend": "个人信息 / 账号资料", "api": "/api/admin/profile", "table": "admin_user", "targetTable": "admin_user", "fields": ["username", "role", "real_name", "job_no", "position", "phone", "email", "wechat_open_id"], "operation": "个人信息来自当前登录 token 对应的 admin_user，缺失时回退默认账号配置。"},
+    {"group": "个人信息", "title": "修改密码", "roles": ["super_admin", "market_admin", "operator_admin", "boss"], "frontend": "个人信息 / 修改密码", "api": "/api/admin/password", "table": "admin_user", "targetTable": "admin_user", "fields": ["username", "password_hash", "updated_at"], "operation": "修改密码会更新 admin_user.password_hash，默认账号则写入账号覆盖层。"},
+]
 
 
 def serialize_value(value):
@@ -1718,8 +1806,29 @@ def list_mongo_documents(collection_name):
     except ValueError:
         return error("limit 和 offset 必须是整数", 400)
 
-    docs = list(collection.find({}).sort("_id", -1).skip(offset).limit(limit))
-    total = collection.count_documents({})
+    keyword = str(request.args.get("q") or "").strip()
+    query = {}
+    if keyword:
+        query = {
+            "$expr": {
+                "$anyElementTrue": {
+                    "$map": {
+                        "input": {"$objectToArray": "$$ROOT"},
+                        "as": "field",
+                        "in": {
+                            "$regexMatch": {
+                                "input": {"$toString": "$$field.v"},
+                                "regex": re.escape(keyword),
+                                "options": "i",
+                            }
+                        },
+                    }
+                }
+            }
+        }
+
+    docs = list(collection.find(query).sort("_id", -1).skip(offset).limit(limit))
+    total = collection.count_documents(query)
     keys = []
     seen = set()
     for doc in docs:
@@ -2081,8 +2190,16 @@ def update_record(table_key, pk_value):
             cursor.execute(sql, params)
 
             if cursor.rowcount == 0:
-                conn.rollback()
-                return error("数据不存在或内容未变化", 404)
+                exists_sql = (
+                    f"SELECT 1 FROM {quote_identifier(table)} "
+                    f"WHERE {quote_identifier(pk_column)} = %s LIMIT 1"
+                )
+                cursor.execute(exists_sql, (pk_value,))
+                if not cursor.fetchone():
+                    conn.rollback()
+                    return error("数据不存在", 404)
+                conn.commit()
+                return success(data, "保存成功，内容未变化")
 
             if table_key == "hot_ranking_daily":
                 new_hot_group = fetch_hot_ranking_group(cursor, pk_value)
@@ -2097,6 +2214,35 @@ def update_record(table_key, pk_value):
     finally:
         if conn:
             conn.close()
+
+
+def delete_referencing_rows(cursor, parent_table, parent_pk_column, parent_pk_value):
+    cursor.execute(
+        """
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND REFERENCED_TABLE_NAME = %s
+          AND REFERENCED_COLUMN_NAME = %s
+        ORDER BY TABLE_NAME, ORDINAL_POSITION
+        """,
+        (parent_table, parent_pk_column),
+    )
+    references = cursor.fetchall() or []
+    deleted = {}
+    for ref in references:
+        child_table = ref.get("TABLE_NAME")
+        child_column = ref.get("COLUMN_NAME")
+        if not child_table or not child_column:
+            continue
+        cursor.execute(
+            f"DELETE FROM {quote_identifier(child_table)} "
+            f"WHERE {quote_identifier(child_column)} = %s",
+            (parent_pk_value,),
+        )
+        if cursor.rowcount:
+            deleted[child_table] = deleted.get(child_table, 0) + cursor.rowcount
+    return deleted
 
 
 # =========================================================
@@ -2131,6 +2277,9 @@ def delete_record(table_key, pk_value):
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
             old_hot_group = fetch_hot_ranking_group(cursor, pk_value) if table_key == "hot_ranking_daily" else None
+            child_deleted = {}
+            if table_key == "user":
+                child_deleted = delete_referencing_rows(cursor, table, pk_column, pk_value)
             cursor.execute(sql, (pk_value,))
 
             if cursor.rowcount == 0:
@@ -2141,7 +2290,7 @@ def delete_record(table_key, pk_value):
                 reorder_hot_ranking_groups(cursor, old_hot_group)
 
         conn.commit()
-        return success(None, "删除成功")
+        return success({"deletedChildren": child_deleted}, "删除成功")
     except Exception as exc:
         if conn:
             conn.rollback()
@@ -2279,8 +2428,16 @@ def update_composite_record(table_key):
             cursor.execute(sql, params)
 
             if cursor.rowcount == 0:
-                conn.rollback()
-                return error("数据不存在或内容未变化", 404)
+                exists_sql = (
+                    f"SELECT 1 FROM {quote_identifier(table)} "
+                    f"WHERE {where_sql} LIMIT 1"
+                )
+                cursor.execute(exists_sql, pk_values)
+                if not cursor.fetchone():
+                    conn.rollback()
+                    return error("数据不存在", 404)
+                conn.commit()
+                return success(data, "保存成功，内容未变化")
 
         conn.commit()
         return success(data, "修改成功")
