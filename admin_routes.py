@@ -1153,11 +1153,16 @@ def sales_amount():
 @admin_bp.get("/super/overview/activity-rate")
 @require_admin("super", "boss")
 def activity_rate():
+    metrics = overview_activity_metrics()
+    return response_ok(metrics)
+
+
+def overview_activity_metrics():
     total = count_sql("SELECT COUNT(*) AS c FROM user_profile", fallback=0)
     if not total:
         total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
     active = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
-    return response_ok({"activeUserCount": active, "totalUserCount": total, "activityRate": round(active / max(total, 1), 4)})
+    return {"activeUserCount": active, "totalUserCount": total, "activityRate": round(active / max(total, 1), 4)}
 
 
 @admin_bp.get("/super/trend/growth")
@@ -2897,6 +2902,7 @@ def create_admin_notice():
 def decision_summary():
     stats = daily_stats_rows(8)
     latest = stats[-1] if stats else {}
+    activity = overview_activity_metrics()
     risk_rows = _system_config_group_rows("decision_risk", 20)
     risks = [
         {
@@ -2909,7 +2915,7 @@ def decision_summary():
     return response_ok({
         "cards": [
             {"label": "播放次数", "value": _int(latest.get("total_play_count"), 0), "trend": ""},
-            {"label": "活跃用户", "value": _int(latest.get("unique_user_count"), 0), "trend": ""},
+            {"label": "活跃用户", "value": _int(activity.get("activeUserCount"), 0), "trend": ""},
             {"label": "活跃设备", "value": _int(latest.get("unique_device_count"), 0), "trend": ""},
             {"label": "平均播放时长", "value": f"{_int(latest.get('avg_play_duration_seconds'), 0)} 秒", "trend": ""},
         ],

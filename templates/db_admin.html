@@ -1211,6 +1211,44 @@
       return `${Date.now()}${Math.floor(Math.random() * 100000).toString().padStart(5, "0")}`;
     }
 
+    async function createQuickSaleUser(userSample, suffix, index, createdAt) {
+      const username = `sale_user_${suffix}_${index + 1}`;
+      const row = {
+        ...userSample,
+        username,
+        password_hash: userSample.password_hash || "123456",
+        phone: `137${String((Number(suffix.slice(-8)) + index) % 100000000).padStart(8, "0")}`,
+        created_at: createdAt,
+        nickname: `成交用户${suffix.slice(-6)}${index + 1}`,
+        avatar: userSample.avatar || "",
+        email: `${username}@smart-speaker.local`,
+        status: "active",
+        last_login_at: createdAt,
+      };
+      const inserted = await api("/api/db/user", { method: "POST", body: row });
+      return inserted.id;
+    }
+
+    async function createQuickSaleDevice(deviceSample, suffix, index, createdAt, region) {
+      const deviceNumber = `SPK-SALE-${suffix.slice(-10)}-${String(index + 1).padStart(2, "0")}`;
+      const row = {
+        ...deviceSample,
+        device_number: deviceNumber,
+        model_name: deviceSample.model_name || "A1",
+        status: 1,
+        firmware_version: deviceSample.firmware_version || "v1.0.0",
+        last_active: createdAt,
+        device_name: `成交音箱${index + 1}`,
+        device_type: "speaker",
+        online_status: "online",
+        ip_address: `192.168.20.${20 + (index % 200)}`,
+        hardware_version: deviceSample.hardware_version || "HW-A1",
+        location: `${region.provinceName}${region.cityName}`,
+      };
+      const inserted = await api("/api/db/device", { method: "POST", body: row });
+      return inserted.id;
+    }
+
     async function quickAdjustSalesRegion() {
       const dateValue = el("salesQuickDate").value;
       const count = Number(el("salesQuickCount").value);
@@ -1232,12 +1270,20 @@
       try {
         const region = parseRegionInput(el("salesQuickRegion").value);
         const sample = await api("/api/db/sales_order/sample");
-        result.textContent = `正在补 ${count} 笔 ${region.provinceName}${region.cityName} 已支付订单...`;
+        const userSample = await api("/api/db/user/sample");
+        const deviceSample = await api("/api/db/device/sample");
+        result.textContent = `正在补 ${count} 笔 ${region.provinceName}${region.cityName} 成交：用户、设备和已支付订单会一起新增...`;
         for (let i = 0; i < count; i += 1) {
           const suffix = uniqueSuffix();
+          const createdAt = randomTimeOnDate(dateValue, i);
+          const userId = await createQuickSaleUser(userSample, suffix, i, createdAt);
+          const deviceId = await createQuickSaleDevice(deviceSample, suffix, i, createdAt, region);
+          if (!userId || !deviceId) throw new Error("新增用户或设备失败，未拿到自增 ID");
           const row = {
             ...sample,
             order_no: `QSO${suffix}${String(i + 1).padStart(3, "0")}`,
+            user_id: userId,
+            device_id: deviceId,
             order_amount: amount,
             pay_amount: amount,
             order_status: "finished",
@@ -1246,8 +1292,8 @@
             province_name: region.provinceName,
             city_code: region.cityCode,
             city_name: region.cityName,
-            paid_at: randomTimeOnDate(dateValue, i),
-            created_at: randomTimeOnDate(dateValue, i),
+            paid_at: createdAt,
+            created_at: createdAt,
           };
           await api("/api/db/sales_order", { method: "POST", body: row });
         }
@@ -1257,7 +1303,7 @@
           statusPrefix: `已补 ${count} 笔地区销售订单`,
           body: { date: dateValue },
         });
-        result.textContent = `完成：${region.provinceName}${region.cityName} 已补 ${count} 笔订单，可点“看结果表”核验 region_stats_daily。`;
+        result.textContent = `完成：${region.provinceName}${region.cityName} 已补 ${count} 个用户、${count} 台设备和 ${count} 笔订单，可点“看结果表”核验 region_stats_daily。`;
       } catch (err) {
         result.textContent = `快捷调整失败：${err.message}`;
         setStatus(`快捷调整失败：${err.message}`);

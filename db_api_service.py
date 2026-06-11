@@ -1308,9 +1308,9 @@ def ensure_quick_media_mapping(cursor):
     return cursor.lastrowid
 
 
-def create_quick_user(cursor, index):
+def create_quick_user(cursor, index, created_at=None):
     stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-    created_at = datetime.now() - timedelta(days=1)
+    created_at = created_at or (datetime.now() - timedelta(days=1))
     username = f"funnel_user_{stamp}_{index}"
     cursor.execute(
         """
@@ -1352,7 +1352,9 @@ def create_quick_device(cursor, index):
 
 def create_quick_binding(cursor, user_id, user_created_at, index):
     device_id = create_quick_device(cursor, index)
-    bind_at = max(user_created_at + timedelta(hours=1), datetime.now() - timedelta(hours=6))
+    bind_at = user_created_at + timedelta(hours=1)
+    if bind_at > datetime.now() - timedelta(days=2, hours=2):
+        bind_at = datetime.now() - timedelta(days=2, hours=2)
     cursor.execute(
         """
         INSERT IGNORE INTO user_device_binding
@@ -1449,6 +1451,18 @@ def add_play_history(cursor, user_id, device_id, mapping_id, played_at):
     )
 
 
+def add_retention_pair(cursor, user_id, device_id, mapping_id, bind_time):
+    base_time = bind_time or (datetime.now() - timedelta(days=2, hours=2))
+    first_at = base_time + timedelta(hours=1)
+    if first_at > datetime.now() - timedelta(days=1, hours=2):
+        first_at = datetime.now() - timedelta(days=2, hours=1)
+    retained_at = datetime.now() - timedelta(hours=1)
+    if retained_at.date() == first_at.date():
+        first_at = retained_at - timedelta(days=1)
+    add_play_history(cursor, user_id, device_id, mapping_id, first_at)
+    add_play_history(cursor, user_id, device_id, mapping_id, retained_at)
+
+
 @db_api.route("/funnel/quick-adjust", methods=["POST"])
 def quick_adjust_funnel():
     body = request.get_json(silent=True) or {}
@@ -1499,9 +1513,34 @@ def quick_adjust_funnel():
             need_retained = max(0, targets["retainedUsers"] - current["retainedUsers"])
             candidates = first_play_users_without_retention(cursor, need_retained)
             for row in candidates:
-                first_play_at = row.get("first_play_at") or datetime.now() - timedelta(days=2)
-                retained_at = max(datetime.now() - timedelta(days=1), first_play_at + timedelta(days=1))
-                add_play_history(cursor, row.get("user_id"), row.get("device_id"), mapping_id, retained_at)
+                add_retention_pair(
+                    cursor,
+                    row.get("user_id"),
+                    row.get("device_id"),
+                    mapping_id,
+                    row.get("bind_time") or row.get("first_play_at"),
+                )
+                created_plays += 2
+
+            current = funnel_counts(cursor)
+            need_retained = max(0, targets["retainedUsers"] - current["retainedUsers"])
+            for index in range(need_retained):
+                user_id, created_at = create_quick_user(cursor, index + 1, datetime.now() - timedelta(days=3))
+                created_users += 1
+                device_id, bind_at = create_quick_binding(cursor, user_id, created_at, index + 1)
+                created_bindings += 1
+                add_retention_pair(cursor, user_id, device_id, mapping_id, bind_at)
+                created_plays += 2
+
+            current = funnel_counts(cursor)
+            need_first = max(0, targets["firstPlayUsers"] - current["firstPlayUsers"])
+            candidates = bound_users_without_first_play(cursor, need_first)
+            for index, row in enumerate(candidates):
+                bind_time = row.get("bind_time") or datetime.now() - timedelta(days=2, hours=2)
+                played_at = bind_time + timedelta(hours=1)
+                if played_at > datetime.now():
+                    played_at = datetime.now() - timedelta(hours=1)
+                add_play_history(cursor, row.get("user_id"), row.get("device_id"), mapping_id, played_at)
                 created_plays += 1
 
             after = funnel_counts(cursor)
