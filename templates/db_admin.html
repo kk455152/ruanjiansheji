@@ -550,8 +550,10 @@
         <div id="quickAdjustResult" class="quick-adjust-result"></div>
       </div>
       <div class="toolbar" id="mysqlToolbar">
+        <input id="quickKeyword" placeholder="关键词：用户名 / 设备名 / 编号 / 手机号">
         <input id="keyword" placeholder="MySQL 字段名，例如 username">
         <input id="keywordValue" placeholder="筛选值">
+        <input id="rowLimit" type="number" min="1" max="500" value="500" title="最多显示 500 行">
         <button id="filterBtn">筛选</button>
       </div>
       <div class="toolbar">
@@ -962,9 +964,12 @@
     async function loadMysqlRows() {
       const store = state.mysql;
       if (!store.current) return;
-      const params = new URLSearchParams({ limit: "100", offset: "0" });
+      const limit = Math.max(1, Math.min(500, Number(el("rowLimit").value || 500)));
+      const params = new URLSearchParams({ limit: String(limit), offset: "0" });
+      const keyword = el("quickKeyword").value.trim();
       const field = el("keyword").value.trim();
       const value = el("keywordValue").value.trim();
+      if (keyword) params.set("q", keyword);
       if (field && value) params.set(field, value);
       const data = await api(`/api/db/${store.current}?${params.toString()}`);
       store.schema = data.schema;
@@ -973,7 +978,7 @@
       applyFieldFocus();
       const info = tableInfo(store.current);
       el("tableTitle").innerHTML = `${escapeHtml(store.current)} <small>${escapeHtml(info?.label || "")}</small>`;
-      setStatus(`MySQL / ${store.current}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条`);
+      setStatus(`MySQL / ${store.current}: 共 ${data.total || 0} 条，当前显示 ${store.rows.length} 条${keyword ? `，关键词：${keyword}` : ""}`);
     }
 
     async function loadMongoRows() {
@@ -1407,6 +1412,11 @@
       scrollContentTop("auto");
     };
     el("filterBtn").onclick = loadRows;
+    ["quickKeyword", "keyword", "keywordValue", "rowLimit"].forEach((id) => {
+      el(id).onkeydown = (event) => {
+        if (event.key === "Enter") loadRows();
+      };
+    });
     el("reloadBtn").onclick = refreshCurrentTable;
     el("newBtn").onclick = openNew;
     el("saveBtn").onclick = saveRow;

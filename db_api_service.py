@@ -1834,6 +1834,15 @@ def list_records(table_key):
             where_parts.append(f"{quote_identifier(column)} = %s")
             params.append(request.args.get(column))
 
+    keyword = str(request.args.get("q") or "").strip()
+    if keyword:
+        keyword_parts = [
+            f"CAST({quote_identifier(column)} AS CHAR) LIKE %s"
+            for column in columns
+        ]
+        where_parts.append("(" + " OR ".join(keyword_parts) + ")")
+        params.extend([f"%{keyword}%"] * len(columns))
+
     where_sql = ""
     if where_parts:
         where_sql = " WHERE " + " AND ".join(where_parts)
