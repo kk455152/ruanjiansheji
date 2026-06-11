@@ -240,6 +240,20 @@
       color: #a45f00;
       font-size: 12px;
     }
+    .catalog-derived {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px solid #f0c36d;
+      border-radius: 6px;
+      background: #fff8e6;
+      color: #7a4a00;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .catalog-route.primary-route {
+      color: #244b35;
+      font-weight: 600;
+    }
     .catalog-actions {
       display: flex;
       justify-content: stretch;
@@ -290,6 +304,20 @@
       color: #6c8275;
       font-size: 12px;
       word-break: break-word;
+    }
+    .maintenance-guide.derived-guide {
+      border-color: #f0c36d;
+      background: #fffaf0;
+    }
+    .maintenance-guide .guide-alert {
+      margin: 8px 0 10px;
+      padding: 9px 10px;
+      border: 1px solid #f0c36d;
+      border-radius: 6px;
+      background: #fff8e6;
+      color: #7a4a00;
+      font-size: 12px;
+      line-height: 1.55;
     }
     .field-focus {
       outline: 2px solid #e3a338;
@@ -573,6 +601,14 @@
       "user_feedback", "device_log", "device_alert", "device_firmware_update_task",
       "daily_stats", "region_stats_daily", "hot_ranking_daily", "user_value_segment_daily",
     ]);
+    const DERIVED_RESULT_TABLES = new Set([
+      "daily_stats", "region_stats_daily", "hot_ranking_daily",
+      "user_value_segment_daily", "user_activity_daily", "analytics_metric_daily",
+    ]);
+    const RAW_TABLE_PRIORITY = [
+      "play_history", "media_mapping", "sales_order", "user_profile",
+      "user", "device", "user_device_binding",
+    ];
 
     async function api(path, options = {}) {
       const res = await fetch(path, {
@@ -688,11 +724,12 @@
             </div>
             <div class="catalog-current">当前前端值：${escapeHtml(item.current || "正在读取或暂无数据")}</div>
             ${item.warning && !String(item.warning).startsWith("0 ") ? `<div class="catalog-warning">需要处理：${escapeHtml(item.warning)}</div>` : ""}
+            ${isDerivedCatalogItem(item) ? `<div class="catalog-derived">${escapeHtml(derivedNotice(item))}</div>` : ""}
             <p>${escapeHtml(item.operation)}</p>
-            <div class="catalog-route">维护位置：${escapeHtml(item.source === "mongo" ? "MongoDB" : "MySQL")} / ${escapeHtml(item.targetTable || item.collection || item.table || "")}</div>
+            <div class="catalog-route primary-route">${escapeHtml(routeLabel(item))}</div>
           </div>
           <div class="catalog-actions">
-            <button data-catalog-index="${index}">去维护</button>
+            <button data-catalog-index="${index}">${escapeHtml(isDerivedCatalogItem(item) ? "去改原始表" : "去维护")}</button>
           </div>
         </div>
       `).join("") || "<p class='status'>没有匹配的前端数据项</p>";
@@ -708,6 +745,58 @@
         .filter(Boolean);
     }
 
+    function firstRawTable(item) {
+      const candidates = [
+        ...(item?.relatedTables || []),
+        ...splitTables(item?.table),
+        item?.targetTable,
+      ].filter(Boolean);
+      const fields = item?.fields || [];
+      const text = `${item?.group || ""} ${item?.title || ""} ${item?.frontend || ""} ${item?.operation || ""}`;
+      if (fields.some((field) => ["total_play_count", "total_play_duration_seconds", "avg_play_duration_seconds", "hottest_play_count"].includes(field)) || /播放|热歌|活跃|留存/.test(text)) {
+        return "play_history";
+      }
+      if (fields.some((field) => ["total_sales_amount", "sales_amount", "order_count", "pay_amount"].includes(field)) || /销售|订单|购买/.test(text)) {
+        return "sales_order";
+      }
+      if (fields.some((field) => ["new_user_count", "user_count", "active_user_count", "province_name", "age_range"].includes(field)) || /用户|画像|地区/.test(text)) {
+        return "user_profile";
+      }
+      if (fields.some((field) => ["new_device_count", "unique_device_count", "online_device_count"].includes(field)) || /设备/.test(text)) {
+        return "device";
+      }
+      return RAW_TABLE_PRIORITY.find((table) => candidates.includes(table))
+        || candidates.find((table) => !DERIVED_RESULT_TABLES.has(table))
+        || "";
+    }
+
+    function isDerivedCatalogItem(item) {
+      if (item?.source === "mongo") return false;
+      const tables = [
+        item?.targetTable,
+        ...splitTables(item?.table),
+      ].filter(Boolean);
+      return tables.some((table) => DERIVED_RESULT_TABLES.has(table));
+    }
+
+    function derivedNotice(item) {
+      const rawTable = firstRawTable(item);
+      const related = (item.relatedTables || []).join(", ");
+      if (rawTable) {
+        return `这是汇总计算结果。优先改 ${rawTable}${related ? ` 等原始表` : ""}，保存后点“运行每日汇总”。直接改汇总表只适合临时展示，后续重算会覆盖。`;
+      }
+      return "这是汇总计算结果，不建议直接改；应先改原始明细或调整 daily_stats_job.py 的统计口径，再运行每日汇总。";
+    }
+
+    function routeLabel(item) {
+      const target = catalogTarget(item);
+      const summaryTable = item.targetTable || item.table || "";
+      if (isDerivedCatalogItem(item)) {
+        return `推荐维护位置：${target.source === "mongo" ? "MongoDB" : "MySQL"} / ${target.key || ""}；汇总结果表：${summaryTable}`;
+      }
+      return `维护位置：${target.source === "mongo" ? "MongoDB" : "MySQL"} / ${target.key || ""}`;
+    }
+
     function catalogTarget(item) {
       if (item?.source === "mongo") {
         return { source: "mongo", key: item.collection || item.table };
@@ -715,6 +804,10 @@
       const rawTable = String(item?.table || "").trim();
       if (rawTable.toLowerCase().startsWith("mongodb ")) {
         return { source: "mongo", key: rawTable.replace(/^MongoDB\s+/i, "").trim() };
+      }
+      if (isDerivedCatalogItem(item)) {
+        const rawTarget = firstRawTable(item);
+        if (rawTarget) return { source: "mysql", key: rawTarget };
       }
       const table = item?.targetTable || splitTables(item?.table)[0] || item?.table;
       return { source: "mysql", key: table };
@@ -732,8 +825,10 @@
       const related = (item.relatedTables || []).join(", ");
       const guide = el("maintenanceGuide");
       guide.style.display = "block";
+      guide.classList.toggle("derived-guide", isDerivedCatalogItem(item));
       guide.innerHTML = `
         <h3>${escapeHtml(item.group || "")} / ${escapeHtml(item.title || "")}</h3>
+        ${isDerivedCatalogItem(item) ? `<div class="guide-alert">${escapeHtml(derivedNotice(item))}</div>` : ""}
         <p><strong>当前前端值：</strong>${escapeHtml(item.current || "暂无当前值")}。打开后黄色高亮列就是主要维护位置。</p>
         <p><strong>具体怎么改：</strong>${escapeHtml(item.operation || "")}</p>
         <div class="guide-grid">
