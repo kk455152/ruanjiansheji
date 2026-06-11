@@ -319,6 +319,42 @@
       font-size: 12px;
       line-height: 1.55;
     }
+    .quick-adjust {
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid #cfe3d5;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    .quick-adjust h3 {
+      margin: 0 0 8px;
+      color: #234934;
+      font-size: 15px;
+    }
+    .quick-adjust p {
+      margin: 6px 0 10px;
+      color: #526d5d;
+      font-size: 12px;
+      line-height: 1.58;
+    }
+    .quick-adjust-row {
+      display: grid;
+      grid-template-columns: minmax(150px, 180px) minmax(150px, 180px) auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .quick-adjust label {
+      display: grid;
+      gap: 4px;
+      color: #526d5d;
+      font-size: 12px;
+    }
+    .quick-adjust .quick-adjust-result {
+      margin-top: 8px;
+      color: #7a4a00;
+      font-size: 12px;
+      line-height: 1.5;
+    }
     .field-focus {
       outline: 2px solid #e3a338;
       outline-offset: -2px;
@@ -499,6 +535,20 @@
         </div>
       </div>
       <div id="maintenanceGuide" class="maintenance-guide" style="display:none"></div>
+      <div id="quickAdjustPanel" class="quick-adjust" style="display:none">
+        <h3>快捷调整播放总数</h3>
+        <p>适合临时演示或补模拟数据：选择统计日期和目标播放总数，系统会补充 play_history 明细，然后自动运行每日汇总。</p>
+        <div class="quick-adjust-row">
+          <label>统计日期
+            <input id="quickStatDate" type="date">
+          </label>
+          <label>目标播放总数
+            <input id="quickTargetCount" type="number" min="0" step="1" placeholder="例如 1200">
+          </label>
+          <button id="quickAdjustBtn">补明细并汇总</button>
+        </div>
+        <div id="quickAdjustResult" class="quick-adjust-result"></div>
+      </div>
       <div class="toolbar" id="mysqlToolbar">
         <input id="keyword" placeholder="MySQL 字段名，例如 username">
         <input id="keywordValue" placeholder="筛选值">
@@ -638,6 +688,17 @@
       document.querySelector("section")?.scrollTo({ top: 0, left: 0, behavior });
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
+    }
+    function localDateString(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    function yesterdayString() {
+      const date = new Date();
+      date.setDate(date.getDate() - 1);
+      return localDateString(date);
     }
     function metaFor(column) {
       return (state.mysql.schema?.columnMeta || []).find((item) => item.name === column) || {
@@ -797,6 +858,28 @@
       return `维护位置：${target.source === "mongo" ? "MongoDB" : "MySQL"} / ${target.key || ""}`;
     }
 
+    function supportsPlayCountQuickAdjust(item, target) {
+      if (!item || target?.source !== "mysql" || target?.key !== "play_history") return false;
+      const fields = item.fields || [];
+      const text = `${item.group || ""} ${item.title || ""} ${item.frontend || ""} ${item.operation || ""}`;
+      return fields.includes("total_play_count")
+        || fields.includes("hottest_play_count")
+        || /播放次数|播放总量|播放趋势|热歌/.test(text);
+    }
+
+    function renderQuickAdjust(item, target) {
+      const panel = el("quickAdjustPanel");
+      const result = el("quickAdjustResult");
+      if (!supportsPlayCountQuickAdjust(item, target)) {
+        panel.style.display = "none";
+        result.textContent = "";
+        return;
+      }
+      panel.style.display = "block";
+      if (!el("quickStatDate").value) el("quickStatDate").value = yesterdayString();
+      result.textContent = "提示：只能自动把播放总数调大；调小需要删除对应日期的 play_history 明细，避免误删真实记录。";
+    }
+
     function catalogTarget(item) {
       if (item?.source === "mongo") {
         return { source: "mongo", key: item.collection || item.table };
@@ -854,6 +937,7 @@
       closeEditor();
       renderItems();
       renderMaintenanceGuide(item, target);
+      renderQuickAdjust(item, target);
       await loadRows();
       setStatus(`已定位：${item.title} / ${target.key}，黄色字段就是建议修改的位置`);
       scrollContentTop("smooth");
@@ -864,6 +948,7 @@
       state.focusFields = [];
       state.maintenance = null;
       el("maintenanceGuide").style.display = "none";
+      el("quickAdjustPanel").style.display = "none";
       closeEditor();
       renderItems();
       await loadRows();
@@ -1200,11 +1285,12 @@
       el("runDailyBtn").disabled = true;
       const reloadRows = options.reloadRows !== false;
       const statusPrefix = options.statusPrefix || "";
+      const body = { skip_seed: true, skip_generate: true, ...(options.body || {}) };
       setStatus(statusPrefix ? `${statusPrefix}，正在运行每日汇总...` : "正在运行每日汇总...");
       try {
         const data = await api("/api/db/daily-stats/run", {
           method: "POST",
-          body: { skip_seed: true, skip_generate: true },
+          body,
         });
         if (reloadRows) await loadRows();
         await refreshCatalog();
@@ -1214,6 +1300,87 @@
         setStatus(`每日汇总失败：${err.message}`);
       } finally {
         el("runDailyBtn").disabled = false;
+      }
+    }
+
+    function randomTimeOnDate(dateValue, index) {
+      const seconds = (index * 37) % (24 * 60 * 60);
+      const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
+      const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+      const s = String(seconds % 60).padStart(2, "0");
+      return `${dateValue} ${h}:${m}:${s}`;
+    }
+
+    async function currentDailyPlayCount(dateValue) {
+      const params = new URLSearchParams({ limit: "1", offset: "0", stat_date: dateValue });
+      const data = await api(`/api/db/daily_stats?${params.toString()}`);
+      const row = (data.list || [])[0] || {};
+      return Number(row.total_play_count || 0);
+    }
+
+    async function quickAdjustPlayCount() {
+      const dateValue = el("quickStatDate").value;
+      const target = Number(el("quickTargetCount").value);
+      const result = el("quickAdjustResult");
+      if (!dateValue) {
+        result.textContent = "请先选择统计日期。";
+        return;
+      }
+      if (!Number.isInteger(target) || target < 0) {
+        result.textContent = "目标播放总数必须是大于等于 0 的整数。";
+        return;
+      }
+      el("quickAdjustBtn").disabled = true;
+      try {
+        result.textContent = "正在同步目标日期当前汇总...";
+        await api("/api/db/daily-stats/run", {
+          method: "POST",
+          body: { date: dateValue, skip_seed: true, skip_generate: true },
+        });
+        result.textContent = "正在读取当前日报播放总数...";
+        const current = await currentDailyPlayCount(dateValue);
+        const delta = target - current;
+        if (delta === 0) {
+          result.textContent = `当前 ${dateValue} 已经是 ${current} 次，不需要调整。`;
+          return;
+        }
+        if (delta < 0) {
+          result.textContent = `当前 ${dateValue} 是 ${current} 次，目标是 ${target} 次，需要减少 ${Math.abs(delta)} 条。为避免误删真实记录，请在 play_history 里筛选该日期后人工删除，再运行每日汇总。`;
+          return;
+        }
+        if (delta > 300) {
+          result.textContent = `需要补 ${delta} 条，单次最多自动补 300 条。请先把目标设到 ${current + 300} 左右分批补，避免页面等待太久。`;
+          return;
+        }
+        result.textContent = `当前 ${dateValue} 是 ${current} 次，正在补 ${delta} 条 play_history 明细...`;
+        const sample = await api("/api/db/play_history/sample");
+        for (let i = 0; i < delta; i += 1) {
+          const row = {
+            device_id: sample.device_id || 1,
+            user_id: sample.user_id || 1,
+            mapping_id: sample.mapping_id || null,
+            play_duration: Number(sample.play_duration || 180),
+            created_at: randomTimeOnDate(dateValue, i),
+            style: sample.style || "demo",
+            source_platform: sample.source_platform || "netease",
+          };
+          await api("/api/db/play_history", { method: "POST", body: row });
+          if ((i + 1) % 20 === 0 || i + 1 === delta) {
+            result.textContent = `已补 ${i + 1}/${delta} 条，正在继续...`;
+          }
+        }
+        result.textContent = "明细已补完，正在运行每日汇总...";
+        await runDailyStats({
+          reloadRows: true,
+          statusPrefix: `已补 ${delta} 条 ${dateValue} 播放明细`,
+          body: { date: dateValue },
+        });
+        result.textContent = `完成：${dateValue} 已从 ${current} 次补到约 ${target} 次，请刷新前端图表查看。`;
+      } catch (err) {
+        result.textContent = `快捷调整失败：${err.message}`;
+        setStatus(`快捷调整失败：${err.message}`);
+      } finally {
+        el("quickAdjustBtn").disabled = false;
       }
     }
 
@@ -1230,9 +1397,11 @@
       }
     };
     el("runDailyBtn").onclick = () => runDailyStats();
+    el("quickAdjustBtn").onclick = quickAdjustPlayCount;
     el("backCatalogBtn").onclick = async () => {
       closeEditor();
       el("maintenanceGuide").style.display = "none";
+      el("quickAdjustPanel").style.display = "none";
       setView("catalog");
       await refreshCatalog();
       scrollContentTop("auto");
