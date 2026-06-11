@@ -722,12 +722,12 @@ TABLE_CONFIG = {
         "insert_columns": [
             "order_no", "user_id", "device_id", "order_amount", "pay_amount",
             "order_status", "pay_status", "province_code", "province_name",
-            "city_code", "city_name", "paid_at",
+            "city_code", "city_name", "paid_at", "created_at",
         ],
         "update_columns": [
             "user_id", "device_id", "order_amount", "pay_amount", "order_status",
             "pay_status", "province_code", "province_name", "city_code", "city_name",
-            "paid_at",
+            "paid_at", "created_at",
         ],
     },
 

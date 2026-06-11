@@ -680,6 +680,7 @@
       maintenance: null,
       mode: "create",
       pk: null,
+      originalMysqlRow: null,
       currentDocId: null,
     };
     const MONGO_META = {
@@ -1180,6 +1181,7 @@
             city_code: region.cityCode,
             city_name: region.cityName,
             paid_at: randomTimeOnDate(dateValue, i),
+            created_at: randomTimeOnDate(dateValue, i),
           };
           await api("/api/db/sales_order", { method: "POST", body: row });
         }
@@ -1470,6 +1472,7 @@
       state.mode = mode;
       state.pk = {};
       for (const key of state.mysql.schema.pk) state.pk[key] = row[key];
+      state.originalMysqlRow = mode === "edit" ? { ...row } : null;
       const fields = mode === "create" ? state.mysql.schema.insertColumns : state.mysql.schema.updateColumns;
       el("editorTitle").textContent = mode === "create" ? `新增 MySQL / ${state.mysql.current}` : `编辑 MySQL / ${state.mysql.current}`;
       el("jsonForm").style.display = "none";
@@ -1507,6 +1510,7 @@
       el("editor").classList.remove("open");
       el("form").innerHTML = "";
       el("jsonText").value = "";
+      state.originalMysqlRow = null;
     }
 
     function collectMysqlForm() {
@@ -1566,13 +1570,15 @@
 
     async function saveMysqlRow() {
       const data = collectMysqlForm();
+      const previousRecord = state.mode === "edit" ? { ...(state.originalMysqlRow || {}) } : null;
+      const changedRecord = { ...(previousRecord || {}), ...data };
       if (state.mode === "create") {
         await api(`/api/db/${state.mysql.current}`, { method: "POST", body: data });
       } else {
         await api(mysqlUpdateUrl(state.pk), { method: "PUT", body: data });
       }
       closeEditor();
-      await refreshAfterMysqlChange("保存成功", data);
+      await refreshAfterMysqlChange("保存成功", changedRecord, previousRecord);
     }
 
     async function saveMongoRow() {
@@ -1651,20 +1657,36 @@
       return "";
     }
 
-    function dailySummaryBodyForRecord(record) {
-      const date = summaryDateFromRecord(record);
-      return date ? { date } : {};
+    function summaryDatesFromRecords(...records) {
+      const dates = new Set();
+      for (const record of records) {
+        const candidates = ["created_at", "paid_at", "stat_date", "ranking_date", "metric_date", "updated_at"];
+        for (const field of candidates) {
+          const value = String(record?.[field] || "").trim();
+          if (/^\d{4}-\d{2}-\d{2}/.test(value)) dates.add(value.slice(0, 10));
+        }
+      }
+      return [...dates];
     }
 
-    async function refreshAfterMysqlChange(prefix, changedRecord = null) {
+    async function refreshAfterMysqlChange(prefix, changedRecord = null, previousRecord = null) {
       if (DAILY_SUMMARY_TABLES.has(state.mysql.current)) {
-        const date = summaryDateFromRecord(changedRecord);
-        setStatus(`${prefix}，正在${date ? `按 ${date} ` : ""}运行每日汇总并刷新前端数据目录...`);
-        await runDailyStats({
-          reloadRows: true,
-          statusPrefix: prefix,
-          body: dailySummaryBodyForRecord(changedRecord),
-        });
+        const dates = summaryDatesFromRecords(previousRecord, changedRecord);
+        if (dates.length) {
+          setStatus(`${prefix}，正在按 ${dates.join("、")} 运行每日汇总并刷新前端数据目录...`);
+          for (const date of dates) {
+            await runDailyStats({
+              reloadRows: false,
+              statusPrefix: `${prefix}，刷新 ${date}`,
+              body: { date },
+            });
+          }
+          await loadRows();
+          await refreshCatalog();
+          setStatus(`${prefix}，已刷新 ${dates.join("、")} 的每日汇总和前端数据目录`);
+          return;
+        }
+        await runDailyStats({ reloadRows: true, statusPrefix: prefix });
         return;
       }
       await loadRows();
