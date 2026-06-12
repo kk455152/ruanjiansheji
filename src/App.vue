@@ -43,7 +43,7 @@ const state = reactive({
     password: "",
     captchaAnswer: "",
     captchaToken: "",
-    captchaQuestion: "",
+    captchaVerified: false,
     captchaLoading: false,
     remember: true,
   },
@@ -394,18 +394,24 @@ async function silent(loader, fallback) {
   }
 }
 
-async function loadCaptcha() {
+function resetRobotVerification() {
+  state.loginForm.captchaToken = ""
+  state.loginForm.captchaAnswer = ""
+  state.loginForm.captchaVerified = false
+}
+
+async function verifyRobot() {
+  if (state.loginForm.captchaLoading || state.loginForm.captchaVerified) return
   state.loginForm.captchaLoading = true
   try {
     const data = await request("/api/admin/captcha", { token: "" })
-    state.loginForm.captchaQuestion = data.question || ""
     state.loginForm.captchaToken = data.captchaToken || ""
-    state.loginForm.captchaAnswer = ""
+    state.loginForm.captchaAnswer = "not_robot_checked"
+    state.loginForm.captchaVerified = Boolean(state.loginForm.captchaToken)
   } catch (error) {
     console.warn(error)
-    state.loginForm.captchaQuestion = "点击刷新重试"
-    state.loginForm.captchaToken = ""
-    state.loginForm.captchaAnswer = ""
+    resetRobotVerification()
+    ElMessage.error("机器人验证失败，请重试")
   } finally {
     state.loginForm.captchaLoading = false
   }
@@ -439,7 +445,7 @@ async function handleLogin() {
     await loadPage(true)
   } catch (error) {
     ElMessage.error(error.message || "登录失败")
-    await loadCaptcha()
+    resetRobotVerification()
   } finally {
     state.loading = false
   }
@@ -459,6 +465,7 @@ function clearSession() {
   state.token = ""
   state.admin = null
   stopProfileRefresh()
+  resetRobotVerification()
   localStorage.removeItem("admin_token")
   localStorage.removeItem("admin_info")
 }
@@ -469,7 +476,7 @@ async function handleLogout() {
   state.detail = null
   ElMessage.success("已退出登录")
   await nextTick()
-  await loadCaptcha()
+  resetRobotVerification()
 }
 
 async function refreshAdminProfile() {
@@ -512,7 +519,7 @@ function stopProfileRefresh() {
 
 async function restoreSession() {
   if (!state.token) {
-    await loadCaptcha()
+    resetRobotVerification()
     state.booting = false
     return
   }
@@ -522,7 +529,7 @@ async function restoreSession() {
     await loadPage(true)
   } catch {
     clearSession()
-    await loadCaptcha()
+    resetRobotVerification()
   } finally {
     state.booting = false
   }
@@ -1102,22 +1109,25 @@ onUnmounted(stopProfileRefresh)
           <input v-model="state.loginForm.password" autocomplete="current-password" type="password" placeholder="请输入密码" />
         </span>
       </label>
-      <label class="field captcha-field">
-        <span>机器人验证</span>
-        <span class="captcha-box">
-          <span class="captcha-question">
-            <i class="fa-solid fa-robot"></i>
-            {{ state.loginForm.captchaLoading ? "生成中..." : state.loginForm.captchaQuestion || "点击刷新" }}
+      <div class="robot-check-wrap">
+        <button
+          type="button"
+          :class="['robot-check-card', { verified: state.loginForm.captchaVerified }]"
+          :disabled="state.loginForm.captchaLoading || state.loading"
+          @click="verifyRobot"
+        >
+          <span class="robot-checkbox">
+            <i v-if="state.loginForm.captchaVerified" class="fa-solid fa-check"></i>
+            <i v-else-if="state.loginForm.captchaLoading" class="fa-solid fa-rotate-right spin"></i>
           </span>
-          <button class="captcha-refresh" type="button" :disabled="state.loginForm.captchaLoading || state.loading" @click="loadCaptcha">
-            <i :class="['fa-solid fa-rotate-right', { spin: state.loginForm.captchaLoading }]"></i>
-          </button>
-        </span>
-        <span class="field-input">
-          <i class="fa-solid fa-shield-halved"></i>
-          <input v-model="state.loginForm.captchaAnswer" inputmode="numeric" autocomplete="off" placeholder="请输入计算结果" />
-        </span>
-      </label>
+          <span class="robot-label">{{ state.loginForm.captchaVerified ? "验证通过" : "我不是机器人" }}</span>
+          <span class="robot-badge">
+            <i class="fa-solid fa-shield-halved"></i>
+            <strong>声盒验证</strong>
+            <small>Privacy - Terms</small>
+          </span>
+        </button>
+      </div>
       <label class="check-row">
         <input v-model="state.loginForm.remember" type="checkbox" />
         <span>记住用户名</span>
@@ -2086,55 +2096,86 @@ button {
   outline: none;
 }
 
-.captcha-field {
-  gap: 10px;
+.robot-check-wrap {
+  margin: 2px 0 18px;
 }
 
-.captcha-box {
+.robot-check-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 42px;
+  grid-template-columns: 42px minmax(0, 1fr) 84px;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
+  width: 100%;
+  min-height: 78px;
+  border: 1px solid rgba(95, 125, 104, 0.24);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 8px 24px rgba(95, 125, 104, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.52);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.field .captcha-question {
-  display: flex;
-  align-items: center;
-  min-height: 42px;
-  gap: 10px;
-  border: 1px solid rgba(132, 169, 140, 0.38);
-  border-radius: 14px;
-  padding: 10px 14px;
-  background: rgba(132, 169, 140, 0.12);
+.robot-check-card:hover:not(:disabled) {
+  border-color: rgba(132, 169, 140, 0.58);
+  box-shadow: 0 12px 28px rgba(95, 125, 104, 0.13), inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  transform: translateY(-1px);
+}
+
+.robot-check-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.82;
+}
+
+.robot-check-card.verified {
+  border-color: rgba(90, 145, 102, 0.62);
+  background: rgba(248, 255, 250, 0.92);
+}
+
+.robot-checkbox {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(48, 66, 56, 0.24);
+  border-radius: 4px;
+  background: #fff;
+  color: #fff;
+  font-size: 18px;
+}
+
+.robot-check-card.verified .robot-checkbox {
+  border-color: var(--accent-green);
+  background: var(--accent-green);
+}
+
+.robot-label {
   color: var(--text-primary);
+  font-size: 17px;
   font-weight: 500;
 }
 
-.field .captcha-question i {
-  color: var(--accent-green);
-}
-
-.captcha-refresh {
+.robot-badge {
   display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(132, 169, 140, 0.36);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
-  color: var(--accent-green);
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  justify-items: center;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.1;
 }
 
-.captcha-refresh:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(95, 125, 104, 0.14);
+.robot-badge i {
+  margin-bottom: 2px;
+  color: #5a8fce;
+  font-size: 28px;
 }
 
-.captcha-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.robot-badge strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .check-row,

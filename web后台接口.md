@@ -29,7 +29,7 @@ Base URLs:
 ## GET 获取机器人验证码
 GET /api/admin/captcha
 
-生成后台登录前的人机验证题目。前端展示 `question`，登录时把用户填写结果和 `captchaToken` 一起提交。
+生成后台登录前的人机验证凭证。前端用户点击“我不是机器人”后获取 `captchaToken`，登录时连同验证标识一起提交。
 
 ### 请求参数
 
@@ -42,7 +42,6 @@ GET /api/admin/captcha
   "code": 200,
   "message": "验证码已生成",
   "data": {
-    "question": "18 + 7 = ?",
     "captchaToken": "signed-captcha-token",
     "expiresIn": 300
   }
@@ -62,7 +61,7 @@ POST /api/admin/login
   "password": "123456",
   "loginType": "password",
   "captchaToken": "signed-captcha-token",
-  "captchaAnswer": "25"
+  "captchaAnswer": "not_robot_checked"
 }
 ```
 
@@ -74,7 +73,7 @@ POST /api/admin/login
 |password|body|string|是|登录密码|
 |loginType|body|string|否|登录方式，前端固定传 password|
 |captchaToken|body|string|是|`GET /api/admin/captcha` 返回的人机验证 token|
-|captchaAnswer|body|string|是|用户填写的验证码计算结果|
+|captchaAnswer|body|string|是|前端点选验证通过后提交的验证标识|
 
 > 返回示例
 

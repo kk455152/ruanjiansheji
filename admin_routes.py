@@ -20,6 +20,7 @@ admin_compat_bp = Blueprint("admin_compat", __name__)
 TOKEN_SECRET = os.environ.get("ADMIN_TOKEN_SECRET", "smart-speaker-admin-secret")
 TOKEN_EXPIRE_SECONDS = int(os.environ.get("ADMIN_TOKEN_EXPIRE_SECONDS", "7200"))
 CAPTCHA_EXPIRE_SECONDS = int(os.environ.get("ADMIN_CAPTCHA_EXPIRE_SECONDS", "300"))
+CAPTCHA_CHECKED_ANSWER = "not_robot_checked"
 ADMIN_CACHE_TTL_SECONDS = float(os.environ.get("ADMIN_CACHE_TTL_SECONDS", "30"))
 _ADMIN_CACHE = {}
 _ADMIN_CACHE_LOCK = threading.Lock()
@@ -314,22 +315,8 @@ def verify_captcha(token, answer):
 
 
 def make_captcha_challenge():
-    operator = ["+", "-", "x"][secrets.randbelow(3)]
-    if operator == "+":
-        left = 10 + secrets.randbelow(30)
-        right = 1 + secrets.randbelow(20)
-        answer = left + right
-    elif operator == "-":
-        left = 20 + secrets.randbelow(40)
-        right = 1 + secrets.randbelow(min(left - 1, 25))
-        answer = left - right
-    else:
-        left = 2 + secrets.randbelow(8)
-        right = 2 + secrets.randbelow(8)
-        answer = left * right
     return {
-        "question": f"{left} {operator} {right} = ?",
-        "captchaToken": sign_captcha(answer),
+        "captchaToken": sign_captcha(CAPTCHA_CHECKED_ANSWER),
         "expiresIn": CAPTCHA_EXPIRE_SECONDS,
     }
 
