@@ -7,11 +7,15 @@ import time
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
+def _env_text(name, fallback):
+    return os.environ.get(name) or fallback
+
+
 # AES-128 passphrase/raw key material used by the project.
-SECRET_KEY = b'speaker_key_2026'
+SECRET_KEY = _env_text("APP_SECRET_KEY", "speaker_key_2026").encode("utf-8")
 
 # Token salt already used by the current gateway/client flow.
-TOKEN_SALT = "smart_speaker_2026_salt"
+TOKEN_SALT = _env_text("TOKEN_SALT", "smart_speaker_2026_salt")
 
 
 def generate_token():
