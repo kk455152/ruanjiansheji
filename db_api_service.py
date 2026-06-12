@@ -1466,23 +1466,33 @@ def add_retention_pair(cursor, user_id, device_id, mapping_id, bind_time):
 @db_api.route("/funnel/quick-adjust", methods=["POST"])
 def quick_adjust_funnel():
     body = request.get_json(silent=True) or {}
-    targets = {
+    requested_targets = {
+        "newUsers": max(0, int(body.get("newUsers") or 0)),
         "boundUsers": max(0, int(body.get("boundUsers") or 0)),
         "firstPlayUsers": max(0, int(body.get("firstPlayUsers") or 0)),
         "retainedUsers": max(0, int(body.get("retainedUsers") or 0)),
+    }
+    retained_target = requested_targets["retainedUsers"]
+    first_target = max(requested_targets["firstPlayUsers"], retained_target)
+    bound_target = max(requested_targets["boundUsers"], first_target)
+    new_target = max(requested_targets["newUsers"], bound_target)
+    targets = {
+        "newUsers": new_target,
+        "boundUsers": bound_target,
+        "firstPlayUsers": first_target,
+        "retainedUsers": retained_target,
     }
     conn = None
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
             before = funnel_counts(cursor)
-            max_target = max(targets.values())
             created_users = 0
             created_bindings = 0
             created_plays = 0
 
-            if max_target > before["newUsers"]:
-                for i in range(max_target - before["newUsers"]):
+            if targets["newUsers"] > before["newUsers"]:
+                for i in range(targets["newUsers"] - before["newUsers"]):
                     create_quick_user(cursor, i + 1)
                     created_users += 1
 
@@ -1548,6 +1558,8 @@ def quick_adjust_funnel():
         return success({
             "before": before,
             "after": after,
+            "requestedTargets": requested_targets,
+            "effectiveTargets": targets,
             "createdUsers": created_users,
             "createdBindings": created_bindings,
             "createdPlayHistory": created_plays,

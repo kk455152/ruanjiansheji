@@ -563,6 +563,7 @@
             <button id="catalogFilterBtn" class="secondary">搜索</button>
             <input id="dailyRunDate" type="date" title="每日汇总日期；留空则按今天">
             <button id="runDailyBtn">运行每日汇总</button>
+            <button id="generateDemoBtn" class="secondary">批量生成今日模拟数据</button>
           </div>
         </div>
         <div id="catalogList" class="catalog-list">
@@ -623,8 +624,11 @@
       </div>
       <div id="funnelQuickPanel" class="quick-adjust" style="display:none">
         <h3>快捷调整转化漏斗</h3>
-        <p>输入目标数后自动补齐真实源数据：绑定写 user_device_binding，完成首播和 7 日活跃写 play_history。只会补大，不会删除已有数据。</p>
+        <p>输入目标数后自动补齐真实源数据：新增用户写 user，绑定写 user_device_binding，完成首播和 7 日活跃写 play_history。只会补大，不会删除已有数据；合法关系为新增用户数 ≥ 绑定设备数 ≥ 完成首播数 ≥ 7 日活跃数。</p>
         <div class="quick-adjust-row">
+          <label>新增用户数
+            <input id="funnelNewTarget" type="number" min="0" step="1" placeholder="例如 248">
+          </label>
           <label>绑定设备数
             <input id="funnelBoundTarget" type="number" min="0" step="1" placeholder="例如 80">
           </label>
@@ -1383,10 +1387,11 @@
 
     async function quickAdjustFunnel() {
       const result = el("funnelQuickResult");
+      const newUsers = Number(el("funnelNewTarget").value || 0);
       const boundUsers = Number(el("funnelBoundTarget").value || 0);
       const firstPlayUsers = Number(el("funnelFirstTarget").value || 0);
       const retainedUsers = Number(el("funnelRetainedTarget").value || 0);
-      if (boundUsers < 0 || firstPlayUsers < 0 || retainedUsers < 0) {
+      if (newUsers < 0 || boundUsers < 0 || firstPlayUsers < 0 || retainedUsers < 0) {
         result.textContent = "目标数不能小于 0。";
         return;
       }
@@ -1395,11 +1400,19 @@
       try {
         const data = await api("/api/db/funnel/quick-adjust", {
           method: "POST",
-          body: { boundUsers, firstPlayUsers, retainedUsers },
+          body: { newUsers, boundUsers, firstPlayUsers, retainedUsers },
         });
         const before = data.before || {};
         const after = data.after || {};
-        result.textContent = `完成：绑定 ${before.boundUsers || 0} -> ${after.boundUsers || 0}，首播 ${before.firstPlayUsers || 0} -> ${after.firstPlayUsers || 0}，7日活跃 ${before.retainedUsers || 0} -> ${after.retainedUsers || 0}；补用户 ${data.createdUsers || 0} 个、绑定 ${data.createdBindings || 0} 条、播放 ${data.createdPlayHistory || 0} 条。刷新后台前端即可看到变化。`;
+        const effective = data.effectiveTargets || {};
+        const normalized = effective.newUsers !== data.requestedTargets?.newUsers
+          || effective.boundUsers !== data.requestedTargets?.boundUsers
+          || effective.firstPlayUsers !== data.requestedTargets?.firstPlayUsers
+          || effective.retainedUsers !== data.requestedTargets?.retainedUsers;
+        const normalizedText = normalized
+          ? `；按漏斗关系实际目标为：新增 ${effective.newUsers || 0}，绑定 ${effective.boundUsers || 0}，首播 ${effective.firstPlayUsers || 0}，7日活跃 ${effective.retainedUsers || 0}`
+          : "";
+        result.textContent = `完成：新增 ${before.newUsers || 0} -> ${after.newUsers || 0}，绑定 ${before.boundUsers || 0} -> ${after.boundUsers || 0}，首播 ${before.firstPlayUsers || 0} -> ${after.firstPlayUsers || 0}，7日活跃 ${before.retainedUsers || 0} -> ${after.retainedUsers || 0}${normalizedText}；补用户 ${data.createdUsers || 0} 个、绑定 ${data.createdBindings || 0} 条、播放 ${data.createdPlayHistory || 0} 条。刷新后台前端即可看到变化。`;
         setStatus("转化漏斗快捷调整完成");
         await loadRows();
       } catch (err) {
@@ -1938,6 +1951,7 @@
 
     async function runDailyStats(options = {}) {
       el("runDailyBtn").disabled = true;
+      el("generateDemoBtn").disabled = true;
       const reloadRows = options.reloadRows !== false;
       const statusPrefix = options.statusPrefix || "";
       const manualDate = String(el("dailyRunDate")?.value || "").trim();
@@ -1955,6 +1969,39 @@
       } catch (err) {
         setStatus(`每日汇总失败：${err.message}`);
       } finally {
+        el("runDailyBtn").disabled = false;
+        el("generateDemoBtn").disabled = false;
+      }
+    }
+
+    async function generateTodayDemoData() {
+      el("generateDemoBtn").disabled = true;
+      el("runDailyBtn").disabled = true;
+      const manualDate = String(el("dailyRunDate")?.value || "").trim();
+      const body = {
+        generate_demo_data: true,
+        skip_seed: true,
+        skip_generate: true,
+        ...(manualDate ? { date: manualDate } : {}),
+      };
+      setStatus(manualDate
+        ? `正在为 ${manualDate} 批量生成模拟数据，并补齐漏掉的日报...`
+        : "正在批量生成今日模拟数据，并补齐漏掉的日报...");
+      try {
+        const data = await api("/api/db/daily-stats/run", {
+          method: "POST",
+          body,
+        });
+        await loadRows();
+        await refreshCatalog();
+        const demoRuns = data.demo_data?.daily_runs || [];
+        const generated = demoRuns.reduce((sum, item) => sum + Number(item.play_history || 0), 0);
+        const processed = (data.processed_dates || []).join(", ") || (manualDate || todayString());
+        setStatus(`模拟数据生成完成：处理日期 ${processed}，新增播放明细 ${generated} 条，日报和前端目录已刷新。`);
+      } catch (err) {
+        setStatus(`批量生成模拟数据失败：${err.message}`);
+      } finally {
+        el("generateDemoBtn").disabled = false;
         el("runDailyBtn").disabled = false;
       }
     }
@@ -2053,6 +2100,7 @@
       }
     };
     el("runDailyBtn").onclick = () => runDailyStats();
+    el("generateDemoBtn").onclick = generateTodayDemoData;
     el("quickAdjustBtn").onclick = quickAdjustPlayCount;
     el("salesQuickBtn").onclick = quickAdjustSalesRegion;
     el("userRegionQuickBtn").onclick = quickAdjustUserRegion;
