@@ -41,6 +41,7 @@ let smsCooldownTimer = null
 
 const state = reactive({
   loginForm: {
+    mode: "password",
     username: localStorage.getItem("admin_username") || "",
     password: "",
     captchaAnswer: "",
@@ -407,6 +408,13 @@ function resetRobotVerification() {
   state.loginForm.captchaVerified = false
 }
 
+function switchLoginMode(mode) {
+  if (!["password", "sms"].includes(mode) || state.loginForm.mode === mode) return
+  state.loginForm.mode = mode
+  state.loginForm.password = ""
+  resetSmsVerification()
+}
+
 function isChinaMobile(phone) {
   return /^1[3-9]\d{9}$/.test(String(phone || "").trim())
 }
@@ -490,25 +498,29 @@ async function verifyRobot() {
 }
 
 async function handleLogin() {
-  if (!state.loginForm.username || !state.loginForm.password) {
-    ElMessage.warning("请输入用户名和密码")
-    return
-  }
   if (!state.loginForm.captchaToken || !state.loginForm.captchaAnswer) {
     ElMessage.warning("请完成机器人验证")
     return
   }
-  if (!isChinaMobile(state.loginForm.smsPhone)) {
-    ElMessage.warning("请输入正确的中国大陆手机号")
-    return
-  }
-  if (!state.loginForm.smsToken || !state.loginForm.smsSent) {
-    ElMessage.warning("请先发送短信验证码")
-    return
-  }
-  if (!isSixDigitCode(state.loginForm.smsCode)) {
-    ElMessage.warning("请输入 6 位数字短信验证码")
-    return
+
+  if (state.loginForm.mode === "password") {
+    if (!state.loginForm.username || !state.loginForm.password) {
+      ElMessage.warning("请输入用户名和密码")
+      return
+    }
+  } else {
+    if (!isChinaMobile(state.loginForm.smsPhone)) {
+      ElMessage.warning("请输入正确的中国大陆手机号")
+      return
+    }
+    if (!state.loginForm.smsToken || !state.loginForm.smsSent) {
+      ElMessage.warning("请先发送短信验证码")
+      return
+    }
+    if (!isSixDigitCode(state.loginForm.smsCode)) {
+      ElMessage.warning("请输入 6 位数字短信验证码")
+      return
+    }
   }
 
   state.loading = true
@@ -517,14 +529,15 @@ async function handleLogin() {
       captchaToken: state.loginForm.captchaToken,
       captchaAnswer: state.loginForm.captchaAnswer.trim(),
     }, {
+      loginType: state.loginForm.mode,
       smsPhone: state.loginForm.smsPhone.trim(),
       smsCode: state.loginForm.smsCode.trim(),
       smsToken: state.loginForm.smsToken,
     })
     applySession(data)
-    if (state.loginForm.remember) {
+    if (state.loginForm.mode === "password" && state.loginForm.remember) {
       localStorage.setItem("admin_username", state.loginForm.username.trim())
-    } else {
+    } else if (state.loginForm.mode === "password") {
       localStorage.removeItem("admin_username")
     }
     state.loginForm.password = ""
@@ -1180,21 +1193,39 @@ onUnmounted(() => {
     <section class="login-panel" @keyup.enter="handleLogin">
       <p class="eyebrow">Welcome back</p>
       <h2>登录后台</h2>
-      <label class="field">
+      <div class="login-mode-tabs" role="tablist" aria-label="登录方式">
+        <button
+          type="button"
+          :class="['login-mode-tab', { active: state.loginForm.mode === 'password' }]"
+          @click="switchLoginMode('password')"
+        >
+          <i class="fa-solid fa-key"></i>
+          账号密码
+        </button>
+        <button
+          type="button"
+          :class="['login-mode-tab', { active: state.loginForm.mode === 'sms' }]"
+          @click="switchLoginMode('sms')"
+        >
+          <i class="fa-solid fa-message"></i>
+          短信验证码
+        </button>
+      </div>
+      <label v-if="state.loginForm.mode === 'password'" class="field">
         <span>用户名</span>
         <span class="field-input">
           <i class="fa-solid fa-user"></i>
           <input v-model="state.loginForm.username" autocomplete="username" placeholder="请输入用户名" />
         </span>
       </label>
-      <label class="field">
+      <label v-if="state.loginForm.mode === 'password'" class="field">
         <span>密码</span>
         <span class="field-input">
           <i class="fa-solid fa-lock"></i>
           <input v-model="state.loginForm.password" autocomplete="current-password" type="password" placeholder="请输入密码" />
         </span>
       </label>
-      <label class="field">
+      <label v-if="state.loginForm.mode === 'sms'" class="field">
         <span>手机号</span>
         <span class="field-input">
           <i class="fa-solid fa-mobile-screen-button"></i>
@@ -1208,7 +1239,7 @@ onUnmounted(() => {
           />
         </span>
       </label>
-      <label class="field">
+      <label v-if="state.loginForm.mode === 'sms'" class="field">
         <span>短信验证码</span>
         <span class="field-input sms-code-input">
           <i class="fa-solid fa-message"></i>
@@ -1251,13 +1282,13 @@ onUnmounted(() => {
           </span>
         </button>
       </div>
-      <label class="check-row">
+      <label v-if="state.loginForm.mode === 'password'" class="check-row">
         <input v-model="state.loginForm.remember" type="checkbox" />
         <span>记住用户名</span>
       </label>
       <button class="primary-button" :disabled="state.loading" @click="handleLogin">
         <i class="fa-solid fa-right-to-bracket"></i>
-        {{ state.loading ? "登录中..." : "账号登录" }}
+        {{ state.loading ? "登录中..." : state.loginForm.mode === "password" ? "账号登录" : "短信登录" }}
       </button>
       <p class="api-note"><i class="fa-solid fa-link"></i> API：{{ apiLabel }}</p>
     </section>
@@ -2130,6 +2161,37 @@ button {
   margin: 6px 0 28px;
   font-size: 30px;
   font-weight: 500;
+}
+
+.login-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: -8px 0 22px;
+  padding: 5px;
+  border: 1px solid var(--border-light);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.login-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-mode-tab.active {
+  background: var(--accent-green);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(132, 169, 140, 0.28);
 }
 
 .field {

@@ -64,7 +64,7 @@ export function login(username, password, captcha = {}, sms = {}) {
     body: {
       username,
       password,
-      loginType: "password",
+      loginType: sms.loginType || "password",
       captchaToken: captcha.captchaToken,
       captchaAnswer: captcha.captchaAnswer,
       smsPhone: sms.smsPhone,

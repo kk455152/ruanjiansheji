@@ -24,6 +24,7 @@ CAPTCHA_CHECKED_ANSWER = "not_robot_checked"
 SMS_CODE_EXPIRE_SECONDS = int(os.environ.get("ADMIN_SMS_CODE_EXPIRE_SECONDS", "300"))
 SMS_CODE_COOLDOWN_SECONDS = int(os.environ.get("ADMIN_SMS_CODE_COOLDOWN_SECONDS", "60"))
 ADMIN_CACHE_TTL_SECONDS = float(os.environ.get("ADMIN_CACHE_TTL_SECONDS", "30"))
+SMS_LOGIN_DEFAULT_USERNAME = os.environ.get("ADMIN_SMS_LOGIN_USERNAME", "admin")
 _ADMIN_CACHE = {}
 _ADMIN_CACHE_LOCK = threading.Lock()
 
@@ -161,6 +162,17 @@ def all_admins():
 
 def find_admin(username):
     return all_admins().get(username)
+
+
+def find_admin_by_phone(phone):
+    normalized_phone = str(phone or "").strip()
+    if not normalized_phone:
+        return None
+    return next((admin for admin in all_admins().values() if str(admin.get("phone") or "").strip() == normalized_phone), None)
+
+
+def default_sms_login_admin():
+    return find_admin(SMS_LOGIN_DEFAULT_USERNAME) or next(iter(all_admins().values()), None)
 
 
 def update_admin_password(admin, new_password):
@@ -1168,6 +1180,7 @@ def sms_code():
 @admin_bp.post("/login")
 def login():
     body = request.get_json(silent=True) or {}
+    login_type = str(body.get("loginType", "password")).strip() or "password"
     username = str(body.get("username", "")).strip()
     password = str(body.get("password", "")).strip()
     captcha_token = str(body.get("captchaToken", "")).strip()
@@ -1175,36 +1188,48 @@ def login():
     sms_phone = str(body.get("smsPhone", "")).strip()
     sms_code = str(body.get("smsCode", "")).strip()
     sms_token = str(body.get("smsToken", "")).strip()
+    audit_target = username or sms_phone
 
-    if not username or not password:
-        return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
+    if login_type not in ("password", "sms"):
+        return response_error(400, "登录失败", "登录方式不正确。")
     if not captcha_token or not captcha_answer:
-        write_admin_audit("login_failed", "认证", "登录机器人验证失败", username, "failed", "机器人验证未完成", None)
+        write_admin_audit("login_failed", "认证", "登录机器人验证失败", audit_target, "failed", "机器人验证未完成", None)
         return response_error(400, "验证失败", "请先完成机器人验证。")
     if not verify_captcha(captcha_token, captcha_answer):
-        write_admin_audit("login_failed", "认证", "登录机器人验证失败", username, "failed", "机器人验证错误或已过期", None)
+        write_admin_audit("login_failed", "认证", "登录机器人验证失败", audit_target, "failed", "机器人验证错误或已过期", None)
         return response_error(400, "验证失败", "机器人验证错误或已过期，请刷新后重试。")
-    if not is_china_mobile(sms_phone):
-        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "手机号格式错误", None)
-        return response_error(400, "短信验证失败", "请输入正确的中国大陆手机号。")
-    if not sms_token:
-        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "短信验证码未发送", None)
-        return response_error(400, "短信验证失败", "请先发送短信验证码。")
-    if not is_sms_code(sms_code):
-        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "短信验证码格式错误", None)
-        return response_error(400, "短信验证失败", "请输入 6 位数字短信验证码。")
-    if not verify_sms_challenge(sms_token, sms_phone):
-        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "短信验证码已过期或手机号不匹配", None)
-        return response_error(400, "短信验证失败", "短信验证码已过期，请重新发送。")
 
-    admin = find_admin(username)
-    if not admin or not verify_admin_password(password, admin.get("password", "")):
-        write_admin_audit("login_failed", "认证", "登录系统失败", username, "failed", "用户名或密码错误", None)
-        return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
+    if login_type == "password":
+        if not username or not password:
+            return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
+        admin = find_admin(username)
+        if not admin or not verify_admin_password(password, admin.get("password", "")):
+            write_admin_audit("login_failed", "认证", "账号密码登录失败", username, "failed", "用户名或密码错误", None)
+            return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
+        operation_name = "账号密码登录"
+    else:
+        if not is_china_mobile(sms_phone):
+            write_admin_audit("login_failed", "认证", "短信验证码登录失败", sms_phone, "failed", "手机号格式错误", None)
+            return response_error(400, "短信验证失败", "请输入正确的中国大陆手机号。")
+        if not sms_token:
+            write_admin_audit("login_failed", "认证", "短信验证码登录失败", sms_phone, "failed", "短信验证码未发送", None)
+            return response_error(400, "短信验证失败", "请先发送短信验证码。")
+        if not is_sms_code(sms_code):
+            write_admin_audit("login_failed", "认证", "短信验证码登录失败", sms_phone, "failed", "短信验证码格式错误", None)
+            return response_error(400, "短信验证失败", "请输入 6 位数字短信验证码。")
+        if not verify_sms_challenge(sms_token, sms_phone):
+            write_admin_audit("login_failed", "认证", "短信验证码登录失败", sms_phone, "failed", "短信验证码已过期或手机号不匹配", None)
+            return response_error(400, "短信验证失败", "短信验证码已过期，请重新发送。")
+        admin = find_admin_by_phone(sms_phone) or default_sms_login_admin()
+        if not admin:
+            write_admin_audit("login_failed", "认证", "短信验证码登录失败", sms_phone, "failed", "没有可用后台账号", None)
+            return response_error(401, "认证失败", "没有可用后台账号，请联系管理员。")
+        username = admin.get("username") or sms_phone
+        operation_name = "短信验证码登录"
 
     token = sign_token(admin)
     record_admin_login(admin)
-    write_admin_audit("login", "认证", "登录系统", username, "success", "", admin)
+    write_admin_audit("login", "认证", operation_name, username, "success", "", admin, params={"loginType": login_type})
     return response_ok({"token": token, "adminInfo": public_admin_info(admin)}, "登录成功")
 
 

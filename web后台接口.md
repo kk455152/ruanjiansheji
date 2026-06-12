@@ -82,18 +82,28 @@ POST /api/admin/sms-code
 }
 ```
 
-## POST 账号密码登录
+## POST 后台登录
 POST /api/admin/login
 
-后台管理员使用用户名、密码、机器人验证码和短信验证码登录，成功后返回 token 和管理员信息。短信验证码当前为模拟校验：登录前需先调用发送接口获取 `smsToken`，验证码只要求填写任意 6 位数字。
+后台管理员可选择账号密码或短信验证码登录，两种方式都需要先完成机器人验证。短信验证码当前为模拟校验：登录前需先调用发送接口获取 `smsToken`，验证码只要求填写任意 6 位数字；手机号未匹配后台账号时回退到默认 `admin` 账号。
 
-> Body 请求示例
+> Body 请求示例：账号密码登录
 
 ```json
 {
   "username": "admin",
   "password": "123456",
   "loginType": "password",
+  "captchaToken": "signed-captcha-token",
+  "captchaAnswer": "not_robot_checked"
+}
+```
+
+> Body 请求示例：短信验证码登录
+
+```json
+{
+  "loginType": "sms",
   "captchaToken": "signed-captcha-token",
   "captchaAnswer": "not_robot_checked",
   "smsPhone": "13800000000",
@@ -106,14 +116,14 @@ POST /api/admin/login
 
 |名称|位置|类型|必填|说明|
 |---|---|---|---|---|
-|username|body|string|是|登录用户名|
-|password|body|string|是|登录密码|
-|loginType|body|string|否|登录方式，前端固定传 password|
+|username|body|string|账号密码登录必填|登录用户名|
+|password|body|string|账号密码登录必填|登录密码|
+|loginType|body|string|否|登录方式：password 或 sms，默认 password|
 |captchaToken|body|string|是|`GET /api/admin/captcha` 返回的人机验证 token|
 |captchaAnswer|body|string|是|前端点选验证通过后提交的验证标识|
-|smsPhone|body|string|是|中国大陆手机号，需为 11 位数字、以 1 开头且第二位为 3-9|
-|smsCode|body|string|是|6 位数字验证码，当前为模拟校验|
-|smsToken|body|string|是|`POST /api/admin/sms-code` 返回的模拟短信凭证|
+|smsPhone|body|string|短信登录必填|中国大陆手机号，需为 11 位数字、以 1 开头且第二位为 3-9|
+|smsCode|body|string|短信登录必填|6 位数字验证码，当前为模拟校验|
+|smsToken|body|string|短信登录必填|`POST /api/admin/sms-code` 返回的模拟短信凭证|
 
 > 返回示例
 
