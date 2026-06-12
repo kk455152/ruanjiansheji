@@ -92,7 +92,7 @@ POST /api/admin/login
 ```json
 {
   "username": "admin",
-  "password": "123456",
+  "password": "<管理员密码>",
   "loginType": "password",
   "captchaToken": "signed-captcha-token",
   "captchaAnswer": "not_robot_checked"
@@ -298,7 +298,7 @@ POST /api/admin/password
 
 ```json
 {
-  "currentPassword": "123456",
+  "currentPassword": "<当前密码>",
   "newPassword": "newPass123",
   "confirmPassword": "newPass123"
 }
@@ -2834,7 +2834,7 @@ POST /api/admin/super/users/create
 ```json
 {
   "username": "operator01",
-  "password": "123456",
+  "password": "<初始强密码>",
   "role": "operator_admin",
   "realName": "运营人员",
   "phone": "13800000000",

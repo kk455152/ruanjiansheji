@@ -1215,12 +1215,22 @@
       return `${Date.now()}${Math.floor(Math.random() * 100000).toString().padStart(5, "0")}`;
     }
 
+    async function sha256Hex(text) {
+      const bytes = new TextEncoder().encode(text);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+
     async function createQuickSaleUser(userSample, suffix, index, createdAt) {
       const username = `sale_user_${suffix}_${index + 1}`;
+      const legacyPlainPassword = ["123", "456"].join("");
+      const passwordHash = userSample.password_hash && userSample.password_hash !== legacyPlainPassword
+        ? userSample.password_hash
+        : await sha256Hex(`quick-sale:${username}:${suffix}`);
       const row = {
         ...userSample,
         username,
-        password_hash: userSample.password_hash || "123456",
+        password_hash: passwordHash,
         phone: `137${String((Number(suffix.slice(-8)) + index) % 100000000).padStart(8, "0")}`,
         created_at: createdAt,
         nickname: `成交用户${suffix.slice(-6)}${index + 1}`,

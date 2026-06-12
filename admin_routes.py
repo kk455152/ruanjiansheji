@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import Blueprint, jsonify, request, g
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from api_pkg.common import json_safe, load_state, mongo_many, mongo_one, mysql_all, mysql_exec, mysql_one, save_state
 
@@ -29,11 +30,31 @@ _ADMIN_CACHE = {}
 _ADMIN_CACHE_LOCK = threading.Lock()
 
 
+def is_password_hash(value):
+    text = str(value or "")
+    return text.startswith(("scrypt:", "pbkdf2:", "argon2:"))
+
+
+def hash_password(raw_password):
+    return generate_password_hash(str(raw_password or ""))
+
+
+def configured_admin_password(env_name):
+    hash_env_name = f"{env_name}_HASH"
+    configured_hash = os.environ.get(hash_env_name)
+    if configured_hash:
+        return configured_hash
+    configured_plain = os.environ.get(env_name)
+    if configured_plain:
+        return hash_password(configured_plain)
+    return hash_password(secrets.token_urlsafe(24))
+
+
 DEFAULT_ADMINS = {
     "admin": {
         "adminId": 1,
         "username": "admin",
-        "password": os.environ.get("ADMIN_PASSWORD", "123456"),
+        "password": configured_admin_password("ADMIN_PASSWORD"),
         "role": "super_admin",
         "roleName": "超级管理员",
         "realName": "张三",
@@ -45,7 +66,7 @@ DEFAULT_ADMINS = {
     "market": {
         "adminId": 2,
         "username": "market",
-        "password": os.environ.get("MARKET_ADMIN_PASSWORD", "123456"),
+        "password": configured_admin_password("MARKET_ADMIN_PASSWORD"),
         "role": "market_admin",
         "roleName": "市场分析管理员",
         "realName": "李四",
@@ -58,7 +79,7 @@ DEFAULT_ADMINS = {
     "operator": {
         "adminId": 3,
         "username": "operator",
-        "password": os.environ.get("OPERATOR_ADMIN_PASSWORD", "123456"),
+        "password": configured_admin_password("OPERATOR_ADMIN_PASSWORD"),
         "role": "operator_admin",
         "roleName": "普通管理员",
         "realName": "王五",
@@ -70,7 +91,7 @@ DEFAULT_ADMINS = {
     "boss": {
         "adminId": 4,
         "username": "boss",
-        "password": os.environ.get("BOSS_PASSWORD", "123456"),
+        "password": configured_admin_password("BOSS_PASSWORD"),
         "role": "boss",
         "roleName": "老板",
         "realName": "老板",
@@ -179,6 +200,7 @@ def update_admin_password(admin, new_password):
     username = str(admin.get("username") or "").strip()
     if not username:
         return False
+    stored_password = new_password if is_password_hash(new_password) else hash_password(new_password)
 
     db_row = mysql_one(
         "SELECT admin_id FROM admin_user WHERE username=%s LIMIT 1",
@@ -187,7 +209,7 @@ def update_admin_password(admin, new_password):
     if db_row and db_row.get("admin_id"):
         updated = mysql_exec(
             "UPDATE admin_user SET password_hash=%s, updated_at=NOW() WHERE admin_id=%s",
-            (new_password, db_row.get("admin_id")),
+            (stored_password, db_row.get("admin_id")),
         )
         return bool(updated is not False)
 
@@ -195,7 +217,7 @@ def update_admin_password(admin, new_password):
     accounts = dict(overlay["accounts"])
     record = dict(accounts.get(username) or DEFAULT_ADMINS.get(username) or admin)
     record["username"] = username
-    record["password"] = new_password
+    record["password"] = stored_password
     record["role"] = record.get("role") or admin.get("role")
     record["roleName"] = ROLE_NAME_MAP.get(record.get("role"), record.get("roleName") or "")
     accounts[username] = record
@@ -206,6 +228,11 @@ def update_admin_password(admin, new_password):
 def verify_admin_password(raw_password, stored_password):
     stored = str(stored_password or "")
     raw = str(raw_password or "")
+    if is_password_hash(stored):
+        try:
+            return check_password_hash(stored, raw)
+        except ValueError:
+            return False
     if hmac.compare_digest(raw, stored):
         return True
     if len(stored) == 64:
@@ -214,6 +241,10 @@ def verify_admin_password(raw_password, stored_password):
             return True
     md5_digest = hashlib.md5(raw.encode("utf-8")).hexdigest()
     return hmac.compare_digest(md5_digest, stored)
+
+
+def password_needs_rehash(stored_password):
+    return not is_password_hash(stored_password)
 
 
 def response_ok(data=None, message=None, code=200):
@@ -1206,6 +1237,9 @@ def login():
         if not admin or not verify_admin_password(password, admin.get("password", "")):
             write_admin_audit("login_failed", "认证", "账号密码登录失败", username, "failed", "用户名或密码错误", None)
             return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
+        if password_needs_rehash(admin.get("password", "")):
+            update_admin_password(admin, password)
+            admin = find_admin(username) or admin
         operation_name = "账号密码登录"
     else:
         if not is_china_mobile(sms_phone):
@@ -2418,6 +2452,7 @@ def _insert_admin_user_from_body(body, username, password, role, real_name):
     position = _nullable_text(body.get("position")) or ROLE_NAME_MAP[role]
     phone = _nullable_text(body.get("phone"))
     email = _nullable_text(body.get("email"))
+    stored_password = password if is_password_hash(password) else hash_password(password)
     admin_id = mysql_exec(
         """
         INSERT INTO admin_user
@@ -2428,7 +2463,7 @@ def _insert_admin_user_from_body(body, username, password, role, real_name):
         """,
         (
             username,
-            password,
+            stored_password,
             role,
             real_name,
             job_no,
@@ -2444,7 +2479,7 @@ def _insert_admin_user_from_body(body, username, password, role, real_name):
     return {
         "adminId": admin_id,
         "username": username,
-        "password": password,
+        "password": stored_password,
         "role": role,
         "roleName": ROLE_NAME_MAP[role],
         "realName": real_name,
@@ -2467,7 +2502,7 @@ def _update_admin_user_from_body(admin, body):
     role = str(body.get("role", "")).strip()
     if password:
         fields.append("password_hash=%s")
-        params.append(password)
+        params.append(hash_password(password))
     if role:
         fields.append("role=%s")
         params.append(role)
@@ -2525,7 +2560,7 @@ def admin_user_create():
     record = {
         "adminId": _next_admin_id(all_admins()),
         "username": username,
-        "password": password,
+        "password": hash_password(password),
         "role": role,
         "roleName": ROLE_NAME_MAP[role],
         "realName": real_name,
@@ -2564,7 +2599,7 @@ def admin_user_update():
     if _update_admin_user_from_body(admin, body):
         record = dict(admin)
         if new_password:
-            record["password"] = new_password
+            record["password"] = hash_password(new_password)
         if new_role:
             record["role"] = new_role
             record["roleName"] = ROLE_NAME_MAP[new_role]
@@ -2579,7 +2614,7 @@ def admin_user_update():
     record = dict(accounts.get(username) or admin)
     record["username"] = username
     if new_password:
-        record["password"] = new_password
+        record["password"] = hash_password(new_password)
     if new_role:
         record["role"] = new_role
         record["roleName"] = ROLE_NAME_MAP[new_role]

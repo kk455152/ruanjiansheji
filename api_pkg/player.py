@@ -8,7 +8,7 @@ def real_conn():
     from pymysql.cursors import DictCursor
 
     user = os.environ.get("MYSQL_USER", "root")
-    password = os.environ.get("MYSQL_PASSWORD", "123456")
+    password = os.environ.get("MYSQL_PASSWORD", "")
     database = os.environ.get("MYSQL_DATABASE", "smart_speaker")
     port = 3306
 

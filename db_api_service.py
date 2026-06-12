@@ -6,6 +6,7 @@ import time
 import uuid
 
 from flask import Blueprint, jsonify, request
+from werkzeug.security import generate_password_hash
 
 from db_config import get_mysql_connection
 from api_pkg.common import json_safe, mongo_db
@@ -80,7 +81,7 @@ FIELD_COMMENTS = {
     "id": ("ID", "系统自增主键。"),
     "user_id": ("用户ID", "关联 user 表的小程序用户主键。"),
     "username": ("用户名", "演示数据使用不带数字尾号的中文姓名，唯一性由生成批次控制。"),
-    "password_hash": ("密码", "当前按要求直接存明文密码，方便维护页查看和修改。"),
+    "password_hash": ("密码哈希", "只保存哈希值；新增或改密请使用后台账号管理表单，不要直接填写明文密码。"),
     "phone": ("手机号", "用户或管理员联系电话。"),
     "created_at": ("创建时间", "记录创建时间，格式 YYYY-MM-DD HH:MM:SS。"),
     "updated_at": ("更新时间", "记录最后更新时间。"),
@@ -1314,10 +1315,11 @@ def create_quick_user(cursor, index, created_at=None):
         INSERT INTO `user`
             (username, password_hash, phone, created_at, nickname, avatar, email, status, last_login_at)
         VALUES
-            (%s, '123456', %s, %s, %s, '', %s, 'active', %s)
+            (%s, %s, %s, %s, %s, '', %s, 'active', %s)
         """,
         (
             username,
+            generate_password_hash(f"funnel:{username}:{stamp}"),
             f"17{stamp[-9:]}",
             created_at.strftime("%Y-%m-%d %H:%M:%S"),
             f"漏斗用户{stamp[-6:]}",
@@ -1743,7 +1745,7 @@ def uniquify_sample_record(table_key, data):
         username, nickname = natural_user_fields(suffix)
         sample["username"] = username
         sample["nickname"] = nickname
-        sample["password_hash"] = "123456"
+        sample["password_hash"] = generate_password_hash(f"demo:{username}:{suffix}")
         sample["status"] = sample.get("status") or "active"
         if sample.get("email"):
             sample["email"] = f"user{suffix}@smart-speaker.local"

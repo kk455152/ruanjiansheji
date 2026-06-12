@@ -1807,7 +1807,7 @@ def seed_chinese_demo_data(
                     "user",
                     {
                         "username": username,
-                        "password_hash": "123456",
+                        "password_hash": demo_password_hash(f"user:{username}:{serial}"),
                         "phone": phone,
                         "created_at": created_at,
                         "nickname": nickname,
