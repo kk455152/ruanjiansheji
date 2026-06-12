@@ -3437,6 +3437,7 @@ def run_once(args):
     demo_processed_dates = []
     if getattr(args, "generate_demo_data", False):
         reset_demo_data = bool(getattr(args, "reset_demo_data", False))
+        force_demo_append = bool(getattr(args, "force_demo_append", False))
         demo_play_count = getattr(args, "demo_play_count", None)
         if demo_play_count is None:
             demo_play_count = args.generate_count
@@ -3474,7 +3475,7 @@ def run_once(args):
         else:
             demo_dates = list(dict.fromkeys(missing_dates + [stat_date]))
             for demo_date in demo_dates:
-                if day_has_play_history(demo_date):
+                if day_has_play_history(demo_date) and not force_demo_append:
                     demo_runs.append({
                         "date": demo_date.isoformat(),
                         "skipped_existing": True,
@@ -3635,6 +3636,7 @@ def run_daily_stats_once(
     demo_order_count=DEFAULT_DEMO_ORDER_COUNT,
     demo_play_count=DEFAULT_DEMO_PLAY_COUNT,
     reset_demo_data=False,
+    force_demo_append=False,
 ):
     class Args:
         pass
@@ -3651,6 +3653,7 @@ def run_daily_stats_once(
     args.demo_order_count = demo_order_count
     args.demo_play_count = demo_play_count if demo_play_count is not None else DEFAULT_DEMO_PLAY_COUNT
     args.reset_demo_data = reset_demo_data
+    args.force_demo_append = force_demo_append
     return run_once(args)
 
 

@@ -567,6 +567,7 @@ def run_daily_stats_now():
             demo_order_count=int(body.get('demo_order_count') or os.environ.get('DAILY_STATS_DEMO_ORDER_COUNT', '15')),
             demo_play_count=int(body.get('demo_play_count') or body.get('generate_count') or os.environ.get('DAILY_STATS_DEMO_PLAY_COUNT', '900')),
             reset_demo_data=bool(body.get('reset_demo_data', False)),
+            force_demo_append=bool(body.get('force_demo_append', False)),
         )
         return jsonify({'status': 'success', 'data': result}), 200
     except Exception as exc:

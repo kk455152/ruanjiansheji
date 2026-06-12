@@ -1980,6 +1980,7 @@
       const manualDate = String(el("dailyRunDate")?.value || "").trim();
       const body = {
         generate_demo_data: true,
+        force_demo_append: true,
         skip_seed: true,
         skip_generate: true,
         ...(manualDate ? { date: manualDate } : {}),
