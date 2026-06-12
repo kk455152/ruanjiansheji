@@ -48,10 +48,44 @@ GET /api/admin/captcha
 }
 ```
 
+## POST 发送登录短信验证码（模拟）
+POST /api/admin/sms-code
+
+校验中国大陆手机号格式，并返回一次模拟短信发送凭证。当前不接入真实短信服务，不会实际发送短信。
+
+> Body 请求示例
+
+```json
+{
+  "phone": "13800000000"
+}
+```
+
+### 请求参数
+
+|名称|位置|类型|必填|说明|
+|---|---|---|---|---|
+|phone|body|string|是|中国大陆手机号，需为 11 位数字、以 1 开头且第二位为 3-9|
+
+> 返回示例
+
+```json
+{
+  "code": 200,
+  "message": "短信验证码已发送",
+  "data": {
+    "smsToken": "signed-sms-token",
+    "maskedPhone": "138****0000",
+    "expiresIn": 300,
+    "cooldownSeconds": 60
+  }
+}
+```
+
 ## POST 账号密码登录
 POST /api/admin/login
 
-后台管理员使用用户名、密码和机器人验证码登录，成功后返回 token 和管理员信息。
+后台管理员使用用户名、密码、机器人验证码和短信验证码登录，成功后返回 token 和管理员信息。短信验证码当前为模拟校验：登录前需先调用发送接口获取 `smsToken`，验证码只要求填写任意 6 位数字。
 
 > Body 请求示例
 
@@ -61,7 +95,10 @@ POST /api/admin/login
   "password": "123456",
   "loginType": "password",
   "captchaToken": "signed-captcha-token",
-  "captchaAnswer": "not_robot_checked"
+  "captchaAnswer": "not_robot_checked",
+  "smsPhone": "13800000000",
+  "smsCode": "123456",
+  "smsToken": "signed-sms-token"
 }
 ```
 
@@ -74,6 +111,9 @@ POST /api/admin/login
 |loginType|body|string|否|登录方式，前端固定传 password|
 |captchaToken|body|string|是|`GET /api/admin/captcha` 返回的人机验证 token|
 |captchaAnswer|body|string|是|前端点选验证通过后提交的验证标识|
+|smsPhone|body|string|是|中国大陆手机号，需为 11 位数字、以 1 开头且第二位为 3-9|
+|smsCode|body|string|是|6 位数字验证码，当前为模拟校验|
+|smsToken|body|string|是|`POST /api/admin/sms-code` 返回的模拟短信凭证|
 
 > 返回示例
 

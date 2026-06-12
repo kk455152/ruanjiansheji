@@ -21,6 +21,8 @@ TOKEN_SECRET = os.environ.get("ADMIN_TOKEN_SECRET", "smart-speaker-admin-secret"
 TOKEN_EXPIRE_SECONDS = int(os.environ.get("ADMIN_TOKEN_EXPIRE_SECONDS", "7200"))
 CAPTCHA_EXPIRE_SECONDS = int(os.environ.get("ADMIN_CAPTCHA_EXPIRE_SECONDS", "300"))
 CAPTCHA_CHECKED_ANSWER = "not_robot_checked"
+SMS_CODE_EXPIRE_SECONDS = int(os.environ.get("ADMIN_SMS_CODE_EXPIRE_SECONDS", "300"))
+SMS_CODE_COOLDOWN_SECONDS = int(os.environ.get("ADMIN_SMS_CODE_COOLDOWN_SECONDS", "60"))
 ADMIN_CACHE_TTL_SECONDS = float(os.environ.get("ADMIN_CACHE_TTL_SECONDS", "30"))
 _ADMIN_CACHE = {}
 _ADMIN_CACHE_LOCK = threading.Lock()
@@ -318,6 +320,52 @@ def make_captcha_challenge():
     return {
         "captchaToken": sign_captcha(CAPTCHA_CHECKED_ANSWER),
         "expiresIn": CAPTCHA_EXPIRE_SECONDS,
+    }
+
+
+def is_china_mobile(phone):
+    text = str(phone or "").strip()
+    return len(text) == 11 and text.isdigit() and text[0] == "1" and text[1:2] in set("3456789")
+
+
+def is_sms_code(code):
+    text = str(code or "").strip()
+    return len(text) == 6 and text.isdigit()
+
+
+def sign_sms_challenge(phone):
+    normalized_phone = str(phone or "").strip()
+    payload = {
+        "phone": normalized_phone,
+        "exp": int((datetime.now() + timedelta(seconds=SMS_CODE_EXPIRE_SECONDS)).timestamp()),
+        "nonce": secrets.token_hex(8),
+    }
+    payload_part = _b64_encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    signature = hmac.new(TOKEN_SECRET.encode("utf-8"), f"sms.{payload_part}".encode("ascii"), hashlib.sha256).digest()
+    return f"{payload_part}.{_b64_encode(signature)}"
+
+
+def verify_sms_challenge(token, phone):
+    try:
+        normalized_phone = str(phone or "").strip()
+        payload_part, signature_part = str(token or "").split(".", 1)
+        expected = hmac.new(TOKEN_SECRET.encode("utf-8"), f"sms.{payload_part}".encode("ascii"), hashlib.sha256).digest()
+        if not hmac.compare_digest(_b64_decode(signature_part), expected):
+            return False
+        payload = json.loads(_b64_decode(payload_part).decode("utf-8"))
+        if int(payload.get("exp", 0)) < int(datetime.now().timestamp()):
+            return False
+        return hmac.compare_digest(str(payload.get("phone") or ""), normalized_phone)
+    except Exception:
+        return False
+
+
+def make_sms_challenge(phone):
+    return {
+        "smsToken": sign_sms_challenge(phone),
+        "maskedPhone": mask_phone(phone),
+        "expiresIn": SMS_CODE_EXPIRE_SECONDS,
+        "cooldownSeconds": SMS_CODE_COOLDOWN_SECONDS,
     }
 
 
@@ -1108,6 +1156,15 @@ def captcha():
     return response_ok(make_captcha_challenge(), "验证码已生成")
 
 
+@admin_bp.post("/sms-code")
+def sms_code():
+    body = request.get_json(silent=True) or {}
+    phone = str(body.get("phone", "")).strip()
+    if not is_china_mobile(phone):
+        return response_error(400, "发送失败", "请输入正确的中国大陆手机号。")
+    return response_ok(make_sms_challenge(phone), "短信验证码已发送")
+
+
 @admin_bp.post("/login")
 def login():
     body = request.get_json(silent=True) or {}
@@ -1115,6 +1172,9 @@ def login():
     password = str(body.get("password", "")).strip()
     captcha_token = str(body.get("captchaToken", "")).strip()
     captcha_answer = str(body.get("captchaAnswer", "")).strip()
+    sms_phone = str(body.get("smsPhone", "")).strip()
+    sms_code = str(body.get("smsCode", "")).strip()
+    sms_token = str(body.get("smsToken", "")).strip()
 
     if not username or not password:
         return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
@@ -1124,6 +1184,18 @@ def login():
     if not verify_captcha(captcha_token, captcha_answer):
         write_admin_audit("login_failed", "认证", "登录机器人验证失败", username, "failed", "机器人验证错误或已过期", None)
         return response_error(400, "验证失败", "机器人验证错误或已过期，请刷新后重试。")
+    if not is_china_mobile(sms_phone):
+        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "手机号格式错误", None)
+        return response_error(400, "短信验证失败", "请输入正确的中国大陆手机号。")
+    if not sms_token:
+        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "短信验证码未发送", None)
+        return response_error(400, "短信验证失败", "请先发送短信验证码。")
+    if not is_sms_code(sms_code):
+        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "短信验证码格式错误", None)
+        return response_error(400, "短信验证失败", "请输入 6 位数字短信验证码。")
+    if not verify_sms_challenge(sms_token, sms_phone):
+        write_admin_audit("login_failed", "认证", "登录短信验证失败", username, "failed", "短信验证码已过期或手机号不匹配", None)
+        return response_error(400, "短信验证失败", "短信验证码已过期，请重新发送。")
 
     admin = find_admin(username)
     if not admin or not verify_admin_password(password, admin.get("password", "")):

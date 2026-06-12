@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
-import { ApiError, API_BASE, login as loginApi, logout as logoutApi, request } from "./api"
+import { ApiError, API_BASE, login as loginApi, logout as logoutApi, request, sendLoginSmsCode } from "./api"
 
 const roleNames = {
   super_admin: "超级管理员",
@@ -35,7 +35,9 @@ const menus = [
 
 const MENU_KEYS = new Set(menus.map((item) => item.key))
 const PROFILE_REFRESH_INTERVAL_MS = 30000
+const SMS_COOLDOWN_SECONDS = 60
 let profileRefreshTimer = null
+let smsCooldownTimer = null
 
 const state = reactive({
   loginForm: {
@@ -45,6 +47,12 @@ const state = reactive({
     captchaToken: "",
     captchaVerified: false,
     captchaLoading: false,
+    smsPhone: "",
+    smsCode: "",
+    smsToken: "",
+    smsSending: false,
+    smsSent: false,
+    smsCooldown: 0,
     remember: true,
   },
   token: localStorage.getItem("admin_token") || "",
@@ -399,6 +407,71 @@ function resetRobotVerification() {
   state.loginForm.captchaVerified = false
 }
 
+function isChinaMobile(phone) {
+  return /^1[3-9]\d{9}$/.test(String(phone || "").trim())
+}
+
+function isSixDigitCode(code) {
+  return /^\d{6}$/.test(String(code || "").trim())
+}
+
+function stopSmsCooldown() {
+  if (smsCooldownTimer) {
+    window.clearInterval(smsCooldownTimer)
+    smsCooldownTimer = null
+  }
+}
+
+function resetSmsVerification() {
+  stopSmsCooldown()
+  state.loginForm.smsCode = ""
+  state.loginForm.smsToken = ""
+  state.loginForm.smsSending = false
+  state.loginForm.smsSent = false
+  state.loginForm.smsCooldown = 0
+}
+
+function startSmsCooldown(seconds = SMS_COOLDOWN_SECONDS) {
+  stopSmsCooldown()
+  state.loginForm.smsCooldown = seconds
+  smsCooldownTimer = window.setInterval(() => {
+    state.loginForm.smsCooldown = Math.max(state.loginForm.smsCooldown - 1, 0)
+    if (!state.loginForm.smsCooldown) stopSmsCooldown()
+  }, 1000)
+}
+
+async function sendSmsCode() {
+  const phone = state.loginForm.smsPhone.trim()
+  if (!isChinaMobile(phone)) {
+    ElMessage.warning("请输入正确的中国大陆手机号")
+    return
+  }
+  if (state.loginForm.smsSending || state.loginForm.smsCooldown > 0) return
+  state.loginForm.smsSending = true
+  try {
+    const data = await sendLoginSmsCode(phone)
+    state.loginForm.smsToken = data.smsToken || ""
+    state.loginForm.smsSent = Boolean(state.loginForm.smsToken)
+    startSmsCooldown(Number(data.cooldownSeconds || SMS_COOLDOWN_SECONDS))
+    ElMessage.success("短信验证码已发送")
+  } catch (error) {
+    state.loginForm.smsToken = ""
+    state.loginForm.smsSent = false
+    ElMessage.error(error.message || "短信验证码发送失败")
+  } finally {
+    state.loginForm.smsSending = false
+  }
+}
+
+function handleSmsPhoneInput() {
+  if (!state.loginForm.smsToken) return
+  stopSmsCooldown()
+  state.loginForm.smsToken = ""
+  state.loginForm.smsCode = ""
+  state.loginForm.smsSent = false
+  state.loginForm.smsCooldown = 0
+}
+
 async function verifyRobot() {
   if (state.loginForm.captchaLoading || state.loginForm.captchaVerified) return
   state.loginForm.captchaLoading = true
@@ -425,12 +498,28 @@ async function handleLogin() {
     ElMessage.warning("请完成机器人验证")
     return
   }
+  if (!isChinaMobile(state.loginForm.smsPhone)) {
+    ElMessage.warning("请输入正确的中国大陆手机号")
+    return
+  }
+  if (!state.loginForm.smsToken || !state.loginForm.smsSent) {
+    ElMessage.warning("请先发送短信验证码")
+    return
+  }
+  if (!isSixDigitCode(state.loginForm.smsCode)) {
+    ElMessage.warning("请输入 6 位数字短信验证码")
+    return
+  }
 
   state.loading = true
   try {
     const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password, {
       captchaToken: state.loginForm.captchaToken,
       captchaAnswer: state.loginForm.captchaAnswer.trim(),
+    }, {
+      smsPhone: state.loginForm.smsPhone.trim(),
+      smsCode: state.loginForm.smsCode.trim(),
+      smsToken: state.loginForm.smsToken,
     })
     applySession(data)
     if (state.loginForm.remember) {
@@ -440,6 +529,7 @@ async function handleLogin() {
     }
     state.loginForm.password = ""
     state.loginForm.captchaAnswer = ""
+    resetSmsVerification()
     ElMessage.success("登录成功，正在加载后台数据")
     await loadPage(true)
   } catch (error) {
@@ -465,6 +555,7 @@ function clearSession() {
   state.admin = null
   stopProfileRefresh()
   resetRobotVerification()
+  resetSmsVerification()
   localStorage.removeItem("admin_token")
   localStorage.removeItem("admin_info")
 }
@@ -1067,7 +1158,10 @@ onMounted(async () => {
   await restoreSession()
   if (isLoggedIn.value) startProfileRefresh()
 })
-onUnmounted(stopProfileRefresh)
+onUnmounted(() => {
+  stopProfileRefresh()
+  stopSmsCooldown()
+})
 </script>
 
 <template>
@@ -1098,6 +1192,44 @@ onUnmounted(stopProfileRefresh)
         <span class="field-input">
           <i class="fa-solid fa-lock"></i>
           <input v-model="state.loginForm.password" autocomplete="current-password" type="password" placeholder="请输入密码" />
+        </span>
+      </label>
+      <label class="field">
+        <span>手机号</span>
+        <span class="field-input">
+          <i class="fa-solid fa-mobile-screen-button"></i>
+          <input
+            v-model="state.loginForm.smsPhone"
+            autocomplete="tel"
+            inputmode="numeric"
+            maxlength="11"
+            placeholder="请输入手机号"
+            @input="handleSmsPhoneInput"
+          />
+        </span>
+      </label>
+      <label class="field">
+        <span>短信验证码</span>
+        <span class="field-input sms-code-input">
+          <i class="fa-solid fa-message"></i>
+          <input
+            v-model="state.loginForm.smsCode"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            maxlength="6"
+            placeholder="6 位数字验证码"
+          />
+          <button
+            class="sms-code-button"
+            type="button"
+            :disabled="state.loading || state.loginForm.smsSending || state.loginForm.smsCooldown > 0"
+            @click="sendSmsCode"
+          >
+            <i v-if="state.loginForm.smsSending" class="fa-solid fa-rotate-right spin"></i>
+            <span v-if="state.loginForm.smsSending">发送中</span>
+            <span v-else-if="state.loginForm.smsCooldown > 0">重新发送 {{ state.loginForm.smsCooldown }}s</span>
+            <span v-else>{{ state.loginForm.smsSent ? "重新发送" : "发送验证码" }}</span>
+          </button>
         </span>
       </label>
       <div class="robot-check-wrap">
@@ -2091,11 +2223,44 @@ button {
 .field-input input,
 .search input {
   flex: 1;
+  min-width: 0;
   width: 100%;
   border: 0;
   background: transparent;
   color: var(--text-primary);
   outline: none;
+}
+
+.sms-code-input {
+  padding-right: 8px;
+}
+
+.sms-code-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 112px;
+  max-width: 136px;
+  border: 0;
+  border-radius: 99px;
+  padding: 8px 12px;
+  background: var(--accent-green);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.sms-code-button:hover:not(:disabled) {
+  background: var(--accent-green-deep);
+}
+
+.sms-code-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .robot-check-wrap {

@@ -57,7 +57,7 @@ export async function request(path, options = {}) {
   return payload?.data ?? payload
 }
 
-export function login(username, password, captcha = {}) {
+export function login(username, password, captcha = {}, sms = {}) {
   return request("/api/admin/login", {
     method: "POST",
     token: "",
@@ -67,7 +67,18 @@ export function login(username, password, captcha = {}) {
       loginType: "password",
       captchaToken: captcha.captchaToken,
       captchaAnswer: captcha.captchaAnswer,
+      smsPhone: sms.smsPhone,
+      smsCode: sms.smsCode,
+      smsToken: sms.smsToken,
     },
+  })
+}
+
+export function sendLoginSmsCode(phone) {
+  return request("/api/admin/sms-code", {
+    method: "POST",
+    token: "",
+    body: { phone },
   })
 }
 
