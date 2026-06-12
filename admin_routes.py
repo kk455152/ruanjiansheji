@@ -18,7 +18,7 @@ from api_pkg.common import json_safe, load_state, mongo_many, mongo_one, mysql_a
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 admin_compat_bp = Blueprint("admin_compat", __name__)
 
-TOKEN_SECRET = os.environ.get("ADMIN_TOKEN_SECRET", "smart-speaker-admin-secret")
+TOKEN_SECRET = os.environ.get("ADMIN_TOKEN_SECRET") or secrets.token_urlsafe(32)
 TOKEN_EXPIRE_SECONDS = int(os.environ.get("ADMIN_TOKEN_EXPIRE_SECONDS", "7200"))
 CAPTCHA_EXPIRE_SECONDS = int(os.environ.get("ADMIN_CAPTCHA_EXPIRE_SECONDS", "300"))
 CAPTCHA_CHECKED_ANSWER = "not_robot_checked"
@@ -37,6 +37,16 @@ def is_password_hash(value):
 
 def hash_password(raw_password):
     return generate_password_hash(str(raw_password or ""))
+
+
+def normalize_password_for_storage(password):
+    text = str(password or "")
+    return text if is_password_hash(text) else hash_password(text)
+
+
+def clear_admin_cache():
+    with _ADMIN_CACHE_LOCK:
+        _ADMIN_CACHE.clear()
 
 
 def configured_admin_password(env_name):
@@ -200,7 +210,7 @@ def update_admin_password(admin, new_password):
     username = str(admin.get("username") or "").strip()
     if not username:
         return False
-    stored_password = new_password if is_password_hash(new_password) else hash_password(new_password)
+    stored_password = normalize_password_for_storage(new_password)
 
     db_row = mysql_one(
         "SELECT admin_id FROM admin_user WHERE username=%s LIMIT 1",
@@ -211,7 +221,10 @@ def update_admin_password(admin, new_password):
             "UPDATE admin_user SET password_hash=%s, updated_at=NOW() WHERE admin_id=%s",
             (stored_password, db_row.get("admin_id")),
         )
-        return bool(updated is not False)
+        if updated is not False:
+            clear_admin_cache()
+            return True
+        return False
 
     overlay = admin_accounts_overlay()
     accounts = dict(overlay["accounts"])
@@ -222,6 +235,7 @@ def update_admin_password(admin, new_password):
     record["roleName"] = ROLE_NAME_MAP.get(record.get("role"), record.get("roleName") or "")
     accounts[username] = record
     _save_admin_overlay({"accounts": accounts, "deleted": overlay["deleted"]})
+    clear_admin_cache()
     return True
 
 
@@ -245,6 +259,13 @@ def verify_admin_password(raw_password, stored_password):
 
 def password_needs_rehash(stored_password):
     return not is_password_hash(stored_password)
+
+
+def upgrade_admin_password_if_needed(admin, raw_password):
+    if password_needs_rehash(admin.get("password", "")):
+        update_admin_password(admin, raw_password)
+        return find_admin(admin.get("username")) or admin
+    return admin
 
 
 def response_ok(data=None, message=None, code=200):
@@ -1237,9 +1258,7 @@ def login():
         if not admin or not verify_admin_password(password, admin.get("password", "")):
             write_admin_audit("login_failed", "认证", "账号密码登录失败", username, "failed", "用户名或密码错误", None)
             return response_error(401, "认证失败", "用户名或密码错误，请重新输入。")
-        if password_needs_rehash(admin.get("password", "")):
-            update_admin_password(admin, password)
-            admin = find_admin(username) or admin
+        admin = upgrade_admin_password_if_needed(admin, password)
         operation_name = "账号密码登录"
     else:
         if not is_china_mobile(sms_phone):
@@ -2452,7 +2471,7 @@ def _insert_admin_user_from_body(body, username, password, role, real_name):
     position = _nullable_text(body.get("position")) or ROLE_NAME_MAP[role]
     phone = _nullable_text(body.get("phone"))
     email = _nullable_text(body.get("email"))
-    stored_password = password if is_password_hash(password) else hash_password(password)
+    stored_password = normalize_password_for_storage(password)
     admin_id = mysql_exec(
         """
         INSERT INTO admin_user
@@ -2476,6 +2495,7 @@ def _insert_admin_user_from_body(body, username, password, role, real_name):
     )
     if not admin_id:
         return None
+    clear_admin_cache()
     return {
         "adminId": admin_id,
         "username": username,
@@ -2491,7 +2511,7 @@ def _insert_admin_user_from_body(body, username, password, role, real_name):
     }
 
 
-def _update_admin_user_from_body(admin, body):
+def _update_admin_user_from_body(admin, body, stored_password=None):
     username = str(admin.get("username") or "").strip()
     db_row = _admin_db_row(username)
     if not db_row or not db_row.get("admin_id"):
@@ -2502,7 +2522,7 @@ def _update_admin_user_from_body(admin, body):
     role = str(body.get("role", "")).strip()
     if password:
         fields.append("password_hash=%s")
-        params.append(hash_password(password))
+        params.append(stored_password or normalize_password_for_storage(password))
     if role:
         fields.append("role=%s")
         params.append(role)
@@ -2530,6 +2550,8 @@ def _update_admin_user_from_body(admin, body):
         f"UPDATE admin_user SET {', '.join(fields)} WHERE admin_id=%s",
         tuple(params),
     )
+    if updated is not False:
+        clear_admin_cache()
     return bool(updated is not False)
 
 
@@ -2557,10 +2579,11 @@ def admin_user_create():
     overlay = admin_accounts_overlay()
     accounts = dict(overlay["accounts"])
     deleted = [u for u in overlay["deleted"] if u != username]
+    stored_password = normalize_password_for_storage(password)
     record = {
         "adminId": _next_admin_id(all_admins()),
         "username": username,
-        "password": hash_password(password),
+        "password": stored_password,
         "role": role,
         "roleName": ROLE_NAME_MAP[role],
         "realName": real_name,
@@ -2572,6 +2595,7 @@ def admin_user_create():
     }
     accounts[username] = record
     _save_admin_overlay({"accounts": accounts, "deleted": deleted})
+    clear_admin_cache()
     write_admin_audit("create_admin_user", "用户管理", "新增后台账号", username, "success", "", params={"role": role})
     return response_ok(public_admin_info(record, include_private=True), "账号已创建")
 
@@ -2596,10 +2620,11 @@ def admin_user_update():
             if len(supers) <= 1:
                 return response_error(400, "更新失败", "至少需保留一个超级管理员。")
 
-    if _update_admin_user_from_body(admin, body):
+    stored_new_password = normalize_password_for_storage(new_password) if new_password else ""
+    if _update_admin_user_from_body(admin, body, stored_new_password):
         record = dict(admin)
         if new_password:
-            record["password"] = hash_password(new_password)
+            record["password"] = stored_new_password
         if new_role:
             record["role"] = new_role
             record["roleName"] = ROLE_NAME_MAP[new_role]
@@ -2614,7 +2639,7 @@ def admin_user_update():
     record = dict(accounts.get(username) or admin)
     record["username"] = username
     if new_password:
-        record["password"] = hash_password(new_password)
+        record["password"] = stored_new_password
     if new_role:
         record["role"] = new_role
         record["roleName"] = ROLE_NAME_MAP[new_role]
@@ -2623,6 +2648,7 @@ def admin_user_update():
             record[key] = str(body.get(key)).strip()
     accounts[username] = record
     _save_admin_overlay({"accounts": accounts, "deleted": overlay["deleted"]})
+    clear_admin_cache()
     write_admin_audit("update_admin_user", "用户管理", "修改后台账号", username, "success", "", params={"role": record.get("role")})
     return response_ok(public_admin_info(record, include_private=True), "账号已更新")
 
@@ -2648,6 +2674,7 @@ def admin_user_delete():
             "UPDATE admin_user SET status=0, updated_at=NOW() WHERE admin_id=%s",
             (db_row.get("admin_id"),),
         )
+        clear_admin_cache()
         write_admin_audit("delete_admin_user", "用户管理", "删除后台账号", username, "success")
         return response_ok(None, "账号已删除")
 
@@ -2657,6 +2684,7 @@ def admin_user_delete():
     if username in DEFAULT_ADMINS and username not in deleted:
         deleted.append(username)
     _save_admin_overlay({"accounts": accounts, "deleted": deleted})
+    clear_admin_cache()
     write_admin_audit("delete_admin_user", "用户管理", "删除后台账号", username, "success")
     return response_ok(None, "账号已删除")
 
