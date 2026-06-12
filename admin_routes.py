@@ -2278,21 +2278,7 @@ def system_config():
 @admin_bp.post("/super/system/config")
 @require_admin("super")
 def update_system_config():
-    body = request.get_json(silent=True) or {}
-    saved_to_db = False
-    for key, value in body.items():
-        if value is None:
-            continue
-        saved_to_db = _save_system_config_value(key, value, "system", key) or saved_to_db
-
-    current = admin_state_section("systemConfig", {})
-    current.update({key: value for key, value in body.items() if value is not None})
-    fallback = save_admin_state_section("systemConfig", current)
-    return response_ok(_system_config_values(fallback) if saved_to_db else fallback, "system config saved")
-
-    current = admin_state_section("systemConfig", {})
-    current.update({key: value for key, value in body.items() if value is not None})
-    return response_ok(save_admin_state_section("systemConfig", current), "系统配置已保存")
+    return response_error(403, "无权限修改", "系统全局配置已设为只读，不支持后台修改。")
 
 
 @admin_bp.get("/super/users")

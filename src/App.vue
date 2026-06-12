@@ -1011,14 +1011,6 @@ async function unbindDevice(item) {
   }
 }
 
-async function saveSystemConfig() {
-  state.settings = await api("/api/admin/super/system/config", {
-    method: "POST",
-    body: state.settings,
-  })
-  ElMessage.success("系统配置已保存")
-}
-
 async function createNotice() {
   try {
     const { value } = await ElMessageBox.prompt("请输入公告标题", "发布系统公告", {
@@ -1689,14 +1681,14 @@ onUnmounted(stopProfileRefresh)
       </section>
 
       <section v-if="state.active === 'system'" class="panel full">
-        <div class="panel-head"><div><h3>系统全局配置</h3><p>名称、主题、上传限制、接口超时和数据保留</p></div><button class="primary-button compact" @click="saveSystemConfig">保存配置</button></div>
+        <div class="panel-head"><div><h3>系统全局配置</h3><p>名称、主题、上传限制、接口超时和数据保留</p></div><span class="perm-tag">只读</span></div>
         <div class="form-grid">
-          <label class="field"><span>系统名称</span><input v-model="state.settings.systemName" /></label>
-          <label class="field"><span>Logo 文案</span><input v-model="state.settings.logoText" /></label>
-          <label class="field"><span>默认主题</span><input v-model="state.settings.defaultTheme" /></label>
-          <label class="field"><span>上传限制 MB</span><input v-model.number="state.settings.uploadLimitMb" type="number" /></label>
-          <label class="field"><span>接口超时 秒</span><input v-model.number="state.settings.apiTimeoutSeconds" type="number" /></label>
-          <label class="field"><span>数据保留 天</span><input v-model.number="state.settings.dataRetentionDays" type="number" /></label>
+          <label class="field"><span>系统名称</span><input v-model="state.settings.systemName" readonly aria-readonly="true" /></label>
+          <label class="field"><span>Logo 文案</span><input v-model="state.settings.logoText" readonly aria-readonly="true" /></label>
+          <label class="field"><span>默认主题</span><input v-model="state.settings.defaultTheme" readonly aria-readonly="true" /></label>
+          <label class="field"><span>上传限制 MB</span><input v-model.number="state.settings.uploadLimitMb" type="number" readonly aria-readonly="true" /></label>
+          <label class="field"><span>接口超时 秒</span><input v-model.number="state.settings.apiTimeoutSeconds" type="number" readonly aria-readonly="true" /></label>
+          <label class="field"><span>数据保留 天</span><input v-model.number="state.settings.dataRetentionDays" type="number" readonly aria-readonly="true" /></label>
         </div>
       </section>
 
@@ -2031,6 +2023,17 @@ button {
 .field > select:focus {
   border-color: var(--accent-green);
   box-shadow: 0 0 0 3px var(--accent-green-light);
+}
+
+.field > input[readonly] {
+  background: rgba(0, 0, 0, 0.035);
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.field > input[readonly]:focus {
+  border-color: var(--border-light);
+  box-shadow: none;
 }
 
 .field > input:disabled {

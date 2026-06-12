@@ -3165,21 +3165,18 @@ GET /api/admin/super/system/config
 |message|string|否|返回消息|
 |data|object|否|接口返回数据，字段见返回示例|
 
-## POST 保存系统配置
+## POST 修改系统配置（已禁用）
 POST /api/admin/super/system/config
 
-保存系统名称、主题、上传限制、接口超时等配置。
+系统全局配置当前为只读，后台不再提供编辑权限。调用该接口会返回 403，不会写入 `system_config` 或本地持久化状态。
 
-> Body 请求示例
+> 返回示例
 
 ```json
 {
-  "systemName": "声盒 Mini 后台管理系统",
-  "logoText": "Mini",
-  "defaultTheme": "green",
-  "uploadLimitMb": 100,
-  "apiTimeoutSeconds": 15,
-  "dataRetentionDays": 365
+  "code": 403,
+  "message": "无权限修改",
+  "error_details": "系统全局配置已设为只读，不支持后台修改。"
 }
 ```
 
@@ -3188,26 +3185,6 @@ POST /api/admin/super/system/config
 |名称|位置|类型|必填|说明|
 |---|---|---|---|---|
 |Authorization|header|string|是|Bearer {{access_token}}，登录后返回的后台访问 token|
-|systemName|body|string|否|系统名称|
-|logoText|body|string|否|Logo 文案|
-|defaultTheme|body|string|否|默认主题|
-|uploadLimitMb|body|integer|否|上传限制 MB|
-|apiTimeoutSeconds|body|integer|否|接口超时秒数|
-|dataRetentionDays|body|integer|否|数据保留天数|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "result": true
-  }
-}
-```
 
 > 401 Response
 
@@ -3222,20 +3199,18 @@ POST /api/admin/super/system/config
 
 |状态码|含义|说明|
 |---|---|---|
-|200|OK|请求成功|
-|400|Bad Request|请求参数错误|
 |401|Unauthorized|未登录或 token 失效|
-|403|Forbidden|当前角色无权限访问|
+|403|Forbidden|系统全局配置为只读，不允许修改|
 
 ### 返回数据结构
 
-状态码 **200**
+状态码 **403**
 
 |名称|类型|必选|说明|
 |---|---|---|---|
-|code|integer|是|业务状态码，成功为 200|
-|message|string|否|返回消息|
-|data|object|否|接口返回数据，字段见返回示例|
+|code|integer|是|业务状态码，固定为 403|
+|message|string|是|返回消息|
+|error_details|string|否|只读原因说明|
 
 ## GET 系统公告列表
 GET /api/admin/super/notices
