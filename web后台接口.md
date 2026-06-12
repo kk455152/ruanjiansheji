@@ -549,59 +549,6 @@ GET /api/admin/super/trend/growth
 |message|string|否|返回消息|
 |data|object|否|接口返回数据，字段见返回示例|
 
-## GET 系统监控
-GET /api/admin/super/monitor
-
-获取 Web API、MySQL、MongoDB 等服务健康状态和异常信息。
-
-### 请求参数
-
-|名称|位置|类型|必填|说明|
-|---|---|---|---|---|
-|Authorization|header|string|是|Bearer {{access_token}}，登录后返回的后台访问 token|
-
-> 返回示例
-
-> 200 Response
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "result": true
-  }
-}
-```
-
-> 401 Response
-
-```json
-{
-  "code": 401,
-  "message": "未登录或登录已失效"
-}
-```
-
-### 返回结果
-
-|状态码|含义|说明|
-|---|---|---|
-|200|OK|请求成功|
-|400|Bad Request|请求参数错误|
-|401|Unauthorized|未登录或 token 失效|
-|403|Forbidden|当前角色无权限访问|
-
-### 返回数据结构
-
-状态码 **200**
-
-|名称|类型|必选|说明|
-|---|---|---|---|
-|code|integer|是|业务状态码，成功为 200|
-|message|string|否|返回消息|
-|data|object|否|接口返回数据，字段见返回示例|
-
 # 决策看板
 ## GET 超级管理员决策汇总
 GET /api/admin/super/decision/summary

@@ -28,7 +28,6 @@ const menus = [
   { key: "users", label: "用户管理", icon: "fa-user-gear", section: "系统管理", roles: ["super_admin"] },
   { key: "roles", label: "角色权限", icon: "fa-user-shield", section: "系统管理", roles: ["super_admin"] },
   { key: "system", label: "系统配置", icon: "fa-gear", section: "系统管理", roles: ["super_admin"] },
-  { key: "monitor", label: "系统监控", icon: "fa-wave-square", section: "系统管理", roles: ["super_admin"] },
   { key: "notices", label: "系统公告", icon: "fa-bullhorn", section: "系统管理", roles: ["super_admin"] },
   { key: "audit", label: "审计日志", icon: "fa-shield-halved", section: "系统管理", roles: ["super_admin"] },
   { key: "account", label: "个人信息", icon: "fa-circle-user", section: "账户", roles: ["super_admin", "market_admin", "operator_admin", "boss"] },
@@ -74,7 +73,6 @@ const state = reactive({
   roleEditor: { open: false, role: "", roleName: "", selected: [], saving: false },
   userEditor: { open: false, mode: "create", saving: false, original: "", form: { username: "", password: "", role: "operator_admin", realName: "", phone: "", email: "", jobNo: "" } },
   settings: {},
-  monitor: { metrics: {}, exceptions: [] },
   notices: { total: 0, list: [] },
   audit: { total: 0, list: [] },
   detail: null,
@@ -531,7 +529,6 @@ async function loadPage(initial = false) {
     if (state.active === "users") await loadUsers()
     if (state.active === "roles") await loadRoles()
     if (state.active === "system") await loadSettings()
-    if (state.active === "monitor") await loadMonitor()
     if (state.active === "notices") await loadNotices()
     if (state.active === "audit") await loadAudit()
     if (state.active === "account") await loadAccount()
@@ -545,7 +542,7 @@ async function loadPage(initial = false) {
 
 async function loadOverview() {
   if (currentRole.value === "super_admin" || currentRole.value === "boss") {
-    const [user, device, sales, activity, trend, songs, feedback, salesRegion, monitor] = await Promise.all([
+    const [user, device, sales, activity, trend, songs, feedback, salesRegion] = await Promise.all([
       silent(() => api("/api/admin/super/overview/user-count"), {}),
       silent(() => api("/api/admin/super/overview/device-count"), {}),
       silent(() => api("/api/admin/super/overview/sales-amount"), {}),
@@ -554,14 +551,12 @@ async function loadOverview() {
       silent(() => api("/api/admin/market/top-songs"), { list: [] }),
       silent(() => api("/api/admin/super/feedback/list", { params: { page: 1, pageSize: 5 } }), { list: [], total: 0 }),
       silent(() => api("/api/admin/super/region/sales-heatmap"), { list: [] }),
-      silent(() => api("/api/admin/super/monitor"), { metrics: {}, exceptions: [] }),
     ])
     state.overview = { user, device, sales, activity }
     state.trend = trend
     state.songs = songs.list || []
     state.feedback = feedback
     state.region.sales = salesRegion.list || []
-    state.monitor = monitor
     return
   }
 
@@ -839,10 +834,6 @@ async function deleteUser(user) {
 
 async function loadSettings() {
   state.settings = await api("/api/admin/super/system/config")
-}
-
-async function loadMonitor() {
-  state.monitor = await api("/api/admin/super/monitor")
 }
 
 async function loadNotices() {
@@ -1647,24 +1638,6 @@ onUnmounted(stopProfileRefresh)
           <label class="field"><span>接口超时 秒</span><input v-model.number="state.settings.apiTimeoutSeconds" type="number" /></label>
           <label class="field"><span>数据保留 天</span><input v-model.number="state.settings.dataRetentionDays" type="number" /></label>
         </div>
-      </section>
-
-      <section v-if="state.active === 'monitor'" class="panel full monitor-panel">
-        <div class="panel-head">
-          <div><h3>最近异常</h3><p>日志、反馈、离线设备与固件异常</p></div>
-          <span class="badge warning">{{ state.monitor.exceptions.length }} 项</span>
-        </div>
-        <div v-if="state.monitor.exceptions.length" class="exception-grid">
-          <article v-for="item in state.monitor.exceptions" :key="item.code" :class="['exception-card', item.level || 'warning']">
-            <span class="exception-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
-            <div>
-              <strong>{{ item.title }}</strong>
-              <small>{{ statusText(item.level) }}</small>
-            </div>
-            <b>{{ item.count }}</b>
-          </article>
-        </div>
-        <p v-else class="empty-state">暂无异常</p>
       </section>
 
       <section v-if="state.active === 'notices'" class="panel full">
@@ -2921,73 +2894,6 @@ button {
   font-weight: 500;
 }
 
-.monitor-panel {
-  align-self: start;
-}
-
-.exception-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.exception-card {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  min-height: 84px;
-  padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.46);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
-}
-
-.exception-card.critical {
-  background: rgba(217, 138, 115, 0.12);
-}
-
-.exception-icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
-  color: var(--accent-orange);
-  background: rgba(244, 162, 97, 0.15);
-}
-
-.exception-card strong,
-.exception-card small {
-  display: block;
-}
-
-.exception-card strong {
-  overflow: hidden;
-  font-size: 16px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.exception-card small {
-  margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.exception-card b {
-  color: var(--text-secondary);
-  font-size: 24px;
-  font-weight: 400;
-}
-
-.exception-card.critical b,
-.exception-card.critical .exception-icon {
-  color: #d98a73;
-}
-
 .empty-state {
   display: grid;
   min-height: 180px;
@@ -3714,9 +3620,6 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .exception-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 820px) {

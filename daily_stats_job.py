@@ -1626,9 +1626,6 @@ def seed_demo_support_rows(cursor, stat_date, rng, user_profiles, device_records
 
     config_rows = [
         (f"notice.daily.{stat_date.strftime('%Y%m%d')}", "今日运营数据已更新，新增用户、设备、播放和反馈已完成汇总。", "notice", "notice", "运营日报公告", "published"),
-        ("monitor.api", "running", "status", "monitor_service", "后台接口服务", "平均响应 42 ms"),
-        ("monitor.mysql", "running", "status", "monitor_service", "MySQL 数据库", "连接正常"),
-        ("monitor.mongo", "running", "status", "monitor_service", "MongoDB 运行态", "连接正常"),
         ("decision_risk.offline", "离线设备占比需持续关注", "warning", "decision_risk", "设备离线风险", "当前离线率低于 20%"),
         ("market_recommendation.retention", "优先触达购买后 7 日内播放少于 3 次的用户。", "text", "market_recommendation", "留存运营建议", "用于营销洞察"),
     ]

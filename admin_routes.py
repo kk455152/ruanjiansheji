@@ -2107,7 +2107,6 @@ PERMISSION_CATALOG = {
     "users": "用户管理",
     "roles": "角色权限",
     "system": "系统配置",
-    "monitor": "系统监控",
     "notices": "系统公告",
     "audit": "审计日志",
     "account": "个人信息",
@@ -2167,7 +2166,6 @@ API_PERMISSION_RULES = [
     (("/api/admin/super/system/config",), ("system",)),
     (("/api/admin/super/security/logs",), ("audit",)),
     (("/api/admin/super/notices",), ("notices",)),
-    (("/api/admin/super/monitor",), ("monitor", "overview")),
     (("/api/admin/super/decision", "/api/admin/market/decision"), ("decision", "overview")),
     (("/api/admin/super/overview",), ("overview",)),
     (("/api/admin/super/trend",), ("trend", "overview")),
@@ -2786,48 +2784,6 @@ def alert_summary_counts(total_devices=None, online_devices=None):
         "failedFirmwareTasks": failed_tasks,
     }
 
-
-@admin_bp.get("/super/monitor")
-@require_admin("super", "boss")
-def system_monitor():
-    total_users = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
-    total_devices = count_sql("SELECT COUNT(*) AS c FROM device", fallback=0)
-    online_devices = count_sql(f"SELECT COUNT(*) AS c FROM device WHERE {ONLINE_DEVICE_CONDITION}", fallback=0)
-    feedback_total = len(feedback_rows())
-    monitor_config = _system_config_values({"apiErrorRate": 0, "storageUsage": ""})
-    alert_counts = alert_summary_counts(total_devices, online_devices)
-    exceptions = []
-    if alert_counts["logAlerts"]:
-        exceptions.append({"code": "DEVICE_LOG_ALERT", "title": "设备日志告警", "count": alert_counts["logAlerts"], "level": "warning"})
-    if alert_counts["offlineDevices"]:
-        exceptions.append({"code": "OFFLINE_DEVICE", "title": "离线设备", "count": alert_counts["offlineDevices"], "level": "warning"})
-    if alert_counts["pendingFeedback"]:
-        exceptions.append({"code": "PENDING_FEEDBACK", "title": "待处理反馈", "count": alert_counts["pendingFeedback"], "level": "warning"})
-    if alert_counts["failedFirmwareTasks"]:
-        exceptions.append({"code": "FAILED_FIRMWARE_TASK", "title": "固件升级失败任务", "count": alert_counts["failedFirmwareTasks"], "level": "critical"})
-
-    existing_codes = {item["code"] for item in exceptions}
-    for row in _system_config_group_rows("monitor_exception", 20):
-        code = row.get("config_key") or f"EX-{row.get('config_id')}"
-        if code in existing_codes:
-            continue
-        exceptions.append({
-            "code": code,
-            "title": row.get("config_name") or row.get("config_value") or "-",
-            "count": _int(row.get("description"), 0),
-            "level": row.get("config_type") or "",
-        })
-    return response_ok({
-        "metrics": {
-            "totalUsers": total_users,
-            "totalDevices": total_devices,
-            "onlineDevices": online_devices,
-            "feedbackTotal": feedback_total,
-            "apiErrorRate": _float(monitor_config.get("apiErrorRate"), 0),
-            "storageUsage": str(monitor_config.get("storageUsage") or ""),
-        },
-        "exceptions": exceptions,
-    })
 
 @admin_bp.get("/super/notices")
 @require_admin("super")
