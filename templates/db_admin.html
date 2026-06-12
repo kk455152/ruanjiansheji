@@ -757,6 +757,7 @@
       "user_feedback", "device_log", "device_alert", "device_firmware_update_task",
       "daily_stats", "region_stats_daily", "hot_ranking_daily", "user_value_segment_daily",
     ]);
+    const SUMMARY_DATE_FIELDS = ["created_at", "paid_at", "stat_date", "ranking_date", "metric_date", "updated_at"];
     const DERIVED_RESULT_TABLES = new Set([
       "daily_stats", "region_stats_daily", "hot_ranking_daily",
       "user_value_segment_daily", "user_activity_daily", "analytics_metric_daily",
@@ -1911,20 +1912,10 @@
       renderCatalog();
     }
 
-    function summaryDateFromRecord(record) {
-      const candidates = ["created_at", "paid_at", "stat_date", "ranking_date", "metric_date", "updated_at"];
-      for (const field of candidates) {
-        const value = String(record?.[field] || "").trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-      }
-      return "";
-    }
-
     function summaryDatesFromRecords(...records) {
       const dates = new Set();
       for (const record of records) {
-        const candidates = ["created_at", "paid_at", "stat_date", "ranking_date", "metric_date", "updated_at"];
-        for (const field of candidates) {
+        for (const field of SUMMARY_DATE_FIELDS) {
           const value = String(record?.[field] || "").trim();
           if (/^\d{4}-\d{2}-\d{2}/.test(value)) dates.add(value.slice(0, 10));
         }

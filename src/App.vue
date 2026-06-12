@@ -367,6 +367,11 @@ function setUpdated() {
   })
 }
 
+function saveAdminInfo(admin) {
+  if (admin) localStorage.setItem("admin_info", JSON.stringify(admin))
+  else localStorage.removeItem("admin_info")
+}
+
 function permissionsForRole(role, permissions) {
   if (Array.isArray(permissions)) {
     return permissions.filter((key) => MENU_KEYS.has(key))
@@ -558,7 +563,7 @@ function applySession(data) {
   state.token = token
   state.admin = data.adminInfo
   localStorage.setItem("admin_token", token)
-  localStorage.setItem("admin_info", JSON.stringify(data.adminInfo))
+  saveAdminInfo(data.adminInfo)
   state.active = firstMenuForAdmin(data.adminInfo)
   startProfileRefresh()
 }
@@ -570,7 +575,7 @@ function clearSession() {
   resetRobotVerification()
   resetSmsVerification()
   localStorage.removeItem("admin_token")
-  localStorage.removeItem("admin_info")
+  saveAdminInfo(null)
 }
 
 async function handleLogout() {
@@ -586,7 +591,7 @@ async function refreshAdminProfile() {
   const previousActive = state.active
   const admin = await api("/api/admin/profile")
   state.admin = admin
-  localStorage.setItem("admin_info", JSON.stringify(admin))
+  saveAdminInfo(admin)
   if (!canUse(state.active)) {
     state.active = firstMenuForAdmin(admin)
   }
@@ -657,25 +662,8 @@ async function loadPage(initial = false) {
 
   try {
     if (initial || state.active === "overview") await loadOverview()
-    if (state.active === "decision") await loadDecision()
-    if (state.active === "trend") await loadTrend()
-    if (state.active === "region") await loadRegion()
-    if (state.active === "profile") await loadProfile()
-    if (state.active === "value") await loadValue()
-    if (state.active === "segments") await loadSegments()
-    if (state.active === "insights") await loadInsights()
-    if (state.active === "songs") await loadSongs()
-    if (state.active === "feedback") await loadFeedback()
-    if (state.active === "devices") await loadDevices()
-    if (state.active === "groups") await loadGroups()
-    if (state.active === "alerts") await loadAlerts()
-    if (state.active === "logs") await loadLogs()
-    if (state.active === "users") await loadUsers()
-    if (state.active === "roles") await loadRoles()
-    if (state.active === "system") await loadSettings()
-    if (state.active === "notices") await loadNotices()
-    if (state.active === "audit") await loadAudit()
-    if (state.active === "account") await loadAccount()
+    const loader = pageLoaders[state.active]
+    if (state.active !== "overview" && loader) await loader()
     setUpdated()
   } catch (error) {
     ElMessage.error(error.message || "数据加载失败")
@@ -876,7 +864,7 @@ async function saveRolePermissions() {
     if (Array.isArray(data?.currentPermissions) && state.admin) {
       state.admin.permissions = data.currentPermissions
       state.admin.permissionsUpdatedAt = data.updatedAt || state.admin.permissionsUpdatedAt
-      localStorage.setItem("admin_info", JSON.stringify(state.admin))
+      saveAdminInfo(state.admin)
     }
     ElMessage.success(`角色权限已更新，已应用到 ${data?.affectedUserCount ?? 0} 个账号`)
     state.roleEditor.open = false
@@ -990,7 +978,29 @@ async function loadAudit() {
 
 async function loadAccount() {
   state.admin = await api("/api/admin/profile")
-  localStorage.setItem("admin_info", JSON.stringify(state.admin))
+  saveAdminInfo(state.admin)
+}
+
+const pageLoaders = {
+  decision: loadDecision,
+  trend: loadTrend,
+  region: loadRegion,
+  profile: loadProfile,
+  value: loadValue,
+  segments: loadSegments,
+  insights: loadInsights,
+  songs: loadSongs,
+  feedback: loadFeedback,
+  devices: loadDevices,
+  groups: loadGroups,
+  alerts: loadAlerts,
+  logs: loadLogs,
+  users: loadUsers,
+  roles: loadRoles,
+  system: loadSettings,
+  notices: loadNotices,
+  audit: loadAudit,
+  account: loadAccount,
 }
 
 function resetPasswordForm() {
@@ -1023,7 +1033,7 @@ async function changePassword() {
       },
     })
     state.admin = profile
-    localStorage.setItem("admin_info", JSON.stringify(state.admin))
+    saveAdminInfo(state.admin)
     resetPasswordForm()
     ElMessage.success("密码已更新")
   } catch (error) {
@@ -1365,7 +1375,7 @@ onUnmounted(() => {
           </div>
           <div v-if="currentRole === 'operator_admin'" class="device-overview">
             <div
-              v-for="item in (state.devices.list || [])"
+              v-for="item in filteredDevices"
               :key="item.deviceId"
               class="device-overview-row"
             >
@@ -1378,7 +1388,7 @@ onUnmounted(() => {
               </button>
               <span :class="['device-status', { online: item.online }]">{{ item.online ? "在线" : "离线" }}</span>
             </div>
-            <p v-if="!(state.devices.list || []).length" class="muted">暂无设备数据。</p>
+            <p v-if="!filteredDevices.length" class="muted">暂无设备数据。</p>
           </div>
           <div v-else class="chart-with-axis">
             <p class="axis-unit">{{ trendMetricName }}（单位：{{ trendUnit }}）</p>
@@ -1717,7 +1727,7 @@ onUnmounted(() => {
             @change="selectDeviceById"
           >
             <el-option
-              v-for="item in state.devices.list || []"
+              v-for="item in filteredDevices"
               :key="item.deviceId"
               :label="`${item.deviceSn} · ${item.deviceName} · ${item.ownerName || '未绑定'}`"
               :value="item.deviceId"
@@ -1730,7 +1740,7 @@ onUnmounted(() => {
           </el-select>
           <div class="data-table scroll-list device-scroll">
             <div
-              v-for="item in state.devices.list || []"
+              v-for="item in filteredDevices"
               :key="`device-${item.deviceId}`"
               :class="['table-row', 'device-pick-row', { active: item.deviceId === state.selectedDeviceId }]"
               @click="showDeviceDetail(item)"
