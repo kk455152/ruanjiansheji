@@ -624,7 +624,7 @@
       </div>
       <div id="funnelQuickPanel" class="quick-adjust" style="display:none">
         <h3>快捷调整转化漏斗</h3>
-        <p>输入目标数后自动补齐真实源数据：新增用户写 user，绑定写 user_device_binding，完成首播和 7 日活跃写 play_history。只会补大，不会删除已有数据；合法关系为新增用户数 ≥ 绑定设备数 ≥ 完成首播数 ≥ 7 日活跃数。</p>
+        <p>输入目标数后自动调整真实源数据：新增用户写 user，绑定写 user_device_binding，完成首播和 7 日活跃写 play_history。减少时只回收系统生成的快捷漏斗数据，不删除真实用户；合法关系为新增用户数 ≥ 绑定设备数 ≥ 完成首播数 ≥ 7 日活跃数。</p>
         <div class="quick-adjust-row">
           <label>新增用户数
             <input id="funnelNewTarget" type="number" min="0" step="1" placeholder="例如 248">
@@ -1397,12 +1397,26 @@
 
     async function quickAdjustFunnel() {
       const result = el("funnelQuickResult");
-      const newUsers = Number(el("funnelNewTarget").value || 0);
-      const boundUsers = Number(el("funnelBoundTarget").value || 0);
-      const firstPlayUsers = Number(el("funnelFirstTarget").value || 0);
-      const retainedUsers = Number(el("funnelRetainedTarget").value || 0);
+      const rawTargets = {
+        newUsers: el("funnelNewTarget").value.trim(),
+        boundUsers: el("funnelBoundTarget").value.trim(),
+        firstPlayUsers: el("funnelFirstTarget").value.trim(),
+        retainedUsers: el("funnelRetainedTarget").value.trim(),
+      };
+      if (Object.values(rawTargets).some((value) => value === "")) {
+        result.textContent = "四个目标数都要填写，空着不会自动按 0 处理。";
+        return;
+      }
+      const newUsers = Number(rawTargets.newUsers);
+      const boundUsers = Number(rawTargets.boundUsers);
+      const firstPlayUsers = Number(rawTargets.firstPlayUsers);
+      const retainedUsers = Number(rawTargets.retainedUsers);
       if (newUsers < 0 || boundUsers < 0 || firstPlayUsers < 0 || retainedUsers < 0) {
         result.textContent = "目标数不能小于 0。";
+        return;
+      }
+      if (![newUsers, boundUsers, firstPlayUsers, retainedUsers].every(Number.isInteger)) {
+        result.textContent = "目标数必须是整数。";
         return;
       }
       el("funnelQuickBtn").disabled = true;
@@ -1422,7 +1436,7 @@
         const normalizedText = normalized
           ? `；按漏斗关系实际目标为：新增 ${effective.newUsers || 0}，绑定 ${effective.boundUsers || 0}，首播 ${effective.firstPlayUsers || 0}，7日活跃 ${effective.retainedUsers || 0}`
           : "";
-        result.textContent = `完成：新增 ${before.newUsers || 0} -> ${after.newUsers || 0}，绑定 ${before.boundUsers || 0} -> ${after.boundUsers || 0}，首播 ${before.firstPlayUsers || 0} -> ${after.firstPlayUsers || 0}，7日活跃 ${before.retainedUsers || 0} -> ${after.retainedUsers || 0}${normalizedText}；补用户 ${data.createdUsers || 0} 个、绑定 ${data.createdBindings || 0} 条、播放 ${data.createdPlayHistory || 0} 条。刷新后台前端即可看到变化。`;
+        result.textContent = `完成：新增 ${before.newUsers || 0} -> ${after.newUsers || 0}，绑定 ${before.boundUsers || 0} -> ${after.boundUsers || 0}，首播 ${before.firstPlayUsers || 0} -> ${after.firstPlayUsers || 0}，7日活跃 ${before.retainedUsers || 0} -> ${after.retainedUsers || 0}${normalizedText}；补用户 ${data.createdUsers || 0} 个、绑定 ${data.createdBindings || 0} 条、播放 ${data.createdPlayHistory || 0} 条，回收快捷用户 ${data.deletedQuickUsers || 0} 个。刷新后台前端即可看到变化。`;
         setStatus("转化漏斗快捷调整完成");
         await loadRows();
       } catch (err) {

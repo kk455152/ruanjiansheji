@@ -1477,6 +1477,113 @@ def add_retention_pair(cursor, user_id, device_id, mapping_id, bind_time, first_
     return 2
 
 
+def quick_funnel_user_candidates(cursor, stage, limit):
+    stage_having = {
+        "retained": "is_retained = 1",
+        "first": "has_first_play = 1 AND is_retained = 0",
+        "bound": "is_bound = 1 AND has_first_play = 0",
+        "new": "is_bound = 0",
+    }.get(stage)
+    if not stage_having or limit <= 0:
+        return []
+    cursor.execute(
+        f"""
+        SELECT *
+        FROM (
+            SELECT
+                u.user_id,
+                MAX(CASE WHEN b.binding_id IS NOT NULL THEN 1 ELSE 0 END) AS is_bound,
+                MAX(CASE WHEN ph.history_id IS NOT NULL THEN 1 ELSE 0 END) AS has_first_play,
+                CASE
+                    WHEN COUNT(DISTINCT DATE(ph.created_at)) >= 2
+                     AND MAX(ph.created_at) >= DATE_ADD(MIN(ph.created_at), INTERVAL 1 DAY)
+                     AND MAX(ph.created_at) >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                    THEN 1 ELSE 0
+                END AS is_retained
+            FROM `user` u
+            LEFT JOIN user_device_binding b
+              ON b.user_id = u.user_id
+             AND (b.bind_time IS NULL OR b.bind_time >= u.created_at)
+             AND (b.bind_time IS NULL OR b.bind_time <= NOW())
+            LEFT JOIN play_history ph
+              ON ph.user_id = u.user_id
+             AND ph.created_at >= COALESCE(b.bind_time, u.created_at)
+             AND ph.created_at <= NOW()
+            WHERE {FUNNEL_COHORT_FILTER}
+              AND u.username LIKE 'funnel_user_%%'
+            GROUP BY u.user_id
+        ) x
+        WHERE {stage_having}
+        ORDER BY user_id DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    return [row.get("user_id") for row in (cursor.fetchall() or []) if row.get("user_id")]
+
+
+def delete_quick_funnel_users(cursor, user_ids):
+    user_ids = [int(user_id) for user_id in user_ids if user_id]
+    if not user_ids:
+        return 0
+    placeholders = ",".join(["%s"] * len(user_ids))
+    cursor.execute(
+        f"""
+        SELECT DISTINCT b.device_id
+        FROM user_device_binding b
+        JOIN device d ON d.device_id = b.device_id
+        WHERE b.user_id IN ({placeholders})
+          AND (d.device_number LIKE 'SPK-QF-%%' OR d.location='快捷漏斗')
+        """,
+        tuple(user_ids),
+    )
+    device_ids = [row.get("device_id") for row in (cursor.fetchall() or []) if row.get("device_id")]
+    cursor.execute(f"DELETE FROM play_history WHERE user_id IN ({placeholders})", tuple(user_ids))
+    cursor.execute(f"DELETE FROM user_activity_daily WHERE user_id IN ({placeholders})", tuple(user_ids))
+    cursor.execute(f"DELETE FROM user_device_binding WHERE user_id IN ({placeholders})", tuple(user_ids))
+    cursor.execute(f"DELETE FROM auth_token WHERE user_id IN ({placeholders})", tuple(user_ids))
+    cursor.execute(f"DELETE FROM user_profile WHERE user_id IN ({placeholders})", tuple(user_ids))
+    cursor.execute(f"DELETE FROM `user` WHERE user_id IN ({placeholders}) AND username LIKE 'funnel_user_%%'", tuple(user_ids))
+    if device_ids:
+        device_placeholders = ",".join(["%s"] * len(device_ids))
+        cursor.execute(f"DELETE FROM play_history WHERE device_id IN ({device_placeholders})", tuple(device_ids))
+        cursor.execute(
+            f"""
+            DELETE FROM device
+            WHERE device_id IN ({device_placeholders})
+              AND (device_number LIKE 'SPK-QF-%%' OR location='快捷漏斗')
+            """,
+            tuple(device_ids),
+        )
+    return len(user_ids)
+
+
+def trim_quick_funnel_to_targets(cursor, targets):
+    deleted_users = 0
+    stages = [
+        ("retainedUsers", "retained"),
+        ("firstPlayUsers", "first"),
+        ("boundUsers", "bound"),
+        ("newUsers", "new"),
+    ]
+    for _ in range(8):
+        current = funnel_counts(cursor)
+        changed = False
+        for metric, stage in stages:
+            overflow = current[metric] - targets[metric]
+            if overflow <= 0:
+                continue
+            candidates = quick_funnel_user_candidates(cursor, stage, overflow)
+            if not candidates:
+                continue
+            deleted_users += delete_quick_funnel_users(cursor, candidates)
+            changed = True
+            break
+        if not changed:
+            break
+    return deleted_users
+
+
 @db_api.route("/funnel/quick-adjust", methods=["POST"])
 def quick_adjust_funnel():
     body = request.get_json(silent=True) or {}
@@ -1504,9 +1611,11 @@ def quick_adjust_funnel():
             created_users = 0
             created_bindings = 0
             created_plays = 0
+            deleted_users = trim_quick_funnel_to_targets(cursor, targets)
 
-            if targets["newUsers"] > before["newUsers"]:
-                for i in range(targets["newUsers"] - before["newUsers"]):
+            current = funnel_counts(cursor)
+            if targets["newUsers"] > current["newUsers"]:
+                for i in range(targets["newUsers"] - current["newUsers"]):
                     create_quick_user(cursor, i + 1)
                     created_users += 1
 
@@ -1608,6 +1717,7 @@ def quick_adjust_funnel():
             "createdUsers": created_users,
             "createdBindings": created_bindings,
             "createdPlayHistory": created_plays,
+            "deletedQuickUsers": deleted_users,
         }, "转化漏斗已补齐")
     except Exception as exc:
         if conn:
