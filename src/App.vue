@@ -343,7 +343,6 @@ function statusText(status) {
     open: "待处理",
     closed: "已关闭",
     published: "已发布",
-    draft: "草稿",
     gray: "灰度",
     stable: "稳定",
     rollback: "可回滚",
@@ -1020,7 +1019,7 @@ async function createNotice() {
     })
     const notice = await api("/api/admin/super/notices", {
       method: "POST",
-      body: { title: value, type: "notice", status: "draft" },
+      body: { title: value, type: "notice" },
     })
     if (notice?.noticeId) {
       state.notices = {

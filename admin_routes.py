@@ -2859,7 +2859,7 @@ def admin_notices():
                 "noticeId": row.get("config_key") or f"N-{row.get('config_id')}",
                 "title": row.get("config_name") or row.get("config_value") or "-",
                 "type": row.get("config_type") or "notice",
-                "status": row.get("description") or "published",
+                "status": "published",
                 "createdAt": fmt_dt(row.get("created_at") or row.get("updated_at")),
             }
             for row in db_rows
@@ -2882,7 +2882,7 @@ def create_admin_notice():
             "noticeId": notice_key,
             "title": title,
             "type": body.get("type") or "notice",
-            "status": body.get("status") or "draft",
+            "status": "published",
             "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         mysql_exec(

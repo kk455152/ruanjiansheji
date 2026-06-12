@@ -1730,13 +1730,11 @@ GET /api/admin/market/segments
   "code": 200,
   "message": "success",
   "data": {
-    "total": 1,
-    "list": [
-      {
-        "id": "示例ID",
-        "name": "示例数据"
-      }
-    ]
+    "noticeId": "notice.20260612123000",
+    "title": "设备维护通知",
+    "type": "notice",
+    "status": "published",
+    "createdAt": "2026-06-12 12:30:00"
   }
 }
 ```
@@ -3274,15 +3272,14 @@ GET /api/admin/super/notices
 ## POST 创建系统公告
 POST /api/admin/super/notices
 
-创建新的系统公告。
+创建新的系统公告。公告创建后直接为已发布状态，不再提供草稿状态。
 
 > Body 请求示例
 
 ```json
 {
   "title": "设备维护通知",
-  "type": "notice",
-  "status": "draft"
+  "type": "notice"
 }
 ```
 
@@ -3293,7 +3290,6 @@ POST /api/admin/super/notices
 |Authorization|header|string|是|Bearer {{access_token}}，登录后返回的后台访问 token|
 |title|body|string|是|公告标题|
 |type|body|string|否|公告类型|
-|status|body|string|否|公告状态：draft/published|
 
 > 返回示例
 
