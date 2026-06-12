@@ -41,6 +41,10 @@ const state = reactive({
   loginForm: {
     username: localStorage.getItem("admin_username") || "",
     password: "",
+    captchaAnswer: "",
+    captchaToken: "",
+    captchaQuestion: "",
+    captchaLoading: false,
     remember: true,
   },
   token: localStorage.getItem("admin_token") || "",
@@ -390,15 +394,39 @@ async function silent(loader, fallback) {
   }
 }
 
+async function loadCaptcha() {
+  state.loginForm.captchaLoading = true
+  try {
+    const data = await request("/api/admin/captcha", { token: "" })
+    state.loginForm.captchaQuestion = data.question || ""
+    state.loginForm.captchaToken = data.captchaToken || ""
+    state.loginForm.captchaAnswer = ""
+  } catch (error) {
+    console.warn(error)
+    state.loginForm.captchaQuestion = "点击刷新重试"
+    state.loginForm.captchaToken = ""
+    state.loginForm.captchaAnswer = ""
+  } finally {
+    state.loginForm.captchaLoading = false
+  }
+}
+
 async function handleLogin() {
   if (!state.loginForm.username || !state.loginForm.password) {
     ElMessage.warning("请输入用户名和密码")
     return
   }
+  if (!state.loginForm.captchaToken || !state.loginForm.captchaAnswer) {
+    ElMessage.warning("请完成机器人验证")
+    return
+  }
 
   state.loading = true
   try {
-    const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password)
+    const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password, {
+      captchaToken: state.loginForm.captchaToken,
+      captchaAnswer: state.loginForm.captchaAnswer.trim(),
+    })
     applySession(data)
     if (state.loginForm.remember) {
       localStorage.setItem("admin_username", state.loginForm.username.trim())
@@ -406,10 +434,12 @@ async function handleLogin() {
       localStorage.removeItem("admin_username")
     }
     state.loginForm.password = ""
+    state.loginForm.captchaAnswer = ""
     ElMessage.success("登录成功，正在加载后台数据")
     await loadPage(true)
   } catch (error) {
     ElMessage.error(error.message || "登录失败")
+    await loadCaptcha()
   } finally {
     state.loading = false
   }
@@ -438,6 +468,8 @@ async function handleLogout() {
   clearSession()
   state.detail = null
   ElMessage.success("已退出登录")
+  await nextTick()
+  await loadCaptcha()
 }
 
 async function refreshAdminProfile() {
@@ -480,6 +512,7 @@ function stopProfileRefresh() {
 
 async function restoreSession() {
   if (!state.token) {
+    await loadCaptcha()
     state.booting = false
     return
   }
@@ -489,6 +522,7 @@ async function restoreSession() {
     await loadPage(true)
   } catch {
     clearSession()
+    await loadCaptcha()
   } finally {
     state.booting = false
   }
@@ -1066,6 +1100,22 @@ onUnmounted(stopProfileRefresh)
         <span class="field-input">
           <i class="fa-solid fa-lock"></i>
           <input v-model="state.loginForm.password" autocomplete="current-password" type="password" placeholder="请输入密码" />
+        </span>
+      </label>
+      <label class="field captcha-field">
+        <span>机器人验证</span>
+        <span class="captcha-box">
+          <span class="captcha-question">
+            <i class="fa-solid fa-robot"></i>
+            {{ state.loginForm.captchaLoading ? "生成中..." : state.loginForm.captchaQuestion || "点击刷新" }}
+          </span>
+          <button class="captcha-refresh" type="button" :disabled="state.loginForm.captchaLoading || state.loading" @click="loadCaptcha">
+            <i :class="['fa-solid fa-rotate-right', { spin: state.loginForm.captchaLoading }]"></i>
+          </button>
+        </span>
+        <span class="field-input">
+          <i class="fa-solid fa-shield-halved"></i>
+          <input v-model="state.loginForm.captchaAnswer" inputmode="numeric" autocomplete="off" placeholder="请输入计算结果" />
         </span>
       </label>
       <label class="check-row">
@@ -2034,6 +2084,57 @@ button {
   background: transparent;
   color: var(--text-primary);
   outline: none;
+}
+
+.captcha-field {
+  gap: 10px;
+}
+
+.captcha-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+}
+
+.field .captcha-question {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  gap: 10px;
+  border: 1px solid rgba(132, 169, 140, 0.38);
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: rgba(132, 169, 140, 0.12);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.field .captcha-question i {
+  color: var(--accent-green);
+}
+
+.captcha-refresh {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(132, 169, 140, 0.36);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--accent-green);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.captcha-refresh:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(95, 125, 104, 0.14);
+}
+
+.captcha-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .check-row,

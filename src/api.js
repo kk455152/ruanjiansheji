@@ -57,11 +57,17 @@ export async function request(path, options = {}) {
   return payload?.data ?? payload
 }
 
-export function login(username, password) {
+export function login(username, password, captcha = {}) {
   return request("/api/admin/login", {
     method: "POST",
     token: "",
-    body: { username, password, loginType: "password" },
+    body: {
+      username,
+      password,
+      loginType: "password",
+      captchaToken: captcha.captchaToken,
+      captchaAnswer: captcha.captchaAnswer,
+    },
   })
 }
 

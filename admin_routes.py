@@ -19,6 +19,7 @@ admin_compat_bp = Blueprint("admin_compat", __name__)
 
 TOKEN_SECRET = os.environ.get("ADMIN_TOKEN_SECRET", "smart-speaker-admin-secret")
 TOKEN_EXPIRE_SECONDS = int(os.environ.get("ADMIN_TOKEN_EXPIRE_SECONDS", "7200"))
+CAPTCHA_EXPIRE_SECONDS = int(os.environ.get("ADMIN_CAPTCHA_EXPIRE_SECONDS", "300"))
 ADMIN_CACHE_TTL_SECONDS = float(os.environ.get("ADMIN_CACHE_TTL_SECONDS", "30"))
 _ADMIN_CACHE = {}
 _ADMIN_CACHE_LOCK = threading.Lock()
@@ -275,6 +276,62 @@ def _b64_encode(raw):
 def _b64_decode(text):
     padding = "=" * (-len(text) % 4)
     return base64.urlsafe_b64decode((text + padding).encode("ascii"))
+
+
+def _captcha_answer_hash(answer, salt):
+    return hashlib.sha256(f"{salt}:{answer}:{TOKEN_SECRET}".encode("utf-8")).hexdigest()
+
+
+def sign_captcha(answer):
+    salt = secrets.token_hex(8)
+    payload = {
+        "salt": salt,
+        "answerHash": _captcha_answer_hash(str(answer), salt),
+        "exp": int((datetime.now() + timedelta(seconds=CAPTCHA_EXPIRE_SECONDS)).timestamp()),
+        "nonce": secrets.token_hex(8),
+    }
+    payload_part = _b64_encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+    signature = hmac.new(TOKEN_SECRET.encode("utf-8"), f"captcha.{payload_part}".encode("ascii"), hashlib.sha256).digest()
+    return f"{payload_part}.{_b64_encode(signature)}"
+
+
+def verify_captcha(token, answer):
+    try:
+        payload_part, signature_part = str(token or "").split(".", 1)
+        expected = hmac.new(TOKEN_SECRET.encode("utf-8"), f"captcha.{payload_part}".encode("ascii"), hashlib.sha256).digest()
+        if not hmac.compare_digest(_b64_decode(signature_part), expected):
+            return False
+        payload = json.loads(_b64_decode(payload_part).decode("utf-8"))
+        if int(payload.get("exp", 0)) < int(datetime.now().timestamp()):
+            return False
+        answer_text = str(answer or "").strip()
+        if not answer_text:
+            return False
+        actual_hash = _captcha_answer_hash(answer_text, str(payload.get("salt") or ""))
+        return hmac.compare_digest(actual_hash, str(payload.get("answerHash") or ""))
+    except Exception:
+        return False
+
+
+def make_captcha_challenge():
+    operator = ["+", "-", "x"][secrets.randbelow(3)]
+    if operator == "+":
+        left = 10 + secrets.randbelow(30)
+        right = 1 + secrets.randbelow(20)
+        answer = left + right
+    elif operator == "-":
+        left = 20 + secrets.randbelow(40)
+        right = 1 + secrets.randbelow(min(left - 1, 25))
+        answer = left - right
+    else:
+        left = 2 + secrets.randbelow(8)
+        right = 2 + secrets.randbelow(8)
+        answer = left * right
+    return {
+        "question": f"{left} {operator} {right} = ?",
+        "captchaToken": sign_captcha(answer),
+        "expiresIn": CAPTCHA_EXPIRE_SECONDS,
+    }
 
 
 def mask_phone(phone):
@@ -1059,14 +1116,27 @@ def feedback_detail(feedback_id):
     }
 
 
+@admin_bp.get("/captcha")
+def captcha():
+    return response_ok(make_captcha_challenge(), "验证码已生成")
+
+
 @admin_bp.post("/login")
 def login():
     body = request.get_json(silent=True) or {}
     username = str(body.get("username", "")).strip()
     password = str(body.get("password", "")).strip()
+    captcha_token = str(body.get("captchaToken", "")).strip()
+    captcha_answer = str(body.get("captchaAnswer", "")).strip()
 
     if not username or not password:
         return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
+    if not captcha_token or not captcha_answer:
+        write_admin_audit("login_failed", "认证", "登录机器人验证失败", username, "failed", "机器人验证未完成", None)
+        return response_error(400, "验证失败", "请先完成机器人验证。")
+    if not verify_captcha(captcha_token, captcha_answer):
+        write_admin_audit("login_failed", "认证", "登录机器人验证失败", username, "failed", "机器人验证错误或已过期", None)
+        return response_error(400, "验证失败", "机器人验证错误或已过期，请刷新后重试。")
 
     admin = find_admin(username)
     if not admin or not verify_admin_password(password, admin.get("password", "")):

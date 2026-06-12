@@ -26,10 +26,33 @@ Base URLs:
 >
 > 通用返回结构：`{"code": 200, "message": "success", "data": {}}`
 # 登录接口
+## GET 获取机器人验证码
+GET /api/admin/captcha
+
+生成后台登录前的人机验证题目。前端展示 `question`，登录时把用户填写结果和 `captchaToken` 一起提交。
+
+### 请求参数
+
+无
+
+> 返回示例
+
+```json
+{
+  "code": 200,
+  "message": "验证码已生成",
+  "data": {
+    "question": "18 + 7 = ?",
+    "captchaToken": "signed-captcha-token",
+    "expiresIn": 300
+  }
+}
+```
+
 ## POST 账号密码登录
 POST /api/admin/login
 
-后台管理员使用用户名和密码登录，成功后返回 token 和管理员信息。
+后台管理员使用用户名、密码和机器人验证码登录，成功后返回 token 和管理员信息。
 
 > Body 请求示例
 
@@ -37,7 +60,9 @@ POST /api/admin/login
 {
   "username": "admin",
   "password": "123456",
-  "loginType": "password"
+  "loginType": "password",
+  "captchaToken": "signed-captcha-token",
+  "captchaAnswer": "25"
 }
 ```
 
@@ -48,6 +73,8 @@ POST /api/admin/login
 |username|body|string|是|登录用户名|
 |password|body|string|是|登录密码|
 |loginType|body|string|否|登录方式，前端固定传 password|
+|captchaToken|body|string|是|`GET /api/admin/captcha` 返回的人机验证 token|
+|captchaAnswer|body|string|是|用户填写的验证码计算结果|
 
 > 返回示例
 
