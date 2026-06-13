@@ -67,6 +67,8 @@ export function login(username, password, captcha = {}, sms = {}) {
       loginType: sms.loginType || "password",
       captchaToken: captcha.captchaToken,
       captchaAnswer: captcha.captchaAnswer,
+      loginCode: captcha.loginCode,
+      loginCodeToken: captcha.loginCodeToken,
       smsPhone: sms.smsPhone,
       smsCode: sms.smsCode,
       smsToken: sms.smsToken,
@@ -80,6 +82,10 @@ export function sendLoginSmsCode(phone) {
     token: "",
     body: { phone },
   })
+}
+
+export function fetchLoginCode() {
+  return request("/api/admin/login-code", { token: "" })
 }
 
 export function logout() {

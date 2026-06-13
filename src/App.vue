@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
-import { ApiError, API_BASE, login as loginApi, logout as logoutApi, request, sendLoginSmsCode } from "./api"
+import { ApiError, API_BASE, fetchLoginCode, login as loginApi, logout as logoutApi, request, sendLoginSmsCode } from "./api"
 
 const roleNames = {
   super_admin: "超级管理员",
@@ -48,6 +48,10 @@ const state = reactive({
     captchaToken: "",
     captchaVerified: false,
     captchaLoading: false,
+    loginCode: "",
+    loginCodeToken: "",
+    loginCodeText: "",
+    loginCodeLoading: false,
     smsPhone: "",
     smsCode: "",
     smsToken: "",
@@ -413,6 +417,33 @@ function resetRobotVerification() {
   state.loginForm.captchaVerified = false
 }
 
+function resetLoginCode() {
+  state.loginForm.loginCode = ""
+  state.loginForm.loginCodeToken = ""
+  state.loginForm.loginCodeText = ""
+}
+
+function handleLoginCodeInput() {
+  state.loginForm.loginCode = String(state.loginForm.loginCode || "").replace(/\D/g, "").slice(0, 4)
+}
+
+async function refreshLoginCode() {
+  if (state.loginForm.loginCodeLoading) return
+  state.loginForm.loginCodeLoading = true
+  try {
+    const data = await fetchLoginCode()
+    state.loginForm.loginCode = ""
+    state.loginForm.loginCodeText = data.loginCode || ""
+    state.loginForm.loginCodeToken = data.loginCodeToken || ""
+  } catch (error) {
+    console.warn(error)
+    resetLoginCode()
+    ElMessage.error("四位验证码生成失败，请刷新重试")
+  } finally {
+    state.loginForm.loginCodeLoading = false
+  }
+}
+
 function switchLoginMode(mode) {
   if (!["password", "sms"].includes(mode) || state.loginForm.mode === mode) return
   state.loginForm.mode = mode
@@ -426,6 +457,10 @@ function isChinaMobile(phone) {
 
 function isSixDigitCode(code) {
   return /^\d{6}$/.test(String(code || "").trim())
+}
+
+function isLoginCode(code) {
+  return /^\d{4}$/.test(String(code || "").trim())
 }
 
 function stopSmsCooldown() {
@@ -507,6 +542,15 @@ async function handleLogin() {
     ElMessage.warning("请完成机器人验证")
     return
   }
+  if (!state.loginForm.loginCodeToken) {
+    ElMessage.warning("请刷新四位验证码")
+    await refreshLoginCode()
+    return
+  }
+  if (!isLoginCode(state.loginForm.loginCode)) {
+    ElMessage.warning("请输入 4 位数字验证码")
+    return
+  }
 
   if (state.loginForm.mode === "password") {
     if (!state.loginForm.username || !state.loginForm.password) {
@@ -533,6 +577,8 @@ async function handleLogin() {
     const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password, {
       captchaToken: state.loginForm.captchaToken,
       captchaAnswer: state.loginForm.captchaAnswer.trim(),
+      loginCode: state.loginForm.loginCode.trim(),
+      loginCodeToken: state.loginForm.loginCodeToken,
     }, {
       loginType: state.loginForm.mode,
       smsPhone: state.loginForm.smsPhone.trim(),
@@ -547,12 +593,17 @@ async function handleLogin() {
     }
     state.loginForm.password = ""
     state.loginForm.captchaAnswer = ""
+    resetLoginCode()
     resetSmsVerification()
     ElMessage.success("登录成功，正在加载后台数据")
     await loadPage(true)
   } catch (error) {
     ElMessage.error(error.message || "登录失败")
     resetRobotVerification()
+    const detail = `${error.message || ""} ${error.payload?.error_details || ""}`
+    if (detail.includes("四位验证码")) {
+      await refreshLoginCode()
+    }
   } finally {
     state.loading = false
   }
@@ -573,6 +624,7 @@ function clearSession() {
   state.admin = null
   stopProfileRefresh()
   resetRobotVerification()
+  resetLoginCode()
   resetSmsVerification()
   localStorage.removeItem("admin_token")
   saveAdminInfo(null)
@@ -585,6 +637,7 @@ async function handleLogout() {
   ElMessage.success("已退出登录")
   await nextTick()
   resetRobotVerification()
+  await refreshLoginCode()
 }
 
 async function refreshAdminProfile() {
@@ -628,6 +681,7 @@ function stopProfileRefresh() {
 async function restoreSession() {
   if (!state.token) {
     resetRobotVerification()
+    await refreshLoginCode()
     state.booting = false
     return
   }
@@ -638,6 +692,7 @@ async function restoreSession() {
   } catch {
     clearSession()
     resetRobotVerification()
+    await refreshLoginCode()
   } finally {
     state.booting = false
   }
@@ -1270,6 +1325,30 @@ onUnmounted(() => {
             <span v-if="state.loginForm.smsSending">发送中</span>
             <span v-else-if="state.loginForm.smsCooldown > 0">重新发送 {{ state.loginForm.smsCooldown }}s</span>
             <span v-else>{{ state.loginForm.smsSent ? "重新发送" : "发送验证码" }}</span>
+          </button>
+        </span>
+      </label>
+      <label class="field">
+        <span>四位验证码</span>
+        <span class="field-input login-code-input">
+          <i class="fa-solid fa-hashtag"></i>
+          <input
+            v-model="state.loginForm.loginCode"
+            autocomplete="off"
+            inputmode="numeric"
+            maxlength="4"
+            placeholder="请输入右侧验证码"
+            @input="handleLoginCodeInput"
+          />
+          <button
+            class="login-code-card"
+            type="button"
+            :disabled="state.loginForm.loginCodeLoading"
+            title="刷新四位验证码"
+            @click="refreshLoginCode"
+          >
+            <strong>{{ state.loginForm.loginCodeLoading ? "...." : state.loginForm.loginCodeText || "----" }}</strong>
+            <i class="fa-solid fa-rotate-right" :class="{ spin: state.loginForm.loginCodeLoading }"></i>
           </button>
         </span>
       </label>
@@ -2333,6 +2412,41 @@ button {
 .sms-code-button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+.login-code-input {
+  padding-right: 8px;
+}
+
+.login-code-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 106px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 99px;
+  padding: 8px 12px;
+  background:
+    linear-gradient(135deg, rgba(132, 169, 140, 0.24), rgba(95, 125, 104, 0.16)),
+    repeating-linear-gradient(-35deg, rgba(255, 255, 255, 0.55) 0 6px, rgba(255, 255, 255, 0.2) 6px 12px);
+  color: var(--accent-green-deep);
+  font-weight: 700;
+  letter-spacing: 3px;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px rgba(95, 125, 104, 0.14);
+}
+
+.login-code-card i {
+  color: var(--accent-green-deep);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.login-code-card:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
 .robot-check-wrap {
