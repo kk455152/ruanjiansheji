@@ -1350,14 +1350,14 @@ def login():
     if not verify_captcha(captcha_token, captcha_answer):
         write_admin_audit("login_failed", "认证", "登录机器人验证失败", audit_target, "failed", "机器人验证错误或已过期", None)
         return response_error(400, "验证失败", "机器人验证错误或已过期，请刷新后重试。")
-    if not login_code_token or not login_code_answer:
-        write_admin_audit("login_failed", "认证", "登录四位验证码失败", audit_target, "failed", "四位验证码未填写", None)
-        return response_error(400, "四位验证码错误", "请输入四位验证码。")
-    if not verify_login_code(login_code_token, login_code_answer):
-        write_admin_audit("login_failed", "认证", "登录四位验证码失败", audit_target, "failed", "四位验证码错误或已过期", None)
-        return response_error(400, "四位验证码错误", "四位验证码错误或已过期，请刷新后重试。")
 
     if login_type == "password":
+        if not login_code_token or not login_code_answer:
+            write_admin_audit("login_failed", "认证", "登录四位验证码失败", audit_target, "failed", "四位验证码未填写", None)
+            return response_error(400, "四位验证码错误", "请输入四位验证码。")
+        if not verify_login_code(login_code_token, login_code_answer):
+            write_admin_audit("login_failed", "认证", "登录四位验证码失败", audit_target, "failed", "四位验证码错误或已过期", None)
+            return response_error(400, "四位验证码错误", "四位验证码错误或已过期，请刷新后重试。")
         if not username or not password:
             return response_error(400, "登录失败", "请求参数不完整，用户名和密码不能为空。")
         admin = find_admin(username)

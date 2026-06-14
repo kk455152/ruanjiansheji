@@ -108,7 +108,7 @@ POST /api/admin/sms-code
 ## POST 后台登录
 POST /api/admin/login
 
-后台管理员可选择账号密码或短信验证码登录，两种方式都需要先完成机器人验证并输入四位登录验证码。短信验证码当前为模拟校验：登录前需先调用发送接口获取 `smsToken`，验证码只要求填写任意 6 位数字；手机号未匹配后台账号时回退到默认 `admin` 账号。
+后台管理员可选择账号密码或短信验证码登录，两种方式都需要先完成机器人验证；账号密码登录需要额外输入四位登录验证码，短信验证码登录不需要四位登录验证码。短信验证码当前为模拟校验：登录前需先调用发送接口获取 `smsToken`，验证码只要求填写任意 6 位数字；手机号未匹配后台账号时回退到默认 `admin` 账号。
 
 > Body 请求示例：账号密码登录
 
@@ -131,8 +131,6 @@ POST /api/admin/login
   "loginType": "sms",
   "captchaToken": "signed-captcha-token",
   "captchaAnswer": "not_robot_checked",
-  "loginCode": "4826",
-  "loginCodeToken": "signed-login-code-token",
   "smsPhone": "13800000000",
   "smsCode": "123456",
   "smsToken": "signed-sms-token"
@@ -148,8 +146,8 @@ POST /api/admin/login
 |loginType|body|string|否|登录方式：password 或 sms，默认 password|
 |captchaToken|body|string|是|`GET /api/admin/captcha` 返回的人机验证 token|
 |captchaAnswer|body|string|是|前端点选验证通过后提交的验证标识|
-|loginCode|body|string|是|用户输入的 4 位数字登录验证码|
-|loginCodeToken|body|string|是|`GET /api/admin/login-code` 返回的四位验证码 token|
+|loginCode|body|string|账号密码登录必填|用户输入的 4 位数字登录验证码|
+|loginCodeToken|body|string|账号密码登录必填|`GET /api/admin/login-code` 返回的四位验证码 token|
 |smsPhone|body|string|短信登录必填|中国大陆手机号，需为 11 位数字、以 1 开头且第二位为 3-9|
 |smsCode|body|string|短信登录必填|6 位数字验证码，当前为模拟校验|
 |smsToken|body|string|短信登录必填|`POST /api/admin/sms-code` 返回的模拟短信凭证|

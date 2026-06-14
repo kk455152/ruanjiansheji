@@ -542,19 +542,19 @@ async function handleLogin() {
     ElMessage.warning("请完成机器人验证")
     return
   }
-  if (!state.loginForm.loginCodeToken) {
-    ElMessage.warning("请刷新四位验证码")
-    await refreshLoginCode()
-    return
-  }
-  if (!isLoginCode(state.loginForm.loginCode)) {
-    ElMessage.warning("请输入 4 位数字验证码")
-    return
-  }
 
   if (state.loginForm.mode === "password") {
     if (!state.loginForm.username || !state.loginForm.password) {
       ElMessage.warning("请输入用户名和密码")
+      return
+    }
+    if (!state.loginForm.loginCodeToken) {
+      ElMessage.warning("请刷新四位验证码")
+      await refreshLoginCode()
+      return
+    }
+    if (!isLoginCode(state.loginForm.loginCode)) {
+      ElMessage.warning("请输入 4 位数字验证码")
       return
     }
   } else {
@@ -574,12 +574,15 @@ async function handleLogin() {
 
   state.loading = true
   try {
-    const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password, {
+    const captchaPayload = {
       captchaToken: state.loginForm.captchaToken,
       captchaAnswer: state.loginForm.captchaAnswer.trim(),
-      loginCode: state.loginForm.loginCode.trim(),
-      loginCodeToken: state.loginForm.loginCodeToken,
-    }, {
+    }
+    if (state.loginForm.mode === "password") {
+      captchaPayload.loginCode = state.loginForm.loginCode.trim()
+      captchaPayload.loginCodeToken = state.loginForm.loginCodeToken
+    }
+    const data = await loginApi(state.loginForm.username.trim(), state.loginForm.password, captchaPayload, {
       loginType: state.loginForm.mode,
       smsPhone: state.loginForm.smsPhone.trim(),
       smsCode: state.loginForm.smsCode.trim(),
@@ -1328,7 +1331,7 @@ onUnmounted(() => {
           </button>
         </span>
       </label>
-      <label class="field">
+      <label v-if="state.loginForm.mode === 'password'" class="field">
         <span>四位验证码</span>
         <span class="field-input login-code-input">
           <i class="fa-solid fa-hashtag"></i>
