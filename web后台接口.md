@@ -20,6 +20,7 @@ generator: "@tarslib/widdershins v4.0.30"
 Base URLs:
 
 - 线上服务器：`http://8.137.165.220`
+- HTTPS 后台入口：`https://api.musicplayer.cn`（ALTCHA 人机验证需要安全上下文）
 - 本地或部署环境可通过 `VITE_API_BASE_URL` 覆盖；未配置时，本地域名默认访问线上服务器，部署后默认走当前站点同源接口。
 
 > 通用认证说明：除登录接口外，前端请求会携带后台登录 token：`Authorization: Bearer <admin_token>`。
@@ -29,7 +30,7 @@ Base URLs:
 ## GET 获取机器人验证码
 GET /api/admin/captcha
 
-生成后台登录前的人机验证凭证。前端用户点击“我不是机器人”后获取 `captchaToken`，登录时连同验证标识一起提交。
+生成 ALTCHA 开源 proof-of-work 人机验证 challenge。前端 `altcha-widget` 完成计算后会得到 `captchaPayload`，登录时提交该 payload 供后端验证。
 
 ### 请求参数
 
@@ -39,12 +40,16 @@ GET /api/admin/captcha
 
 ```json
 {
-  "code": 200,
-  "message": "验证码已生成",
-  "data": {
-    "captchaToken": "signed-captcha-token",
-    "expiresIn": 300
-  }
+  "parameters": {
+    "algorithm": "SHA-256",
+    "cost": 5000,
+    "keyLength": 32,
+    "keyPrefix": "00",
+    "nonce": "b72d...",
+    "salt": "71a4...",
+    "expiresAt": 1781420717
+  },
+  "signature": "signed-altcha-challenge"
 }
 ```
 
@@ -117,8 +122,7 @@ POST /api/admin/login
   "username": "admin",
   "password": "<管理员密码>",
   "loginType": "password",
-  "captchaToken": "signed-captcha-token",
-  "captchaAnswer": "not_robot_checked",
+  "captchaPayload": "base64-altcha-payload",
   "loginCode": "4826",
   "loginCodeToken": "signed-login-code-token"
 }
@@ -129,8 +133,7 @@ POST /api/admin/login
 ```json
 {
   "loginType": "sms",
-  "captchaToken": "signed-captcha-token",
-  "captchaAnswer": "not_robot_checked",
+  "captchaPayload": "base64-altcha-payload",
   "smsPhone": "13800000000",
   "smsCode": "123456",
   "smsToken": "signed-sms-token"
@@ -144,8 +147,7 @@ POST /api/admin/login
 |username|body|string|账号密码登录必填|登录用户名|
 |password|body|string|账号密码登录必填|登录密码|
 |loginType|body|string|否|登录方式：password 或 sms，默认 password|
-|captchaToken|body|string|是|`GET /api/admin/captcha` 返回的人机验证 token|
-|captchaAnswer|body|string|是|前端点选验证通过后提交的验证标识|
+|captchaPayload|body|string|是|ALTCHA widget 完成 proof-of-work 后生成的 payload|
 |loginCode|body|string|账号密码登录必填|用户输入的 4 位数字登录验证码|
 |loginCodeToken|body|string|账号密码登录必填|`GET /api/admin/login-code` 返回的四位验证码 token|
 |smsPhone|body|string|短信登录必填|中国大陆手机号，需为 11 位数字、以 1 开头且第二位为 3-9|

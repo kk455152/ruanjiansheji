@@ -11,6 +11,7 @@ from functools import wraps
 
 from flask import Blueprint, jsonify, request, g
 from werkzeug.security import check_password_hash, generate_password_hash
+import altcha
 
 from api_pkg.common import json_safe, load_state, mongo_many, mongo_one, mysql_all, mysql_exec, mysql_one, save_state
 
@@ -68,7 +69,9 @@ def load_token_secret():
 TOKEN_SECRET = load_token_secret()
 TOKEN_EXPIRE_SECONDS = int(os.environ.get("ADMIN_TOKEN_EXPIRE_SECONDS", "7200"))
 CAPTCHA_EXPIRE_SECONDS = int(os.environ.get("ADMIN_CAPTCHA_EXPIRE_SECONDS", "300"))
-CAPTCHA_CHECKED_ANSWER = "not_robot_checked"
+CAPTCHA_ALGORITHM = os.environ.get("ADMIN_CAPTCHA_ALGORITHM", "SHA-256")
+CAPTCHA_COST = int(os.environ.get("ADMIN_CAPTCHA_COST", "5000"))
+CAPTCHA_KEY_PREFIX = os.environ.get("ADMIN_CAPTCHA_KEY_PREFIX", "00")
 LOGIN_CODE_EXPIRE_SECONDS = int(os.environ.get("ADMIN_LOGIN_CODE_EXPIRE_SECONDS", "300"))
 SMS_CODE_EXPIRE_SECONDS = int(os.environ.get("ADMIN_SMS_CODE_EXPIRE_SECONDS", "300"))
 SMS_CODE_COOLDOWN_SECONDS = int(os.environ.get("ADMIN_SMS_CODE_COOLDOWN_SECONDS", "60"))
@@ -397,42 +400,21 @@ def _captcha_answer_hash(answer, salt):
     return hashlib.sha256(f"{salt}:{answer}:{TOKEN_SECRET}".encode("utf-8")).hexdigest()
 
 
-def sign_captcha(answer):
-    salt = secrets.token_hex(8)
-    payload = {
-        "salt": salt,
-        "answerHash": _captcha_answer_hash(str(answer), salt),
-        "exp": int((datetime.now() + timedelta(seconds=CAPTCHA_EXPIRE_SECONDS)).timestamp()),
-        "nonce": secrets.token_hex(8),
-    }
-    payload_part = _b64_encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
-    signature = hmac.new(TOKEN_SECRET.encode("utf-8"), f"captcha.{payload_part}".encode("ascii"), hashlib.sha256).digest()
-    return f"{payload_part}.{_b64_encode(signature)}"
-
-
-def verify_captcha(token, answer):
-    try:
-        payload_part, signature_part = str(token or "").split(".", 1)
-        expected = hmac.new(TOKEN_SECRET.encode("utf-8"), f"captcha.{payload_part}".encode("ascii"), hashlib.sha256).digest()
-        if not hmac.compare_digest(_b64_decode(signature_part), expected):
-            return False
-        payload = json.loads(_b64_decode(payload_part).decode("utf-8"))
-        if int(payload.get("exp", 0)) < int(datetime.now().timestamp()):
-            return False
-        answer_text = str(answer or "").strip()
-        if not answer_text:
-            return False
-        actual_hash = _captcha_answer_hash(answer_text, str(payload.get("salt") or ""))
-        return hmac.compare_digest(actual_hash, str(payload.get("answerHash") or ""))
-    except Exception:
-        return False
-
-
 def make_captcha_challenge():
-    return {
-        "captchaToken": sign_captcha(CAPTCHA_CHECKED_ANSWER),
-        "expiresIn": CAPTCHA_EXPIRE_SECONDS,
-    }
+    expires_at = int((datetime.now() + timedelta(seconds=CAPTCHA_EXPIRE_SECONDS)).timestamp())
+    challenge = altcha.create_challenge(
+        CAPTCHA_ALGORITHM,
+        CAPTCHA_COST,
+        expires_at=expires_at,
+        hmac_secret=TOKEN_SECRET,
+        key_prefix=CAPTCHA_KEY_PREFIX,
+    )
+    return challenge.to_dict()
+
+
+def verify_captcha(payload):
+    result = altcha.verify_solution(str(payload or ""), TOKEN_SECRET)
+    return bool(result.verified)
 
 
 def is_login_code(code):
@@ -1310,7 +1292,7 @@ def feedback_detail(feedback_id):
 
 @admin_bp.get("/captcha")
 def captcha():
-    return response_ok(make_captcha_challenge(), "验证码已生成")
+    return jsonify(make_captcha_challenge())
 
 
 @admin_bp.get("/login-code")
@@ -1333,8 +1315,7 @@ def login():
     login_type = str(body.get("loginType", "password")).strip() or "password"
     username = str(body.get("username", "")).strip()
     password = str(body.get("password", "")).strip()
-    captcha_token = str(body.get("captchaToken", "")).strip()
-    captcha_answer = str(body.get("captchaAnswer", "")).strip()
+    captcha_payload = str(body.get("captchaPayload") or body.get("captchaToken") or "").strip()
     login_code_answer = str(body.get("loginCode", "")).strip()
     login_code_token = str(body.get("loginCodeToken", "")).strip()
     sms_phone = str(body.get("smsPhone", "")).strip()
@@ -1344,10 +1325,10 @@ def login():
 
     if login_type not in ("password", "sms"):
         return response_error(400, "登录失败", "登录方式不正确。")
-    if not captcha_token or not captcha_answer:
+    if not captcha_payload:
         write_admin_audit("login_failed", "认证", "登录机器人验证失败", audit_target, "failed", "机器人验证未完成", None)
         return response_error(400, "验证失败", "请先完成机器人验证。")
-    if not verify_captcha(captcha_token, captcha_answer):
+    if not verify_captcha(captcha_payload):
         write_admin_audit("login_failed", "认证", "登录机器人验证失败", audit_target, "failed", "机器人验证错误或已过期", None)
         return response_error(400, "验证失败", "机器人验证错误或已过期，请刷新后重试。")
 

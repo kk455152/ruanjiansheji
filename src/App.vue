@@ -1,7 +1,14 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
+import "altcha"
+import "altcha/i18n/zh-cn"
 import { ApiError, API_BASE, fetchLoginCode, login as loginApi, logout as logoutApi, request, sendLoginSmsCode } from "./api"
+
+const SECURE_ADMIN_ORIGIN = "https://api.musicplayer.cn"
+if (window.location.hostname === "8.137.165.220" && window.location.protocol === "http:") {
+  window.location.replace(`${SECURE_ADMIN_ORIGIN}${window.location.pathname}${window.location.search}${window.location.hash}`)
+}
 
 const roleNames = {
   super_admin: "超级管理员",
@@ -44,10 +51,9 @@ const state = reactive({
     mode: "password",
     username: localStorage.getItem("admin_username") || "",
     password: "",
-    captchaAnswer: "",
-    captchaToken: "",
+    captchaPayload: "",
     captchaVerified: false,
-    captchaLoading: false,
+    captchaWidgetKey: 0,
     loginCode: "",
     loginCodeToken: "",
     loginCodeText: "",
@@ -107,6 +113,7 @@ const currentPermissionSet = computed(() => new Set(currentPermissions.value))
 const visibleMenus = computed(() => menus.filter((item) => currentPermissionSet.value.has(item.key)))
 const activeMenu = computed(() => menus.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
 const apiLabel = computed(() => API_BASE || (LOCAL_HOSTS.has(window.location.hostname) ? "服务器接口" : "当前站点"))
+const captchaChallengeUrl = computed(() => (API_BASE ? `${API_BASE}/api/admin/captcha` : "/api/admin/captcha"))
 
 const groupedMenus = computed(() => {
   const groups = []
@@ -412,9 +419,22 @@ async function silent(loader, fallback) {
 }
 
 function resetRobotVerification() {
-  state.loginForm.captchaToken = ""
-  state.loginForm.captchaAnswer = ""
+  state.loginForm.captchaPayload = ""
   state.loginForm.captchaVerified = false
+  state.loginForm.captchaWidgetKey += 1
+}
+
+function handleCaptchaVerified(event) {
+  state.loginForm.captchaPayload = event?.detail?.payload || ""
+  state.loginForm.captchaVerified = Boolean(state.loginForm.captchaPayload)
+}
+
+function handleCaptchaStateChange(event) {
+  const nextState = event?.detail?.state || ""
+  if (nextState !== "verified") {
+    state.loginForm.captchaPayload = ""
+    state.loginForm.captchaVerified = false
+  }
 }
 
 function resetLoginCode() {
@@ -520,25 +540,8 @@ function handleSmsPhoneInput() {
   state.loginForm.smsCooldown = 0
 }
 
-async function verifyRobot() {
-  if (state.loginForm.captchaLoading || state.loginForm.captchaVerified) return
-  state.loginForm.captchaLoading = true
-  try {
-    const data = await request("/api/admin/captcha", { token: "" })
-    state.loginForm.captchaToken = data.captchaToken || ""
-    state.loginForm.captchaAnswer = "not_robot_checked"
-    state.loginForm.captchaVerified = Boolean(state.loginForm.captchaToken)
-  } catch (error) {
-    console.warn(error)
-    resetRobotVerification()
-    ElMessage.error("机器人验证失败，请重试")
-  } finally {
-    state.loginForm.captchaLoading = false
-  }
-}
-
 async function handleLogin() {
-  if (!state.loginForm.captchaToken || !state.loginForm.captchaAnswer) {
+  if (!state.loginForm.captchaPayload || !state.loginForm.captchaVerified) {
     ElMessage.warning("请完成机器人验证")
     return
   }
@@ -575,8 +578,7 @@ async function handleLogin() {
   state.loading = true
   try {
     const captchaPayload = {
-      captchaToken: state.loginForm.captchaToken,
-      captchaAnswer: state.loginForm.captchaAnswer.trim(),
+      captchaPayload: state.loginForm.captchaPayload,
     }
     if (state.loginForm.mode === "password") {
       captchaPayload.loginCode = state.loginForm.loginCode.trim()
@@ -595,7 +597,6 @@ async function handleLogin() {
       localStorage.removeItem("admin_username")
     }
     state.loginForm.password = ""
-    state.loginForm.captchaAnswer = ""
     resetLoginCode()
     resetSmsVerification()
     ElMessage.success("登录成功，正在加载后台数据")
@@ -1356,23 +1357,18 @@ onUnmounted(() => {
         </span>
       </label>
       <div class="robot-check-wrap">
-        <button
-          type="button"
-          :class="['robot-check-card', { verified: state.loginForm.captchaVerified }]"
-          :disabled="state.loginForm.captchaLoading || state.loading"
-          @click="verifyRobot"
-        >
-          <span class="robot-checkbox">
-            <i v-if="state.loginForm.captchaVerified" class="fa-solid fa-check"></i>
-            <i v-else-if="state.loginForm.captchaLoading" class="fa-solid fa-rotate-right spin"></i>
-          </span>
-          <span class="robot-label">{{ state.loginForm.captchaVerified ? "验证通过" : "我不是机器人" }}</span>
-          <span class="robot-badge">
-            <i class="fa-solid fa-shield-halved"></i>
-            <strong>声盒验证</strong>
-            <small>Privacy - Terms</small>
-          </span>
-        </button>
+        <altcha-widget
+          :key="state.loginForm.captchaWidgetKey"
+          :challenge="captchaChallengeUrl"
+          name="captchaPayload"
+          type="checkbox"
+          language="zh-cn"
+          workers="2"
+          configuration='{"hideFooter":true,"minDuration":500}'
+          @verified="handleCaptchaVerified"
+          @statechange="handleCaptchaStateChange"
+          @expired="resetRobotVerification"
+        ></altcha-widget>
       </div>
       <label v-if="state.loginForm.mode === 'password'" class="check-row">
         <input v-model="state.loginForm.remember" type="checkbox" />
@@ -2456,82 +2452,23 @@ button {
   margin: 2px 0 18px;
 }
 
-.robot-check-card {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 84px;
-  align-items: center;
-  gap: 14px;
+.robot-check-wrap altcha-widget {
+  display: block;
   width: 100%;
-  min-height: 78px;
-  border: 1px solid rgba(95, 125, 104, 0.24);
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--text-primary);
-  cursor: pointer;
-  text-align: left;
-  box-shadow: 0 8px 24px rgba(95, 125, 104, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.52);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.robot-check-card:hover:not(:disabled) {
-  border-color: rgba(132, 169, 140, 0.58);
-  box-shadow: 0 12px 28px rgba(95, 125, 104, 0.13), inset 0 0 0 1px rgba(255, 255, 255, 0.65);
-  transform: translateY(-1px);
-}
-
-.robot-check-card:disabled {
-  cursor: not-allowed;
-  opacity: 0.82;
-}
-
-.robot-check-card.verified {
-  border-color: rgba(90, 145, 102, 0.62);
-  background: rgba(248, 255, 250, 0.92);
-}
-
-.robot-checkbox {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(48, 66, 56, 0.24);
-  border-radius: 4px;
-  background: #fff;
-  color: #fff;
-  font-size: 18px;
-}
-
-.robot-check-card.verified .robot-checkbox {
-  border-color: var(--accent-green);
-  background: var(--accent-green);
-}
-
-.robot-label {
-  color: var(--text-primary);
-  font-size: 17px;
-  font-weight: 500;
-}
-
-.robot-badge {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.1;
-}
-
-.robot-badge i {
-  margin-bottom: 2px;
-  color: #5a8fce;
-  font-size: 28px;
-}
-
-.robot-badge strong {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  --altcha-max-width: 100%;
+  --altcha-border-radius: 8px;
+  --altcha-border-color: rgba(95, 125, 104, 0.24);
+  --altcha-color-primary: var(--accent-green);
+  --altcha-color-primary-content: #ffffff;
+  --altcha-color-success: var(--accent-green);
+  --altcha-color-success-content: #ffffff;
+  --altcha-color-base: rgba(255, 255, 255, 0.84);
+  --altcha-color-base-content: var(--text-primary);
+  --altcha-color-neutral: rgba(48, 66, 56, 0.24);
+  --altcha-color-neutral-content: var(--text-secondary);
+  --altcha-padding: 14px;
+  --altcha-checkbox-size: 34px;
+  --altcha-shadow: drop-shadow(0 10px 22px rgba(95, 125, 104, 0.12));
 }
 
 .check-row,

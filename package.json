@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/kk455152/ruanjiansheji#readme",
   "dependencies": {
+    "altcha": "^3.1.0",
     "element-plus": "^2.14.0",
     "vue": "^3.5.34"
   },
