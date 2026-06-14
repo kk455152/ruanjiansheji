@@ -52,6 +52,8 @@ runtime/*.log
 runtime/*.md
 runtime/*.offset
 runtime/*.zip
+runtime/admin_token_secret
+runtime/*.secret
 runtime/current_working_code_for_github/
 runtime/final_code_for_github/
 

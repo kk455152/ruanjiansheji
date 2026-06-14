@@ -18,7 +18,54 @@ from api_pkg.common import json_safe, load_state, mongo_many, mongo_one, mysql_a
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 admin_compat_bp = Blueprint("admin_compat", __name__)
 
-TOKEN_SECRET = os.environ.get("ADMIN_TOKEN_SECRET") or secrets.token_urlsafe(32)
+TOKEN_SECRET_FILE = os.environ.get(
+    "ADMIN_TOKEN_SECRET_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime", "admin_token_secret"),
+)
+
+
+def _read_token_secret_file(path):
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        return ""
+
+
+def _write_token_secret_file(path, secret):
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, mode=0o700, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            file.write(f"{secret}\n")
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+
+
+def load_token_secret():
+    configured_secret = os.environ.get("ADMIN_TOKEN_SECRET")
+    if configured_secret:
+        return configured_secret
+
+    file_secret = _read_token_secret_file(TOKEN_SECRET_FILE)
+    if file_secret:
+        return file_secret
+
+    generated_secret = secrets.token_urlsafe(48)
+    if _write_token_secret_file(TOKEN_SECRET_FILE, generated_secret):
+        return generated_secret
+
+    return _read_token_secret_file(TOKEN_SECRET_FILE) or generated_secret
+
+
+TOKEN_SECRET = load_token_secret()
 TOKEN_EXPIRE_SECONDS = int(os.environ.get("ADMIN_TOKEN_EXPIRE_SECONDS", "7200"))
 CAPTCHA_EXPIRE_SECONDS = int(os.environ.get("ADMIN_CAPTCHA_EXPIRE_SECONDS", "300"))
 CAPTCHA_CHECKED_ANSWER = "not_robot_checked"
