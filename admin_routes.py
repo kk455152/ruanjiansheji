@@ -2386,15 +2386,33 @@ PERMISSION_CATALOG = {
     "account": "个人信息",
 }
 
+SUPER_ADMIN_HIDDEN_PERMISSION_KEYS = {
+    "region",
+    "profile",
+    "segments",
+    "insights",
+    "songs",
+    "feedback",
+    "devices",
+    "groups",
+    "alerts",
+    "logs",
+}
+
+SUPER_ADMIN_DEFAULT_PERMISSIONS = [
+    key for key in PERMISSION_CATALOG.keys()
+    if key not in SUPER_ADMIN_HIDDEN_PERMISSION_KEYS
+]
+
 DEFAULT_ROLE_PERMISSIONS = {
-    "super_admin": list(PERMISSION_CATALOG.keys()),
+    "super_admin": list(SUPER_ADMIN_DEFAULT_PERMISSIONS),
     "market_admin": ["overview", "decision", "trend", "region", "profile", "segments", "insights", "songs", "account"],
     "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "logs", "account"],
     "boss": ["overview", "trend", "region", "profile", "songs", "feedback", "account"],
 }
 
 DEFAULT_ROLE_DESCRIPTIONS = {
-    "super_admin": "系统配置、用户权限、审计、安全和全量业务数据",
+    "super_admin": "核心看板、系统配置、用户权限、审计与安全管理",
     "market_admin": "用户画像、区域分析、留存分析、热歌排行和营销洞察",
     "operator_admin": "设备运维、用户反馈、日志和告警处理",
     "boss": "只读经营视角，查看核心看板、趋势、地区、画像、热歌和反馈",
@@ -2409,7 +2427,7 @@ def ensure_required_role_permissions(role, permissions):
 
 def role_permissions_for_display(role, permissions=None, allow_empty=False):
     if role == "super_admin":
-        return list(PERMISSION_CATALOG.keys())
+        return list(SUPER_ADMIN_DEFAULT_PERMISSIONS)
     if permissions is None:
         return DEFAULT_ROLE_PERMISSIONS.get(role, [])
     cleaned = [p for p in (permissions or []) if p in PERMISSION_CATALOG]
@@ -2780,7 +2798,7 @@ def update_role_permissions():
         return response_error(400, f"包含未知权限：{'、'.join(invalid)}")
 
     # 去重并按目录顺序归一化
-    cleaned = list(PERMISSION_CATALOG.keys()) if role == "super_admin" else [key for key in PERMISSION_CATALOG if key in set(permissions)]
+    cleaned = list(SUPER_ADMIN_DEFAULT_PERMISSIONS) if role == "super_admin" else [key for key in PERMISSION_CATALOG if key in set(permissions)]
     if role != "super_admin" and "account" not in cleaned:
         cleaned.append("account")
 

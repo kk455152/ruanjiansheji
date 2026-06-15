@@ -40,6 +40,7 @@ const menus = [
 ]
 
 const MENU_KEYS = new Set(menus.map((item) => item.key))
+const SUPER_ADMIN_HIDDEN_SECTIONS = new Set(["分析洞察", "运营管理"])
 const PROFILE_REFRESH_INTERVAL_MS = 10000
 const SMS_COOLDOWN_SECONDS = 60
 let profileRefreshTimer = null
@@ -108,8 +109,8 @@ const currentRole = computed(() => state.admin?.role || "")
 const currentRoleName = computed(() => state.admin?.roleName || roleNames[currentRole.value] || "未登录")
 const currentPermissions = computed(() => permissionsForRole(currentRole.value, state.admin?.permissions))
 const currentPermissionSet = computed(() => new Set(currentPermissions.value))
-const visibleMenus = computed(() => menus.filter((item) => currentPermissionSet.value.has(item.key)))
-const activeMenu = computed(() => menus.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
+const visibleMenus = computed(() => menus.filter((item) => currentPermissionSet.value.has(item.key) && isMenuVisibleForRole(item, currentRole.value)))
+const activeMenu = computed(() => visibleMenus.value.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
 const permissionSignature = computed(() => currentPermissions.value.join("|"))
 const apiLabel = computed(() => API_BASE || (LOCAL_HOSTS.has(window.location.hostname) ? "服务器接口" : "当前站点"))
 const captchaChallengeUrl = computed(() => (API_BASE ? `${API_BASE}/api/admin/captcha` : "/api/admin/captcha"))
@@ -361,11 +362,18 @@ function saveAdminInfo(admin) {
   else localStorage.removeItem("admin_info")
 }
 
+function isMenuVisibleForRole(menu, role) {
+  return role !== "super_admin" || !SUPER_ADMIN_HIDDEN_SECTIONS.has(menu.section)
+}
+
 function permissionsForRole(role, permissions) {
-  if (Array.isArray(permissions)) {
-    return permissions.filter((key) => MENU_KEYS.has(key))
-  }
-  return menus.filter((item) => item.roles.includes(role)).map((item) => item.key)
+  const keys = Array.isArray(permissions)
+    ? permissions.filter((key) => MENU_KEYS.has(key))
+    : menus.filter((item) => item.roles.includes(role)).map((item) => item.key)
+  return keys.filter((key) => {
+    const menu = menus.find((item) => item.key === key)
+    return menu && isMenuVisibleForRole(menu, role)
+  })
 }
 
 function firstMenuForAdmin(admin) {
