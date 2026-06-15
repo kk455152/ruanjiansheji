@@ -41,7 +41,7 @@ const menus = [
 ]
 
 const MENU_KEYS = new Set(menus.map((item) => item.key))
-const PROFILE_REFRESH_INTERVAL_MS = 30000
+const PROFILE_REFRESH_INTERVAL_MS = 10000
 const SMS_COOLDOWN_SECONDS = 60
 let profileRefreshTimer = null
 let smsCooldownTimer = null
@@ -112,6 +112,7 @@ const currentPermissions = computed(() => permissionsForRole(currentRole.value, 
 const currentPermissionSet = computed(() => new Set(currentPermissions.value))
 const visibleMenus = computed(() => menus.filter((item) => currentPermissionSet.value.has(item.key)))
 const activeMenu = computed(() => menus.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
+const permissionSignature = computed(() => currentPermissions.value.join("|"))
 const apiLabel = computed(() => API_BASE || (LOCAL_HOSTS.has(window.location.hostname) ? "服务器接口" : "当前站点"))
 const captchaChallengeUrl = computed(() => (API_BASE ? `${API_BASE}/api/admin/captcha` : "/api/admin/captcha"))
 
@@ -395,6 +396,16 @@ function firstMenuForAdmin(admin) {
   return menus.find((item) => keys.includes(item.key))?.key || "overview"
 }
 
+function normalizeActiveMenu(admin = state.admin) {
+  if (canUse(state.active)) return false
+  const nextActive = firstMenuForAdmin(admin)
+  if (state.active === nextActive) return false
+  state.active = nextActive
+  state.detail = null
+  state.keyword = ""
+  return true
+}
+
 function canUse(key) {
   return visibleMenus.value.some((item) => item.key === key)
 }
@@ -649,21 +660,28 @@ async function refreshAdminProfile() {
   const admin = await api("/api/admin/profile")
   state.admin = admin
   saveAdminInfo(admin)
-  if (!canUse(state.active)) {
-    state.active = firstMenuForAdmin(admin)
-  }
-  return { admin, activeChanged: previousActive !== state.active }
+  const activeChanged = normalizeActiveMenu(admin) || previousActive !== state.active
+  return { admin, activeChanged }
 }
 
 async function syncAdminProfile() {
   if (!isLoggedIn.value || state.loading) return
-  const before = JSON.stringify(state.admin?.permissions || [])
+  const before = permissionSignature.value
+  const beforeUpdatedAt = state.admin?.permissionsUpdatedAt || ""
   try {
     const { activeChanged } = await refreshAdminProfile()
-    const after = JSON.stringify(state.admin?.permissions || [])
-    if (before !== after) {
+    const after = permissionSignature.value
+    const afterUpdatedAt = state.admin?.permissionsUpdatedAt || ""
+    const permissionsChanged = before !== after || beforeUpdatedAt !== afterUpdatedAt
+    if (permissionsChanged) {
       ElMessage.info("当前账号权限已同步")
-      if (activeChanged) await loadPage(true)
+    }
+    if (permissionsChanged || activeChanged) {
+      await nextTick()
+      if (activeChanged || !canUse(state.active)) {
+        normalizeActiveMenu()
+        await loadPage(true)
+      }
     }
   } catch (error) {
     console.warn(error)
@@ -717,6 +735,7 @@ async function selectPage(key) {
 
 async function loadPage(initial = false) {
   if (!isLoggedIn.value) return
+  normalizeActiveMenu()
   state.loading = true
 
   try {
@@ -2598,8 +2617,11 @@ button {
 
 .nav-groups {
   display: grid;
-  gap: 18px;
-  flex: 1;
+  align-content: start;
+  grid-auto-rows: max-content;
+  gap: 14px;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .nav-groups p {
@@ -2647,7 +2669,7 @@ button {
 
 .user-card {
   gap: 12px;
-  margin-top: 24px;
+  margin-top: auto;
   padding: 14px;
   background: rgba(255, 255, 255, 0.5);
   border-color: var(--border-light);
