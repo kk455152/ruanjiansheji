@@ -314,3 +314,12 @@
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 14rpx 36rpx rgba(132, 169, 140, 0.2);
 }
+
+.feedback-entry {
+  margin-top: 22rpx;
+}
+
+.feedback-entry .circle-mark {
+  background: linear-gradient(135deg, rgba(244, 162, 97, 0.22) 0%, rgba(244, 162, 97, 0.1) 100%);
+  color: #d98b4a;
+}

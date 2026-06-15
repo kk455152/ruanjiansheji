@@ -1,0 +1,47 @@
+<navigation-bar title="用户反馈" color="#2C3E35" background="transparent"></navigation-bar>
+<scroll-view class="page-shell feedback-page" scroll-y type="list" enhanced show-scrollbar="{{false}}">
+  <view class="page-head">
+    <view class="page-head-main">
+      <text class="page-title">用户反馈</text>
+      <text class="page-subtitle">告诉我们哪里好用、哪里卡壳，每条反馈都会被认真看到。</text>
+    </view>
+  </view>
+
+  <view class="glass-card feedback-card">
+    <text class="section-title">反馈类型</text>
+    <view class="filter-row">
+      <text
+        class="{{selectedType === item.key ? 'pill' : 'outline-pill'}}"
+        wx:for="{{typeOptions}}"
+        wx:key="key"
+        data-key="{{item.key}}"
+        bindtap="selectType"
+      >
+        {{item.label}}
+      </text>
+    </view>
+
+    <text class="section-title field-label">详细描述</text>
+    <textarea
+      class="feedback-textarea"
+      placeholder="说说你遇到的问题或想要的功能，越具体越好～"
+      value="{{content}}"
+      maxlength="500"
+      bindinput="inputContent"
+    />
+    <text class="char-count">{{content.length}}/500</text>
+
+    <text class="section-title field-label">联系方式（选填）</text>
+    <input
+      class="search-input"
+      placeholder="微信号 / 手机号 / 邮箱，方便我们回复你"
+      value="{{contact}}"
+      maxlength="60"
+      bindinput="inputContact"
+    />
+
+    <button class="primary-button submit-button" loading="{{isSubmitting}}" bindtap="submitFeedback">
+      提交反馈
+    </button>
+  </view>
+</scroll-view>

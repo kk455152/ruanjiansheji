@@ -7,6 +7,7 @@
     "pages/device/index",
     "pages/history/index",
     "pages/auth/index",
+    "pages/feedback/index",
     "pages/logs/logs"
   ],
   "window": {

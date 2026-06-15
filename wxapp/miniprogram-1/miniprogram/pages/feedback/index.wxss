@@ -1,0 +1,43 @@
+.feedback-card {
+  margin-top: 4rpx;
+  padding: 28rpx 26rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-row {
+  margin-top: 16rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.field-label {
+  margin-top: 30rpx;
+}
+
+.feedback-textarea {
+  margin-top: 16rpx;
+  width: 100%;
+  min-height: 220rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2rpx solid rgba(255, 255, 255, 0.88);
+  color: #2c3e35;
+  font-size: 24rpx;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.char-count {
+  margin-top: 10rpx;
+  align-self: flex-end;
+  color: #7b8f84;
+  font-size: 20rpx;
+  font-weight: 300;
+}
+
+.submit-button {
+  margin-top: 36rpx;
+}

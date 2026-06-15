@@ -656,3 +656,17 @@ export function controlPlayer(action: 'next' | 'pause' | 'play' | 'previous') {
     source: 'netease',
   })
 }
+
+export interface FeedbackResult {
+  feedbackId: string
+  status: string
+  submittedAt: string
+}
+
+export function submitFeedback(payload: { contact?: string; content: string; type: string }) {
+  return request<FeedbackResult>('/api/feedback/submit', 'POST', {
+    contact: payload.contact || '',
+    content: payload.content,
+    type: payload.type,
+  })
+}

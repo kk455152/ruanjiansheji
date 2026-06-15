@@ -636,5 +636,8 @@ Component({
     openHistory() {
       wx.navigateTo({ url: '/pages/history/index' })
     },
+    openFeedback() {
+      wx.navigateTo({ url: '/pages/feedback/index' })
+    },
   },
 })

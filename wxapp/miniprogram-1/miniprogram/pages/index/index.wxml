@@ -153,4 +153,13 @@
     </view>
     <text class="outline-pill">{{item.syncText}}</text>
   </view>
+
+  <view class="glass-card list-row feedback-entry" bindtap="openFeedback">
+    <view class="circle-mark">谏</view>
+    <view class="list-copy">
+      <text class="list-title">用户反馈</text>
+      <text class="list-meta">有建议或问题？点这里告诉我们</text>
+    </view>
+    <text class="right-link">去反馈</text>
+  </view>
 </scroll-view>
