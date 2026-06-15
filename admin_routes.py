@@ -1500,25 +1500,6 @@ def user_heatmap():
     return response_ok({"list": heatmap("user")})
 
 
-@admin_bp.get("/super/user-value/normal-users")
-@admin_bp.get("/market/user-value/normal-users")
-@require_admin("super", "market", "boss")
-def normal_users():
-    total = count_sql("SELECT COUNT(*) AS c FROM user_profile", fallback=0)
-    if not total:
-        total = count_sql("SELECT COUNT(*) AS c FROM `user`", fallback=0)
-    high_active = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
-    return response_ok({"normalUserCount": max(total - high_active, 0)})
-
-
-@admin_bp.get("/super/user-value/high-active-users")
-@admin_bp.get("/market/user-value/high-active-users")
-@require_admin("super", "market", "boss")
-def high_active_users():
-    count = count_sql("SELECT COUNT(*) AS c FROM user_profile WHERE active_level = 'high'", fallback=0)
-    return response_ok({"highActiveUserCount": count})
-
-
 @admin_bp.get("/super/user-profile/age-distribution")
 @admin_bp.get("/market/user-profile/age-distribution")
 @require_admin("super", "market", "boss")
@@ -2389,7 +2370,6 @@ PERMISSION_CATALOG = {
     "trend": "趋势分析",
     "region": "区域热力图",
     "profile": "用户画像",
-    "value": "用户价值",
     "segments": "用户分群",
     "insights": "营销洞察",
     "songs": "热歌排行",
@@ -2408,9 +2388,9 @@ PERMISSION_CATALOG = {
 
 DEFAULT_ROLE_PERMISSIONS = {
     "super_admin": list(PERMISSION_CATALOG.keys()),
-    "market_admin": ["overview", "decision", "trend", "region", "profile", "value", "segments", "insights", "songs", "account"],
+    "market_admin": ["overview", "decision", "trend", "region", "profile", "segments", "insights", "songs", "account"],
     "operator_admin": ["overview", "trend", "feedback", "devices", "groups", "alerts", "logs", "account"],
-    "boss": ["overview", "trend", "region", "profile", "value", "songs", "feedback", "account"],
+    "boss": ["overview", "trend", "region", "profile", "songs", "feedback", "account"],
 }
 
 DEFAULT_ROLE_DESCRIPTIONS = {
@@ -2464,7 +2444,6 @@ API_PERMISSION_RULES = [
     (("/api/admin/super/overview",), ("overview",)),
     (("/api/admin/super/trend",), ("trend", "overview")),
     (("/api/admin/super/region", "/api/admin/market/region"), ("region", "overview")),
-    (("/api/admin/super/user-value", "/api/admin/market/user-value"), ("value", "overview")),
     (("/api/admin/super/user-profile", "/api/admin/market/user-profile"), ("profile", "overview")),
     (("/api/admin/operator/feedback/handle",), ("feedback",)),
     (("/api/admin/super/feedback", "/api/admin/operator/feedback"), ("feedback", "overview")),

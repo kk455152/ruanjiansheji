@@ -23,7 +23,6 @@ const menus = [
   { key: "trend", label: "趋势分析", icon: "fa-arrow-trend-up", section: "核心看板", roles: ["super_admin", "market_admin", "operator_admin", "boss"] },
   { key: "region", label: "区域热力图", icon: "fa-map-location-dot", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
   { key: "profile", label: "用户画像", icon: "fa-user-tag", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
-  { key: "value", label: "用户价值", icon: "fa-star", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
   { key: "segments", label: "用户分群", icon: "fa-users-rays", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "insights", label: "营销洞察", icon: "fa-lightbulb", section: "分析洞察", roles: ["super_admin", "market_admin"] },
   { key: "songs", label: "热歌排行", icon: "fa-music", section: "分析洞察", roles: ["super_admin", "market_admin", "boss"] },
@@ -78,7 +77,6 @@ const state = reactive({
   trend: { type: "user", dimension: "day", list: [] },
   region: { sales: [], users: [] },
   profile: { age: [], region: [], activity: [], service: [] },
-  value: {},
   songs: [],
   retention: [],
   insights: { funnels: [], recommendations: [] },
@@ -146,8 +144,8 @@ const metricCards = computed(() => {
     const avgRetention = average(state.retention.map((item) => item.day7RetentionRate))
     return [
       { label: "热歌播放", value: formatNumber(totalPlays), hint: `${state.songs.length} 首上榜歌曲`, tone: "green", icon: "fa-music" },
-      { label: "高活用户", value: formatNumber(state.value.highActiveUserCount || 0), hint: "近周期活跃", tone: "blue", icon: "fa-bolt" },
-      { label: "普通用户", value: formatNumber(state.value.normalUserCount || 0), hint: "用户价值分层", tone: "orange", icon: "fa-users" },
+      { label: "画像维度", value: formatNumber((state.profile.age || []).length + (state.profile.region || []).length), hint: "年龄与区域分布", tone: "blue", icon: "fa-user-tag" },
+      { label: "运营人群", value: formatNumber(state.segments.total || (state.segments.list || []).length), hint: "用户分群规模", tone: "orange", icon: "fa-users-rays" },
       { label: "7 日留存", value: percent(avgRetention), hint: "购买设备后持续使用", tone: "red", icon: "fa-clock-rotate-left" },
     ]
   }
@@ -259,27 +257,6 @@ const trendAxis = computed(() => {
   const ticks = []
   for (let i = tickCount; i >= 0; i--) ticks.push(step * i)
   return { niceMax, ticks }
-})
-
-// 用户价值环状图：普通用户 vs 高活跃用户 占比
-const valueDonut = computed(() => {
-  const normal = Number(state.value.normalUserCount || 0)
-  const high = Number(state.value.highActiveUserCount || 0)
-  const total = normal + high
-  const segments = [
-    { label: "普通用户", value: normal, color: "var(--accent-green)" },
-    { label: "高活跃用户", value: high, color: "var(--accent-orange)" },
-  ]
-  const circumference = 2 * Math.PI * 52
-  let offset = 0
-  const arcs = segments.map((seg) => {
-    const ratio = total ? seg.value / total : 0
-    const dash = ratio * circumference
-    const arc = { ...seg, ratio, dash, gap: circumference - dash, dashOffset: -offset }
-    offset += dash
-    return arc
-  })
-  return { total, segments: arcs, circumference }
 })
 
 // 用户分群饼图：各运营人群的规模占比
@@ -771,7 +748,13 @@ async function loadOverview() {
   }
 
   if (currentRole.value === "market_admin") {
-    await Promise.all([loadSongs(), loadValue(), loadRetention(), loadRegion(), loadProfile(), loadDecision()])
+    const tasks = [loadSongs(), loadRetention(), loadRegion(), loadProfile(), loadDecision()]
+    if (canUse("segments")) {
+      tasks.push(loadSegments())
+    } else {
+      state.segments = { total: 0, list: [] }
+    }
+    await Promise.all(tasks)
     state.trend = {
       type: "retention",
       dimension: "day",
@@ -830,15 +813,6 @@ async function loadProfile() {
   state.profile.region = region.list || []
   state.profile.activity = activity.list || []
   state.profile.service = service.list || []
-}
-
-async function loadValue() {
-  const prefix = currentRole.value === "market_admin" ? "/api/admin/market" : "/api/admin/super"
-  const [normal, high] = await Promise.all([
-    silent(() => api(`${prefix}/user-value/normal-users`), {}),
-    silent(() => api(`${prefix}/user-value/high-active-users`), {}),
-  ])
-  state.value = { ...normal, ...high }
 }
 
 async function loadSongs() {
@@ -1064,7 +1038,6 @@ const pageLoaders = {
   trend: loadTrend,
   region: loadRegion,
   profile: loadProfile,
-  value: loadValue,
   segments: loadSegments,
   insights: loadInsights,
   songs: loadSongs,
@@ -1669,54 +1642,6 @@ onUnmounted(() => {
             </li>
           </ul>
         </article>
-      </section>
-
-      <section v-if="state.active === 'value'" class="value-layout">
-        <article class="panel donut-panel">
-          <div class="panel-head"><div><h3>用户价值构成</h3><p>普通用户与高活跃用户占比</p></div></div>
-          <div class="donut-body">
-            <div class="donut-chart">
-              <svg viewBox="0 0 120 120">
-                <circle class="donut-track" cx="60" cy="60" r="52" />
-                <circle
-                  v-for="seg in valueDonut.segments"
-                  :key="seg.label"
-                  class="donut-arc"
-                  cx="60"
-                  cy="60"
-                  r="52"
-                  :stroke="seg.color"
-                  :stroke-dasharray="`${seg.dash} ${seg.gap}`"
-                  :stroke-dashoffset="seg.dashOffset"
-                />
-              </svg>
-              <div class="donut-center">
-                <small>用户总量</small>
-                <strong>{{ formatNumber(valueDonut.total) }}</strong>
-              </div>
-            </div>
-            <ul class="donut-legend">
-              <li v-for="seg in valueDonut.segments" :key="seg.label">
-                <span class="legend-dot" :style="{ background: seg.color }"></span>
-                <span class="legend-label">{{ seg.label }}</span>
-                <em>{{ formatNumber(seg.value) }}</em>
-                <b>{{ percent(seg.ratio) }}</b>
-              </li>
-            </ul>
-          </div>
-        </article>
-        <div class="two-column">
-          <article class="panel hero-number">
-            <span>普通用户</span>
-            <strong>{{ formatNumber(state.value.normalUserCount || 0) }}</strong>
-            <p>适合基础推荐、设备使用引导和新功能教育。</p>
-          </article>
-          <article class="panel hero-number">
-            <span>高活跃用户</span>
-            <strong>{{ formatNumber(state.value.highActiveUserCount || 0) }}</strong>
-            <p>适合会员权益、歌单推荐和复购活动触达。</p>
-          </article>
-        </div>
       </section>
 
       <section v-if="state.active === 'segments'" class="value-layout">
@@ -3370,23 +3295,7 @@ button {
   font-weight: 500;
 }
 
-.hero-number {
-  min-height: 230px;
-}
-
-.hero-number span {
-  color: var(--text-secondary);
-}
-
-.hero-number strong {
-  display: block;
-  margin: 28px 0 18px;
-  color: var(--accent-green);
-  font-size: clamp(52px, 9vw, 92px);
-  font-weight: 300;
-}
-
-/* 用户价值环状图 */
+/* 用户分群图表布局 */
 .value-layout {
   display: grid;
   gap: 24px;
@@ -3397,19 +3306,6 @@ button {
   align-items: center;
   gap: 40px;
   flex-wrap: wrap;
-}
-
-.donut-chart {
-  position: relative;
-  width: 200px;
-  height: 200px;
-  flex-shrink: 0;
-}
-
-.donut-chart svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
 }
 
 .pie-chart {
@@ -3473,40 +3369,6 @@ button {
   min-width: 42px;
   text-align: right;
   font-weight: 500;
-  color: var(--accent-green-deep);
-}
-
-.donut-track {
-  fill: none;
-  stroke: var(--accent-green-light);
-  stroke-width: 14;
-}
-
-.donut-arc {
-  fill: none;
-  stroke-width: 14;
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease;
-}
-
-.donut-center {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  text-align: center;
-}
-
-.donut-center small {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.donut-center strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 34px;
-  font-weight: 300;
   color: var(--accent-green-deep);
 }
 

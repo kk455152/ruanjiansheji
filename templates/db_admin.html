@@ -1002,7 +1002,7 @@
     function supportsUserRegionQuickAdjust(item, target) {
       if (!item || target?.source !== "mysql" || target?.key !== "user_profile") return false;
       const text = `${item.group || ""} ${item.title || ""} ${item.frontend || ""} ${item.operation || ""}`;
-      return /地区|用户分布|用户画像|区域热力图|分群|用户价值/.test(text);
+      return /地区|用户分布|用户画像|区域热力图|分群/.test(text);
     }
 
     function supportsFunnelQuickAdjust(item) {
