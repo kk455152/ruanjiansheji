@@ -2500,7 +2500,7 @@ button {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow: auto;
+  overflow: hidden;
   padding: 36px 22px;
   display: flex;
   flex-direction: column;
@@ -2545,8 +2545,12 @@ button {
   align-content: start;
   grid-auto-rows: max-content;
   gap: 14px;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 6px;
+  margin-right: -6px;
 }
 
 .nav-groups p {
@@ -2594,10 +2598,25 @@ button {
 
 .user-card {
   gap: 12px;
-  margin-top: auto;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
+  margin-top: 18px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.5);
   border-color: var(--border-light);
+}
+
+.user-card > div:not(.avatar) {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.user-card strong,
+.user-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-card .avatar {
@@ -3959,6 +3978,13 @@ button {
   .sidebar {
     position: relative;
     height: auto;
+    overflow: visible;
+  }
+
+  .nav-groups {
+    overflow: visible;
+    padding-right: 0;
+    margin-right: 0;
   }
 
   .topbar,
