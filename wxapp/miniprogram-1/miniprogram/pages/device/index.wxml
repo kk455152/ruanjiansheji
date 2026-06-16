@@ -26,6 +26,24 @@
     <text class="section-copy">{{isCharging ? '正在充电中' : '预计可播放 ' + estimatedPlayTime}}</text>
   </view>
 
+  <view class="glass-card bind-card">
+    <view class="bind-head">
+      <text class="section-title">绑定新设备</text>
+      <text class="section-copy">输入音箱上的访问码即可绑定到当前账号。</text>
+    </view>
+    <input
+      class="bind-input"
+      type="text"
+      placeholder="请输入访问码，如 SH-8F3A21"
+      placeholder-class="bind-input-placeholder"
+      value="{{accessCode}}"
+      maxlength="32"
+      confirm-type="done"
+      bindinput="inputAccessCode"
+    />
+    <button class="primary-button bind-button" loading="{{binding}}" bindtap="bindDevice">绑定设备</button>
+  </view>
+
   <view class="glass-card setting-row">
     <view class="list-copy">
       <text class="list-title">音量上限</text>

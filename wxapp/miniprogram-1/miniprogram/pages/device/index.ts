@@ -1,4 +1,5 @@
 import {
+  bindDeviceByAccessCode,
   getBindProgress,
   getDeviceBattery,
   getDeviceDetail,
@@ -81,10 +82,12 @@ function writeStoredSettings(payload: StoredSettings) {
 
 Component({
   data: {
+    accessCode: '',
     bassGain: 8,
     batteryLevel: 82,
     bindProgress: 0,
     bindSteps: [] as BindStepView[],
+    binding: false,
     currentNetwork: DEFAULT_NETWORK,
     deviceName: DEFAULT_DEVICE_NAME,
     estimatedPlayTime: '11 小时 20 分',
@@ -279,6 +282,35 @@ Component({
         wx.showToast({ title: '已更新附近设备', icon: 'success' })
       } catch (error) {
         wx.showToast({ title: '扫描失败', icon: 'none' })
+      }
+    },
+    inputAccessCode(event: WechatMiniprogram.Input) {
+      this.setData({ accessCode: String(event.detail.value || '') })
+    },
+    async bindDevice() {
+      const accessCode = this.data.accessCode.trim()
+      if (!accessCode) {
+        wx.showToast({ title: '请输入访问码', icon: 'none' })
+        return
+      }
+      if (accessCode.length < 4) {
+        wx.showToast({ title: '访问码至少 4 位', icon: 'none' })
+        return
+      }
+
+      this.setData({ binding: true })
+      try {
+        const result = await bindDeviceByAccessCode(accessCode)
+        wx.showToast({
+          title: result && result.deviceName ? `已绑定 ${result.deviceName}` : '绑定成功',
+          icon: 'success',
+        })
+        this.setData({ accessCode: '' })
+        void this.loadPage()
+      } catch (error) {
+        wx.showToast({ title: '绑定失败，请核对访问码', icon: 'none' })
+      } finally {
+        this.setData({ binding: false })
       }
     },
     copyCurrentNetwork() {

@@ -601,6 +601,19 @@ export function searchNearbyDevices() {
   return request<{ list: NearbyDevice[]; total: number }>('/api/device/search-nearby', 'GET')
 }
 
+export interface BindByCodeResult {
+  bound: boolean
+  deviceId: string
+  deviceName: string
+  modelName: string
+}
+
+export function bindDeviceByAccessCode(accessCode: string) {
+  return request<BindByCodeResult>('/api/device/bind-by-code', 'POST', {
+    accessCode,
+  })
+}
+
 export function getBindProgress(taskId = DEFAULT_BIND_TASK_ID) {
   return request<BindProgress>('/api/device/bind-progress', 'GET', undefined, { taskId })
 }
