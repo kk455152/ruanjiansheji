@@ -1,6 +1,5 @@
 import {
   bindDeviceByAccessCode,
-  getBindProgress,
   getDeviceBattery,
   getDeviceDetail,
   getMusicServices,
@@ -8,7 +7,7 @@ import {
   saveBatteryNotice,
   searchNearbyDevices,
 } from '../../services/api'
-import { stepStatusLabel, syncStatusLabel } from '../../utils/display'
+import { syncStatusLabel } from '../../utils/display'
 import { ensureAuthenticated } from '../../utils/auth'
 
 type NearbyCard = {
@@ -16,12 +15,6 @@ type NearbyCard = {
   deviceName: string
   modelName: string
   signalStrength: number
-}
-
-type BindStepView = {
-  label: string
-  name: string
-  status: string
 }
 
 type ServicePill = {
@@ -85,8 +78,6 @@ Component({
     accessCode: '',
     bassGain: 8,
     batteryLevel: 82,
-    bindProgress: 0,
-    bindSteps: [] as BindStepView[],
     binding: false,
     currentNetwork: DEFAULT_NETWORK,
     deviceName: DEFAULT_DEVICE_NAME,
@@ -155,21 +146,14 @@ Component({
       const stored = readStoredSettings()
 
       try {
-        const [detail, batteryInfo, servicesResult, nearbyResult, bindProgress] = await Promise.all([
+        const [detail, batteryInfo, servicesResult, nearbyResult] = await Promise.all([
           getDeviceDetail().catch(() => null),
           getDeviceBattery().catch(() => null),
           getMusicServices().catch(() => ({ services: [] as any[] })),
           searchNearbyDevices().catch(() => ({ list: [] as any[] })),
-          getBindProgress().catch(() => ({ progress: 0, steps: [] as any[] })),
         ])
 
         const patch: Record<string, unknown> = {
-          bindProgress: bindProgress.progress || 0,
-          bindSteps: (bindProgress.steps || []).map((step: any) => ({
-            label: stepStatusLabel(step.status),
-            name: stripFallbackTag(String(step.name || '')) || '配置步骤',
-            status: step.status,
-          })),
           nearbyDevices: (nearbyResult.list || []).map((device: any) => ({
             deviceId: device.deviceId,
             deviceName: clean(device.deviceName, '未命名设备'),
