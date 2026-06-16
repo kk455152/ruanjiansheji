@@ -2792,6 +2792,8 @@ def update_role_permissions():
     valid_roles = {row["role"] for row in role_rows()}
     if role not in valid_roles:
         return response_error(400, "无效的角色")
+    if role == "super_admin":
+        return response_error(403, "超级管理员权限不可编辑", "超级管理员为系统内置角色，不支持在后台修改权限。")
     if not isinstance(permissions, list):
         return response_error(400, "权限格式不正确")
 
@@ -2800,8 +2802,8 @@ def update_role_permissions():
         return response_error(400, f"包含未知权限：{'、'.join(invalid)}")
 
     # 去重并按目录顺序归一化
-    cleaned = list(SUPER_ADMIN_DEFAULT_PERMISSIONS) if role == "super_admin" else [key for key in PERMISSION_CATALOG if key in set(permissions)]
-    if role != "super_admin" and "account" not in cleaned:
+    cleaned = [key for key in PERMISSION_CATALOG if key in set(permissions)]
+    if "account" not in cleaned:
         cleaned.append("account")
 
     overrides = dict(admin_state_section("rolePermissions", {}))

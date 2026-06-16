@@ -893,6 +893,7 @@ async function loadRoles() {
 }
 
 function openRoleEditor(role) {
+  if (!canEditRolePermissions(role)) return
   state.roleEditor = {
     open: true,
     role: role.role,
@@ -937,6 +938,10 @@ async function saveRolePermissions() {
 
 function permissionLabel(key) {
   return state.roles.catalog?.find((item) => item.key === key)?.label || key
+}
+
+function canEditRolePermissions(role) {
+  return role?.role !== "super_admin"
 }
 
 function openUserCreate() {
@@ -1874,7 +1879,7 @@ onUnmounted(() => {
             </div>
             <div class="role-actions">
               <em>{{ role.userCount }} 人</em>
-              <button class="ghost-button compact" @click="openRoleEditor(role)">
+              <button v-if="canEditRolePermissions(role)" class="ghost-button compact" @click="openRoleEditor(role)">
                 <i class="fa-solid fa-user-pen"></i> 编辑权限
               </button>
             </div>
