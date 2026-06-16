@@ -1889,7 +1889,7 @@ onUnmounted(() => {
       </section>
 
       <section v-if="state.active === 'system'" class="panel full">
-        <div class="panel-head"><div><h3>系统全局配置</h3><p>名称、主题、上传限制、接口超时和数据保留</p></div><span class="perm-tag">只读</span></div>
+        <div class="panel-head"><div><h3>系统全局配置</h3><p>名称、主题、上传限制、接口超时和数据保留</p></div></div>
         <div class="form-grid">
           <label class="field"><span>系统名称</span><input v-model="state.settings.systemName" readonly aria-readonly="true" /></label>
           <label class="field"><span>Logo 文案</span><input v-model="state.settings.logoText" readonly aria-readonly="true" /></label>
