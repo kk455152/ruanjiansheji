@@ -2777,7 +2777,7 @@ def admin_user_delete():
 @admin_bp.get("/super/roles")
 @require_admin("super")
 def admin_roles():
-    rows = merged_role_rows()
+    rows = [row for row in merged_role_rows() if row.get("role") != "super_admin"]
     catalog = [{"key": key, "label": label} for key, label in PERMISSION_CATALOG.items()]
     return response_ok({"total": len(rows), "list": rows, "catalog": catalog})
 

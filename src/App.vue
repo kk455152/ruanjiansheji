@@ -110,6 +110,7 @@ const currentRoleName = computed(() => state.admin?.roleName || roleNames[curren
 const currentPermissions = computed(() => permissionsForRole(currentRole.value, state.admin?.permissions))
 const currentPermissionSet = computed(() => new Set(currentPermissions.value))
 const visibleMenus = computed(() => menus.filter((item) => currentPermissionSet.value.has(item.key) && isMenuVisibleForRole(item, currentRole.value)))
+const visibleRoleRows = computed(() => (state.roles.list || []).filter((role) => role.role !== "super_admin"))
 const activeMenu = computed(() => visibleMenus.value.find((item) => item.key === state.active) || visibleMenus.value[0] || menus[0])
 const permissionSignature = computed(() => currentPermissions.value.join("|"))
 const apiLabel = computed(() => API_BASE || (LOCAL_HOSTS.has(window.location.hostname) ? "服务器接口" : "当前站点"))
@@ -1869,7 +1870,7 @@ onUnmounted(() => {
       <section v-if="state.active === 'roles'" class="panel full">
         <div class="panel-head"><div><h3>角色权限矩阵</h3><p>创建角色、修改权限、授权与撤权的基础视图</p></div></div>
         <div class="data-table">
-          <div v-for="role in state.roles.list" :key="role.role" class="role-row">
+          <div v-for="role in visibleRoleRows" :key="role.role" class="role-row">
             <div class="role-info">
               <strong>{{ role.roleName }}</strong>
               <span>{{ role.description }}</span>
