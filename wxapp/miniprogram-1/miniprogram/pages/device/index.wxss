@@ -1,7 +1,6 @@
 .device-card,
 .setting-row,
-.account-card,
-.progress-card {
+.account-card {
   padding: 26rpx;
 }
 
@@ -162,8 +161,7 @@
 }
 
 .account-card,
-.nearby-row,
-.progress-card {
+.nearby-row {
   margin-top: 16rpx;
 }
 
@@ -176,39 +174,4 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
-}
-
-.progress-head,
-.step-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.progress-head .section-title {
-  font-size: 26rpx;
-}
-
-.progress-head .right-link {
-  color: #84a98c;
-  font-weight: 600;
-  font-size: 24rpx;
-}
-
-.progress-card .progress-track {
-  margin: 18rpx 0;
-}
-
-.step-row {
-  padding: 12rpx 0;
-  border-top: 2rpx dashed rgba(132, 169, 140, 0.22);
-}
-
-.step-row .section-copy {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

@@ -8,6 +8,9 @@ Component({
     contact: '',
     content: '',
     isSubmitting: false,
+    rating: 0,
+    stars: [1, 2, 3, 4, 5],
+    ratingLabels: ['很不满意', '不满意', '一般', '满意', '非常满意'],
     selectedType: 'suggestion' as FeedbackType,
     typeOptions: [
       { key: 'suggestion', label: '功能建议' },
@@ -25,6 +28,10 @@ Component({
     selectType(event: WechatMiniprogram.TouchEvent) {
       const key = String(event.currentTarget.dataset.key || 'suggestion') as FeedbackType
       this.setData({ selectedType: key })
+    },
+    selectRating(event: WechatMiniprogram.TouchEvent) {
+      const value = Number(event.currentTarget.dataset.value || 0)
+      this.setData({ rating: value })
     },
     inputContent(event: WechatMiniprogram.Input) {
       this.setData({ content: event.detail.value })
@@ -47,9 +54,10 @@ Component({
           contact: this.data.contact.trim(),
           content,
           type: this.data.selectedType,
+          rating: this.data.rating,
         })
         wx.showToast({ title: '反馈已提交，谢谢你！', icon: 'success' })
-        this.setData({ contact: '', content: '', selectedType: 'suggestion' })
+        this.setData({ contact: '', content: '', selectedType: 'suggestion', rating: 0 })
         setTimeout(() => wx.navigateBack(), 1200)
       } catch (error) {
         wx.showToast({ title: '提交失败，请稍后再试', icon: 'none' })

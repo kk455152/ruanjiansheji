@@ -21,6 +21,18 @@
       </text>
     </view>
 
+    <text class="section-title field-label">整体评分</text>
+    <view class="rating-row">
+      <text
+        class="rating-star {{item <= rating ? 'rating-star-active' : ''}}"
+        wx:for="{{stars}}"
+        wx:key="*this"
+        data-value="{{item}}"
+        bindtap="selectRating"
+      >★</text>
+      <text class="rating-tip">{{rating > 0 ? ratingLabels[rating - 1] : '点击星星评分'}}</text>
+    </view>
+
     <text class="section-title field-label">详细描述</text>
     <textarea
       class="feedback-textarea"

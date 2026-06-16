@@ -676,10 +676,11 @@ export interface FeedbackResult {
   submittedAt: string
 }
 
-export function submitFeedback(payload: { contact?: string; content: string; type: string }) {
+export function submitFeedback(payload: { contact?: string; content: string; type: string; rating?: number }) {
   return request<FeedbackResult>('/api/feedback/submit', 'POST', {
     contact: payload.contact || '',
     content: payload.content,
     type: payload.type,
+    rating: payload.rating || 0,
   })
 }
