@@ -1923,7 +1923,7 @@ onUnmounted(() => {
             <h3>{{ state.admin?.realName || state.admin?.username }}</h3>
             <p>{{ state.admin?.position || currentRoleName }} / 工号 {{ state.admin?.jobNo || "-" }}</p>
             <p>{{ state.admin?.phone || "未配置手机号" }} · {{ state.admin?.email || "未配置邮箱" }}</p>
-            <p>权限：{{ currentRoleName }}，可访问 {{ visibleMenus.length }} 个后台模块。</p>
+            <p>权限：{{ currentRoleName }}</p>
           </div>
         </article>
         <article class="panel password-card">
