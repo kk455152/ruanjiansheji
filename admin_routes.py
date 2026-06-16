@@ -1184,6 +1184,8 @@ def feedback_rows():
         type_text = {
             "bug": "问题反馈",
             "suggestion": "功能建议",
+            "experience": "\u4f53\u9a8c\u5410\u69fd",
+            "other": "\u5176\u4ed6\u53cd\u9988",
             "complaint": "投诉",
             "praise": "表扬建议",
         }

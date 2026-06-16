@@ -5,6 +5,7 @@ import {
   DEFAULT_DEVICE_ID,
   MusicServiceKey,
 } from './config'
+import { getLoginSession } from '../utils/auth'
 
 type HttpMethod = 'GET' | 'POST' | 'DELETE'
 type QueryValue = string | number | boolean | undefined
@@ -415,6 +416,22 @@ function normalizeAudioUrl(url?: string | null) {
   return url.replace(/^http:\/\//, 'https://')
 }
 
+function getFeedbackDeviceInfo() {
+  try {
+    const info = wx.getSystemInfoSync()
+    return {
+      brand: (info as any).brand || '',
+      model: info.model || '',
+      platform: info.platform || '',
+      system: info.system || '',
+      version: info.version || '',
+      SDKVersion: info.SDKVersion || '',
+    }
+  } catch (error) {
+    return {}
+  }
+}
+
 export function getHomeOverview() {
   return request<HomeOverview>('/api/home/overview', 'GET')
 }
@@ -677,9 +694,15 @@ export interface FeedbackResult {
 }
 
 export function submitFeedback(payload: { contact?: string; content: string; type: string; rating?: number }) {
+  const session = getLoginSession()
+
   return request<FeedbackResult>('/api/feedback/submit', 'POST', {
+    avatarUrl: session?.avatarUrl || '',
     contact: payload.contact || '',
     content: payload.content,
+    deviceInfo: getFeedbackDeviceInfo(),
+    loginCode: session?.code || '',
+    nickname: session?.nickname || '',
     type: payload.type,
     rating: payload.rating || 0,
   })
