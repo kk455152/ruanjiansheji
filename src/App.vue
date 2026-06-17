@@ -1825,7 +1825,7 @@ onUnmounted(() => {
 
       <section v-if="state.active === 'logs'" class="two-column detail-layout">
         <article class="panel">
-          <div class="panel-head"><div><h3>设备日志</h3><p>设备上线、升级、异常事件</p></div></div>
+          <div class="panel-head"><div><h3>设备日志</h3><p>设备最近活跃时间</p></div></div>
           <div class="data-table scroll-list log-scroll">
             <div v-for="log in state.logs.list" :key="log.logId" class="table-row" @click="showLogDetail(log)">
               <strong>{{ log.deviceName }}</strong><span>{{ log.content }}</span><em>{{ log.createdAt }}</em>
